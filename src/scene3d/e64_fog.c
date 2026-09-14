@@ -2,6 +2,7 @@
 #include <t3d/t3d.h>
 
 #include "scene3d/e64_fog.h"
+#include "engine/e64_common.h"
 
 
 static Fog fog;
@@ -27,6 +28,8 @@ void fog_set(Fog* fog)
 	rdpq_mode_fog(RDPQ_FOG_STANDARD);
 	rdpq_set_fog_color(fog->color);
 
-	t3d_fog_set_range(fog->near, fog->far);
+	/* Declared in metres, like everything else in a scene, and applied in
+	   render units: the same conversion the camera planes get. */
+	t3d_fog_set_range(fog->near * RENDER_SCALE, fog->far * RENDER_SCALE);
 	t3d_fog_set_enabled(true);
 }

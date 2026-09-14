@@ -4,6 +4,7 @@
 #include <t3d/t3d.h>
 #include <t3d/t3danim.h>
 
+#include "engine/e64_common.h"
 #include "time/e64_time.h"
 #include "sound/e64_sound.h"
 #include "camera/e64_camera.h"

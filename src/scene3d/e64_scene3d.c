@@ -15,7 +15,7 @@
 #include "physics/shapes/e64_physics_shape.h"
 #include "physics/body/e64_rigid_body.h"
 #include "physics/e64_physics_settings.h"
-#include "physics/math/e64_math_common.h"    /* RENDER_SCALE_INV */
+#include "engine/e64_common.h"
 
 
 static Scene3D scene;
@@ -52,7 +52,6 @@ void scene3d_load(const Scene3DDef *def)
 		camera->base_near_clipping   = def->camera->near_clipping;
 		camera->base_far_clipping    = def->camera->far_clipping;
 		camera->auto_clipping        = def->camera->auto_clipping;
-		camera->binding              = def->camera->binding;
 	}
 	switch (def->camera ? def->camera->type : CAMERA_TYPE_NONE) {
 		case CAMERA_TYPE_SPRING_ARM:

@@ -6,6 +6,7 @@
 
 #include "graphics/e64_mesh.h"
 #include "shaders/e64_mesh_deform.h"
+#include "engine/e64_common.h"
 #include "physics/math/e64_math_common.h"
 #include "physics/math/e64_quaternion.h"
 

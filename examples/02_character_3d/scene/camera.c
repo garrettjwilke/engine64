@@ -1,72 +1,48 @@
 /*
-	Where the world is looked at from, and what the player can do about it.
+	The scene's camera: how the world is framed.
 
-	A scene is four answers: what the world contains and where it stands, how
-	it is lit, whether there is fog, and where it is looked at from. The first
-	one is the prefabs next door; this file is the last one.
+	Declared apart from main.c because a camera is reused across scenes more
+	often than anything else in them. The scene references it by name, and so
+	does the binding that moves it, which is declared with the other controls.
 
-	None of this has a default. A field left out is zero and the camera behaves
-	accordingly, so everything it needs is written here.
+	There are no defaults: any field left out is zero.
 */
 #include "camera/e64_camera.h"
-#include "control/e64_camera_control.h"
 
 
-/* Naming the buttons is the whole job: the engine reads this every frame and
-   turns, pulls back and zooms the camera itself. An action left at BTN_NONE
-   simply never happens. */
-static const CameraControlBinding camera_binding = {
-
-	.player = PLAYER_1,
-
-	.pan_left  = BTN_C_LEFT,
-	.pan_right = BTN_C_RIGHT,
-	.tilt_up   = BTN_C_UP,
-	.tilt_down = BTN_C_DOWN,
-
-	.distance_in  = BTN_L,
-	.distance_out = BTN_R,
-
-	.fov_in    = BTN_D_UP,
-	.fov_out   = BTN_D_DOWN,
-};
-
-/* A spring arm camera hangs off the end of an arm anchored to a point in the
-   world, and swings around that point instead of moving freely. */
+/* A spring arm camera hangs at the end of an arm anchored to a target point,
+   and orbits that point in yaw and pitch. */
 const CameraDef camera = {
 
 	.type    = CAMERA_TYPE_SPRING_ARM,
-	.binding = &camera_binding,
 
-	/* The lens. Nothing nearer than the near plane or farther than the far one
-	   is drawn. The console stores depth with limited precision, so the wider
-	   that range, the coarser it gets, and surfaces close to each other start
-	   flickering over which one is in front. */
-	.field_of_view = 60.0f,
+	/* The lens. Nothing closer than the near plane or farther than the far one
+	   is drawn. Depth precision is spread across that range, so keeping it
+	   tight is what stops close surfaces from flickering over each other. */
+	.field_of_view = 60.0f,   /* vertical lens angle, between 10 and 120 */
 	.near_clipping =  1.0f,
 	.far_clipping  = 50.0f,
 
 	.spring_arm = {
-		.arm_length    = 5.0f,   /* how far back the camera sits       */
-		.side_offset   = 0.0f,     /* pushed off centre, over a shoulder */
-		.height_offset = 1.2f,   /* the anchor, raised off the floor   */
-		.yaw           = -45.0f,   /* where it starts around the anchor  */
-		.pitch         = 15.0f,    /* and how far above it               */
+		.arm_length    = 5.0f,     /* distance from the target, in metres        */
+		.side_offset   = 0.0f,     /* shifts the arm sideways, for over-shoulder */
+		.height_offset = 1.2f,     /* raises the anchor above the target point   */
+		.yaw           = -45.0f,   /* starting orbit angle, in degrees           */
+		.pitch         = 15.0f,    /* starting elevation, in degrees             */
 
 		.settings = {
-			/* The arm chases its target instead of snapping to it. A higher
-			   response catches up sooner, and the maximum caps how fast it can
-			   be swung. Two numbers each: turning and tilting. */
-			.response_rate = {  10.0f,  10.0f },
-			.max_velocity  = { 120.0f, 100.0f },
-			.direction     = {   1.0f,   1.0f },   /* -1 inverts that axis */
+			/* The arm does not jump to where the controls ask: it accelerates
+			   towards it. One value per axis, yaw then pitch. */
+			.response_rate = {  10.0f,  10.0f },   /* how hard it accelerates */
+			.max_velocity  = { 120.0f, 100.0f },   /* degrees per second cap  */
+			.direction     = {   1.0f,   1.0f },   /* -1 inverts that axis    */
 
-			.zoom_response_rate = 6.0f,
-			.distance_speed     = 4.0f,   /* pulling in and out */
-			.fov_speed          =  30.0f,   /* narrowing the lens */
+			.zoom_response_rate = 6.0f,   /* how fast the arm settles at a new length */
+			.distance_speed     = 4.0f,   /* metres per second while zooming          */
+			.fov_speed          =  30.0f,   /* degrees per second while changing fov  */
 
-			/* How far up and down it is allowed to go, so it never ends up
-			   under the floor or on its back. */
+			/* How far up and down the orbit is allowed to go, in degrees, so
+			   it never ends up under the floor or on its back. */
 			.max_pitch =  80.0f,
 			.min_pitch = -50.0f,
 		},

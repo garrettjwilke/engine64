@@ -1,10 +1,10 @@
-PROJECT_NAME = 02_character_physics
+PROJECT_NAME = 03_character_physics
 
 # Path to the engine64 checkout. Set it to wherever the engine lives; this
 # example sits two levels down inside the repo.
 ENGINE_DIR = ../..
 
-src = $(wildcard *.c) $(wildcard prefabs/*.c)
+src = $(wildcard *.c) $(wildcard prefabs/*.c) $(wildcard scene/*.c) $(wildcard controls/*.c)
 
 # How much the models grow on the way in. They are authored in metres and the
 # engine works at 64 units per metre, which is what this puts them at.
@@ -15,9 +15,7 @@ MODEL_SCALE = 64
 # replacing this prefix with "rom:/".
 GLTF_FLAGS = '--base-scale=$(MODEL_SCALE)' '--asset-path=assets'
 
-# Models that also need a collision mesh, declared one per line: the room is
-# what the body walks on, the water plane is what the waves run on.
-assets_collision = filesystem/collision/room.collision \
-                   filesystem/collision/water.collision
+# Models that also need a collision mesh: the room is what the body walks on.
+assets_collision = filesystem/collision/room.collision
 
 include $(ENGINE_DIR)/engine.mk

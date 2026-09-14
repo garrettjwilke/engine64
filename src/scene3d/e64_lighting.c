@@ -6,7 +6,7 @@
 #include <t3d/t3dmath.h>
 
 #include "physics/e64_physics.h"
-#include "physics/math/e64_math_common.h"    /* RENDER_SCALE */
+#include "engine/e64_common.h"               /* RENDER_SCALE */
 #include "scene3d/e64_lighting.h"
 
 

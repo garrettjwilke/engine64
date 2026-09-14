@@ -4,12 +4,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "scene3d/e64_scene3d.h"
+#include "scene2d/e64_scene2d.h"
+#include "viewport/e64_viewport.h"
+#include "control/e64_player_control.h"
 
-typedef struct Game                 Game;
-typedef struct Scene3DDef           Scene3DDef;
-typedef struct Scene2DDef           Scene2DDef;
-typedef struct Player               Player;
-typedef struct ViewportModeDef      ViewportModeDef;
+/* Game holds the current state, so it cannot be included back from here. */
+typedef struct Game Game;
+
 
 /* Index into the state table the game hands to game_start. */
 typedef uint8_t GameState;
@@ -23,7 +25,6 @@ typedef uint8_t GameState;
 typedef struct GameStateDef {
 
 	void (*update)(void);
-	void (*bindCharacter)(void);
 	void (*onEnter)(void);
 	void (*onExit)(void);
 
@@ -39,6 +40,11 @@ typedef struct GameStateDef {
 	   2D one drawn over it. */
 	Scene3DDef          *scene3d;
 	const Scene2DDef    *scene2d;
+
+	/* What drives what while this state is current. Each binding names the
+	   piece it moves, so the engine wires them itself once the scenes are
+	   built. A state that drives nothing leaves it out. */
+	const ControlsDef   *controls;
 
 	/* The screen this state is played on. The engine opens none by itself,
 	   so the first state entered is what puts one up, and a state that wants

@@ -1,4 +1,4 @@
-# 02 character physics
+# 03 character physics
 
 A body in a room, and the smallest world that makes it show everything it can do: walk and run it, jump it, slide it along a wall, push it into the water and up the ladder.
 

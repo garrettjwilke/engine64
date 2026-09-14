@@ -6,8 +6,8 @@
 	Range picked against the camera's 50 metre far plane, so the haze closes
 	before geometry is cut.
 
-	Materials have their own say: one exported with fog disabled ignores what
-	the scene declares.
+	Every material in this example has fog enabled on the Blender side, which is
+	what lets the scene decide the range for all of them.
 */
 #include "scene3d/e64_fog.h"
 

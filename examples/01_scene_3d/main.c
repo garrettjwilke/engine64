@@ -1,64 +1,69 @@
 /*
 	3D scene
 
-	Start here. The smallest world engine64 can draw: a room, a lamp post
-	standing in it, and a camera to look around with.
+	The minimum a game needs to draw a 3D world: two models placed in a room,
+	lit by a point light, seen through a camera the player can orbit.
 
-	The engine draws through scenes. There are two kinds, 2D and 3D, and the 3D
-	one is what this example covers. A 3D scene is four answers:
+	The engine has no world of its own. Everything a scene contains is declared
+	as static data and handed over once, and the engine builds the live scene
+	from it when the state that owns it is entered:
 
-		what the world contains, and where it stands
-		how it is lit
-		whether there is fog
-		where it is looked at from
+		a Prefab3D per kind of thing the world contains
+		a Scene3DDef listing where each one is placed, plus light, fog and camera
+		a GameStateDef naming that scene, the screen, and an update function
+		game_start with the state table, then game_runStep once per frame
 
-	All four are plain data, written below and handed over once.
+	Nothing below is allocated or registered by hand. Entering the state loads
+	the scene, leaving it frees everything the scene brought.
 
-	It also covers how a model made of several objects can have any of them
-	shown and hidden on demand.
+	The update function also shows how a model built from several objects can
+	have each of them drawn or skipped at runtime.
 */
 #include <libdragon.h>
 
-#include "game/e64_game.h"               /* startup, states, the frame loop  */
-#include "scene3d/e64_scene3d.h"         /* the 3D scene and what it holds   */
-#include "entity/e64_entity3d.h"         /* one thing placed in the world    */
-#include "viewport/e64_viewport.h"       /* what the camera ends up drawing  */
-#include "control/e64_controller.h"      /* the pad as the hardware reads it */
+#include "game/e64_game.h"               /* init, state table, frame step    */
+#include "scene3d/e64_scene3d.h"         /* scene declaration and live scene */
+#include "entity/e64_entity3d.h"         /* one prefab placed in the world   */
+#include "viewport/e64_viewport.h"       /* screen modes and the live camera */
+#include "control/e64_controller.h"      /* controller state and buttons     */
 #include "control/e64_camera_control.h"  /* buttons wired to camera motion   */
-#include "camera/e64_camera.h"           /* where the camera is looking      */
+#include "control/e64_player_control.h"  /* handing the controls over        */
+#include "camera/e64_camera.h"           /* camera declaration               */
 #include "camera/e64_spring_arm.h"       /* reading the arm back for debug   */
-#include "time/e64_time.h"               /* how long the last frame took     */
-#include "debug/e64_debug.h"             /* the on-screen frame counter      */
+#include "time/e64_time.h"               /* frame delta                      */
+#include "debug/e64_debug.h"             /* on-screen debug lines            */
 
 
 /* --- prefabs ---------------------------------------------------------------
-	A prefab is one kind of thing the world can contain: a model, plus
-	whatever that kind needs to work. It carries no position, which is why the
-	same prefab can be placed as many times as wanted.
+	A Prefab3D declares one kind of content: a model, the type tag that says
+	how the engine treats it, and whatever that type needs. It holds no
+	transform, so the same prefab can be placed any number of times.
 
-	Both of these are props: drawn and nothing else. Neither declares a
-	collider or a body. Example 02 gives props both.
+	PREFAB3D_PROP with no .collider and no .prop body is static scenery: drawn,
+	never simulated, no collision. Adding physics to a prop is example 02.
 
-	The .model path is a file in the ROM's filesystem. The Makefile builds it
-	from the .glb left in assets/models.
+	.model is a path into the ROM filesystem. The Makefile compiles the .glb
+	files in assets/models into the .t3dm files named here.
 */
 
-/* The shortest a prefab gets: a kind and a model, drawn whole. */
+/* The smallest prefab there is: a type and a model, drawn as one piece. */
 static const Prefab3D room = { .type = PREFAB3D_PROP, .model = "rom:/models/room.t3dm" };
 
-/* lamp_post.glb holds two objects, named "post" and "lamp" in Blender.
+/* lamp_post.glb contains two objects, named "post" and "lamp" in Blender.
 
-   Listing a name in .part cuts that object out as a part the game can show and
-   hide on its own. Everything left unlisted stays together as one more part,
-   always drawn. Seven names is the cap.
+   A model is drawn as a single unit unless the prefab lists part names. Each
+   name in .part becomes a part that can be drawn or skipped independently at
+   runtime, matched against the object names inside the model. Everything the
+   list does not name is grouped into one remaining part that is always drawn.
+   Up to seven names can be listed.
 
-   .part_position gives each of those names a position of its own, in the same
-   order, and .part_count has to match how many names were listed. A position
-   left at zero draws the part where it was modelled and reserves no extra matrix.
+   .part_position places each named part inside the entity, in the same order
+   as the names, and .part_count must equal the number of names listed. A part
+   left at zero is drawn exactly where it was modelled.
 
-   Both objects were modelled at the origin. The post reaches 5.5012 metres and
-   the lamp has a radius of 0.75, so their sum is what leaves the lamp resting
-   on the tip. The light below is declared at that same height. */
+   Here both objects were modelled at the origin, so the lamp needs an offset
+   to sit on top of the post: 5.5012 of post plus 0.75 of lamp radius. The
+   point light further down uses the same height. */
 #define LAMP_HEIGHT 6.252f
 
 static const Prefab3D lamp_post = {
@@ -81,14 +86,15 @@ static const Prefab3D lamp_post = {
 
 
 /* --- the scene -------------------------------------------------------------
-	Everything the world is made of, as data. The engine reads it once, when
-	the state opens, and builds the world from it.
+	The content of the world, as data. Read once when the state is entered.
 */
 
-/* One row per thing placed: which prefab, then its position, and a rotation
-   after that if it needs one. Loading the scene builds each row in order.
+/* The placement table: one row per instance, each naming a prefab followed by
+   position, rotation and scale. The scene is built walking this table in
+   order, and the live entities keep that order, so the entity created from row
+   N is scene3d_get()->entity[N].
 
-   Anything left out of a row is zero, and a zero scale means original size. */
+   Fields left out of a row are zero, and a zero scale means original size. */
 static Scene3DPrefab scene_prefabs[] = {
 
 	{ &room,      { 0.0f, 0.0f, 0.0f } },
@@ -97,11 +103,50 @@ static Scene3DPrefab scene_prefabs[] = {
 
 /* --- the camera ------------------------------------------------------------*/
 
-/* One button per action. The engine reads this every frame and moves the
-   camera itself. An action left at BTN_NONE never happens. */
+/* A spring arm camera hangs at the end of an arm anchored to a target point,
+   and orbits that point in yaw and pitch. The game only supplies the point,
+   once per frame; everything else happens inside the engine.
+
+   There are no defaults: any field left out is zero. */
+static const CameraDef camera = {
+
+	.type    = CAMERA_TYPE_SPRING_ARM,
+
+	.field_of_view = 60.0f,   /* vertical lens angle, between 10 and 120  */
+	.near_clipping =  1.0f,   /* closer than this is not drawn            */
+	.far_clipping  = 50.0f,   /* farther than this is not drawn           */
+
+	.spring_arm = {
+		.arm_length    = 6.0f,     /* distance from the target, in metres      */
+		.side_offset   = 0.0f,     /* shifts the arm sideways, for over-shoulder */
+		.height_offset = 3.0f,     /* raises the anchor above the target point */
+		.yaw           = -45.0f,   /* starting orbit angle, in degrees         */
+		.pitch         = 15.0f,    /* starting elevation, in degrees           */
+
+		.settings = {
+			/* The arm does not jump to where the controls ask: it accelerates
+			   towards it. One value per axis, yaw then pitch. */
+			.response_rate = {  10.0f,  10.0f },   /* how hard it accelerates */
+			.max_velocity  = { 120.0f, 100.0f },   /* degrees per second cap  */
+			.direction     = {   1.0f,   1.0f },   /* -1 inverts that axis    */
+
+			.zoom_response_rate = 6.0f,   /* how fast the arm settles at a new length */
+			.distance_speed     = 4.0f,   /* metres per second while zooming          */
+			.fov_speed          =  30.0f,   /* degrees per second while changing fov  */
+
+			.max_pitch =  80.0f,   /* how far above the target it can climb */
+			.min_pitch = -50.0f,   /* and how far below it can drop         */
+		},
+	},
+};
+
+/* One button per camera action, and the camera they move. The engine reads
+   this binding every frame and applies the motion itself, so the game never
+   moves the camera. Any action left unset is BTN_NONE and never triggers. */
 static const CameraControlBinding camera_binding = {
 
 	.player = PLAYER_1,
+	.camera = &camera,
 
 	.pan_left  = BTN_C_LEFT,
 	.pan_right = BTN_C_RIGHT,
@@ -115,50 +160,24 @@ static const CameraControlBinding camera_binding = {
 	.fov_out   = BTN_D_DOWN,
 };
 
-/* A spring arm camera sits on the end of an arm anchored to a point and swings
-   around it. Nothing here has a default: a field left out is zero. */
-static const CameraDef camera = {
+/* What this state drives with, named in its declaration further down. Each
+   binding names the piece it moves, so entering the state is all it takes for
+   the engine to wire them: there is nothing to bind by hand. */
+static const ControlsDef controls = {
 
-	.type    = CAMERA_TYPE_SPRING_ARM,
-	.binding = &camera_binding,
-
-	.field_of_view = 60.0f,   /* how wide the lens is            */
-	.near_clipping =  1.0f,   /* nothing nearer than this drawn  */
-	.far_clipping  = 50.0f,   /* nothing farther than this drawn */
-
-	.spring_arm = {
-		.arm_length    = 6.0f,   /* how far back the camera sits       */
-		.side_offset   = 0.0f,   /* pushed off centre, over a shoulder */
-		.height_offset = 3.0f,   /* the anchor, raised off the floor   */
-		.yaw           = -45.0f,   /* where it starts around the anchor  */
-		.pitch         = 15.0f,    /* and how far above it               */
-
-		.settings = {
-			/* The arm chases its target instead of snapping to it. One number
-			   for turning, one for tilting. */
-			.response_rate = {  10.0f,  10.0f },   /* how fast it catches up */
-			.max_velocity  = { 120.0f, 100.0f },   /* and how fast it swings */
-			.direction     = {   1.0f,   1.0f },   /* -1 inverts that axis   */
-
-			.zoom_response_rate = 6.0f,
-			.distance_speed     = 4.0f,   /* pulling in and out */
-			.fov_speed          =  30.0f,   /* narrowing the lens */
-
-			.max_pitch =  80.0f,   /* never lands on its back    */
-			.min_pitch = -50.0f,   /* never goes under the floor */
-		},
-	},
+	.camera = &camera_binding,
 };
 
 /* --- the light -------------------------------------------------------------
-	Ambient is the colour a surface keeps where nothing shines on it, and the
-	only reason the dark side of an object is not black.
+	Ambient is the flat colour every surface keeps regardless of what reaches
+	it, and the only thing lighting the faces no light hits.
 
-	.source holds seven slots, shared between directional and point lights.
-	They are read in order and cut at the first empty one.
+	.source holds seven slots shared by every light type. They are read in
+	order and stop at the first empty one, so a scene only pays for what it
+	declares.
 
-	A point light shines from its position in every direction, and .size is how
-	far it carries. This one sits at the height the lamp was put at.
+	A point light radiates in all directions from .position, and .size is the
+	radius it reaches. This one sits just under the lamp part placed above.
 */
 static const LightDef light = {
 
@@ -172,11 +191,30 @@ static const LightDef light = {
 	},
 };
 
-/* Distance haze. Off here; example 02 turns it on. A material exported with
-   fog disabled ignores this. */
-static const FogDef fog = { .enabled = false };
+/* Distance fog: a surface blends towards .color the farther it is from the
+   camera, untouched up to .near and fully replaced past .far. Both in metres,
+   measured along the view axis.
 
-/* The four answers together. This is the scene. */
+   Keep the range inside the camera's far plane. Fog that saturates past it
+   never finishes, and geometry is cut at the plane anyway, so the room's back
+   wall would pop out of a haze that never closed.
+
+   Enabling fog also paints the background: the frame is cleared to .color, so
+   what fades out in the distance matches what is behind it. With fog off the
+   background is black.
+
+   Materials have their own say. One exported with fog disabled ignores what
+   the scene declares, so an asset that has to take fog needs it enabled back
+   in Blender. */
+static const FogDef fog = {
+
+	.color   = { 70, 80, 100, 0xFF },
+	.near    = 5.0f,
+	.far     = 45.0f,
+	.enabled = true,
+};
+
+/* The scene itself: content plus the three things that decide how it looks. */
 static Scene3DDef scene = {
 
 	.light  = &light,
@@ -189,59 +227,57 @@ static Scene3DDef scene = {
 
 
 /* --- the state -------------------------------------------------------------
-	A state is one mode of the game: the title screen, the match, the pause,
-	the credits. One runs at a time. Each carries the scene it draws, the
-	sprites and fonts it needs, and the function the engine calls every frame.
-	Leaving a state frees all of that, and the next one loads its own.
+	A game state is one mode of the game: title screen, gameplay, pause,
+	credits. Exactly one is current. Each declares the scenes it runs, the
+	screen it uses, and the function the engine calls every frame while it is
+	current. Switching states unloads everything the old one loaded.
 
-	The engine takes this table at startup, and from then on the only thing it
-	calls on its own is the update of whichever state is current.
+	The engine calls nothing of the game's on its own except the update of the
+	current state.
 */
 
-enum { GAME_STATE_EXAMPLE, STATE_COUNT };
+enum { GAMEPLAY3D, STATE_COUNT };
 
-/* The point the camera swings around, walked by the stick. The speed is in
-   metres per second, times whatever the stick reads. */
+/* The point the camera orbits, moved with the stick. Metres per second, scaled
+   by how far the stick is pushed. */
 #define CAMERA_TARGET_SPEED 0.1f
 
 static Vector3 camera_target = { 0.0f, 0.0f, 0.0f };
 
-/* Whether each object of the lamp post is being drawn. A button only says "the
-   other one now", so the game has to remember where it left them. Both start
-   true, which is how the world comes up. */
+/* Part visibility is set, not toggled, so the game keeps the current value of
+   each one. Both parts are visible when the scene loads. */
 static bool draw_lamp = true;
 static bool draw_post = true;
 
-/* The state's update: the one place the game's own code runs. The engine calls
-   it once per frame for as long as this state is in play.
+/* The state update: the only place this game's own code runs. Called once per
+   frame while this state is current, after the controllers are polled and the
+   physics has stepped, before the frame is drawn.
 
-   This one does two things: shows and hides the two objects of the lamp post,
-   and walks the point the camera watches around the floor. */
-static void GameStateExample_update(void)
+   It does two things: switches the two parts of the lamp post on and off, and
+   walks the point the camera orbits across the floor. */
+static void gameplay3d_update(void)
 {
 	Scene3D *scene3d = scene3d_get();
 
-	/* The pad, already polled by the engine, and how long the last frame took.
-	   Everything below reads from these two. */
+	/* The controller, already polled by the engine this frame, and how long
+	   the previous frame took, in seconds. */
 	const Controller *pad = controller_get();
 	float delta = time_get()->delta;
 
-	/* From here down the pad is read button by button, and that is the
-	   difference with the camera.
+	/* Buttons are read directly here, unlike the camera above.
 
-	   Moving a camera is something the engine does, so it takes a binding.
-	   There is one of those for the camera, one for a 3D character, one for a
-	   2D one and one for menus, each binding the actions that module has.
-
-	   Declaring an action of the game's own is on the to do list. Until then,
-	   turning a lamp off has nothing to bind to and the game reads the pad
+	   Moving a camera is engine work, so it is declared as a binding and the
+	   engine does it. There is a binding type per module that moves something:
+	   camera, 3D character, 2D character, menu. Toggling a lamp belongs to no
+	   module, so there is nothing to bind it to and the game reads the button
 	   itself.
 
-	   .pressed is the frame a button goes down. Held, it reads once and stops,
-	   which is what a switch wants.
+	   button_isPressed is true only on the frame the button goes down, which
+	   is what a toggle needs; button_isHeld would fire every frame.
 
-	   The world is built in the order of the placement table, so the lamp post
-	   written second is entity 1. */
+	   entity[1] is the lamp post because it is the second row of the placement
+	   table. Parts are addressed by the name the prefab declared, and setting
+	   a name the entity does not have does nothing. */
 	if (button_isPressed(pad, BTN_A)) {
 		draw_lamp = !draw_lamp;
 		entity3d_setPartVisible(scene3d->entity[1], "lamp", draw_lamp);
@@ -252,12 +288,12 @@ static void GameStateExample_update(void)
 		entity3d_setPartVisible(scene3d->entity[1], "post", draw_post);
 	}
 
-	/* Under the deadzone the stick reads as centred: it never rests at exactly
-	   zero.
+	/* Raw stick values run from -127 to 127 and never rest at exactly zero, so
+	   anything under the deadzone is discarded.
 
-	   The push is turned by the camera's angle before it is applied, so up on
-	   the stick is always away from the viewer. It is what a character does to
-	   walk. */
+	   The stick vector is then rotated by the camera's angle around the target
+	   before being applied, which makes up on the stick mean away from the
+	   camera at any orbit angle. A character controller does the same thing. */
 	float x = fabsf(pad->input.stick_x) >= STICK_DEADZONE ? pad->input.stick_x : 0.0f;
 	float y = fabsf(pad->input.stick_y) >= STICK_DEADZONE ? pad->input.stick_y : 0.0f;
 
@@ -270,12 +306,14 @@ static void GameStateExample_update(void)
 		camera_target.y += (y * cos_a - x * sin_a) * CAMERA_TARGET_SPEED * delta;
 	}
 
-	/* The only thing about the camera the game decides: what it watches. The
-	   buttons were declared with it, up in the scene. */
+	/* Hands the camera the point to orbit for this frame. Reading the buttons,
+	   accelerating the arm and applying the result all happen inside. Call it
+	   once per frame from any state that has a 3D camera. */
 	scene3d_updateCamera(&camera_target);
 
-	/* The debug overlay: free lines down the left, free lines down the right
-	   under the framerate. The engine only ever puts the rate there. */
+	/* Debug lines: numbered slots down the left, numbered slots down the right
+	   under the framerate. Skipped numbers leave blank rows. Each line has to
+	   be rewritten every frame; nothing persists. */
 	debugUI_set(0, "A %s lamp", draw_lamp ? "hide" : "show");
 	debugUI_set(1, "B %s post", draw_post ? "hide" : "show");
 
@@ -285,22 +323,26 @@ static void GameStateExample_update(void)
 	debugUI_set(6, "DPAD fov");
 
 	debugUI_showFPS();
-	debugUI_setRight(0, "arm %d", (int)cameraSpringArm_getLength(&viewport_get()->camera));
-	debugUI_setRight(1, "fov %d", (int)viewport_get()->camera.field_of_view);
+	debugUI_setRight(0, "arm %.1f", cameraSpringArm_getLength(&viewport_get()->camera));
+	debugUI_setRight(1, "fov %.1f", viewport_get()->camera.field_of_view);
 }
 
 static const GameStateDef states[STATE_COUNT] = {
 
-	[GAME_STATE_EXAMPLE] = {
-		.update     = GameStateExample_update,
+	[GAMEPLAY3D] = {
+		.update     = gameplay3d_update,
 		.scene3d    = &scene,
+		.controls   = &controls,
 
-		/* The engine opens no screen by itself, so a state that draws has to
-		   name one. */
+		/* The engine opens no screen by itself, so every state that draws has
+		   to name a mode. Entering a state that names the current mode leaves
+		   the screen as it is. */
 		.viewport   = SCREEN_320x240,
 
-		/* A state can be drawn on top of another one, which is how a pause
-		   keeps the game visible behind it. This one stands alone. */
+		/* States can be stacked: an overlay keeps the state named here loaded
+		   and visible underneath, which is how a pause works. GAME_STATE_NONE
+		   means this state stands alone, and it has to be set explicitly
+		   because state 0 is a valid state. */
 		.overlay_of = GAME_STATE_NONE,
 	},
 };
@@ -308,22 +350,23 @@ static const GameStateDef states[STATE_COUNT] = {
 
 int main()
 {
-	/* Where printed output goes: the emulator's viewer, and the USB cable on a
-	   flashcart. Neither is needed to run. */
+	/* Where printf output goes: the emulator's debug viewer, and USB on a
+	   flashcart. Both optional, neither affects the game. */
 	debug_init_isviewer();
 	debug_init_usblog();
 
-	/* Video, audio, the pads, the physics, the ROM's filesystem: everything
-	   that has to be up before a game can run. */
+	/* Brings up video, audio, controllers, physics and the ROM filesystem.
+	   Runs before anything else the engine offers. */
 	game_init();
 
 	debugUI_init();
 
-	/* Hand over the whole game and say which state opens. Opening that state
-	   is what builds the scene written above. */
-	game_start(states, STATE_COUNT, GAME_STATE_EXAMPLE);
+	/* Hands over the state table and enters the initial state, which is what
+	   loads the scene declared above. Everything after this point is driven by
+	   the state that is current. */
+	game_start(states, STATE_COUNT, GAMEPLAY3D);
 
-	/* One frame per turn, forever: read the pads, step the physics, run the
+	/* One frame per iteration: poll the controllers, step the physics, run the
 	   current state's update, draw. */
 	for (;;) game_runStep();
 

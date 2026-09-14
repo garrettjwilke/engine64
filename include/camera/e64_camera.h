@@ -30,10 +30,6 @@ typedef struct {
 	   nothing is visible. */
 	bool auto_clipping;
 
-	/* The buttons that drive it. Left out, the camera answers to nothing and
-	   only goes where the game sends it. */
-	const struct CameraControlBinding *binding;
-
 	union {
 		CameraSpringArmDef spring_arm;
 	};

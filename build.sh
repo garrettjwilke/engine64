@@ -12,6 +12,14 @@ cd "$(dirname "$0")"
 clean_only=0
 [ "$1" = clean ] && clean_only=1
 
+# The model importer is a host tool of tiny3d, built on its own and shipped as
+# source: without it every .glb in an example fails to convert.
+importer="$T3D_INST/tools/gltf_importer/gltf_to_t3d"
+if [ "$clean_only" = 0 ] && [ -n "$T3D_INST" ] && [ ! -x "$importer" ]; then
+	echo "Building the tiny3d model importer"
+	make -C "$(dirname "$importer")" -j4
+fi
+
 for dir in examples/*/; do
 	[ -f "$dir/Makefile" ] || continue
 

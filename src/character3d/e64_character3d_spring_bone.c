@@ -9,6 +9,7 @@
 
 #include "character3d/e64_character3d_spring_bone.h"
 #include "character3d/e64_character3d_skeleton.h"
+#include "engine/e64_common.h"
 #include "physics/math/e64_math_common.h"
 #include "physics/math/e64_matrix3.h"
 #include "time/e64_time.h"

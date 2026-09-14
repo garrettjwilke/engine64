@@ -5,7 +5,8 @@
 #include <libdragon.h>
 
 /* Distance fog: computed per vertex on the RSP and blended by the RDP.
-   Range is in world units along the view axis, inside the camera planes. */
+   Range is in metres along the view axis, and only reaches what the camera
+   planes already let through. */
 
 typedef struct {
 

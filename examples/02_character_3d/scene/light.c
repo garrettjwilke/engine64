@@ -1,20 +1,17 @@
 /*
-	How the world is lit.
+	The scene's lighting.
 
-	Light comes in two parts. Ambient is the floor: the colour a surface keeps
-	where nothing shines on it, and the only reason the dark side of an object
-	is not black. Then the sources, seven slots shared between directional and
-	point lights. They are read in order and cut at the first empty one, so the
-	six left unwritten here cost nothing.
+	Two parts. Ambient is the flat colour every surface keeps regardless of
+	what reaches it, and the only thing lighting the faces no source hits.
+	Then the sources: seven slots shared by every light type, read in order and
+	stopped at the first empty one, so the six left unwritten here cost nothing.
 */
 #include "scene3d/e64_lighting.h"
 
 
-/* The one source is a point light: it shines from a position in every
-   direction, and its size is how far it carries.
-
-   It sits at the height the lamp post puts its glass at, so it ends up inside
-   it. Move the lamp and this has to follow. */
+/* One point light: it radiates in every direction from .position, and .size is
+   the radius it reaches, in metres. Placed above the middle of the room, high
+   enough to light the floor without flattening the walls. */
 const LightDef light = {
 
 	.ambient_color = { 60, 60, 70, 0xFF },

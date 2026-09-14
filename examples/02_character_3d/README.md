@@ -1,19 +1,35 @@
-# 01 scene 3d
+# 02 character 3d
 
-The smallest world engine64 can put on screen: a room, a capsule standing in the middle of it, and a camera to look around.
+A capsule walking around a room: the stick moves it, A jumps, the camera follows it.
 
-Everything in `main.c` is content. The assets, where they are placed, the light, the camera and the one game state that draws them are all data the game hands over; the engine supplies the rest.
+Scene, light, fog and camera work exactly as in example 01. What this one adds is a character, the collision it stands on, and the player seat that ties a controller to it.
 
-### Camera
+### Character
 
-The scene definition carries the whole camera: lens, clipping planes, arm length, angles, and the settings the arm runs on. The engine keeps no defaults, so a value left out is zero and the camera behaves accordingly.
+A character is declared entirely as settings, and the engine ships no movement values of its own: what this body does is the `Character3DDef` in `main.c` and nothing else. Animation, weapons, aiming, sound and stats are separate blocks of settings, all optional, all left out here.
 
-Control is a binding: the game names a button per action and the engine does the rest every frame.
+Its body is kinematic. Nothing in the solver moves it: it moves itself, then resolves whatever it ended up inside and writes its own transform. That whole step is one call, `scene3d_updateCharacters`.
+
+One gait is declared, which is the proportional locomotion case: speed follows stick displacement. Declaring a second gait switches locomotion to target speeds, where the stick selects a gait by crossing its threshold.
+
+Jump mode is `JUMP_SNAP`: the body leaves the floor on the press, and while A stays down the rise pays less gravity, so a tap and a held press reach different heights. `JUMP_CHARGE` is the other mode, crouching first and launching on release.
+
+### Collision
+
+Drawn geometry and collision geometry are separate assets built from the same `.glb`. Room geometry is imported twice, once as a model and once as a triangle mesh, and the `Makefile` asks for the second one under `assets_collision`. A character falls through anything with no collision shape.
+
+### Player seat
+
+Binding a controller to a body happens in the state's `bindCharacter`, which the engine calls right after the scene is built. Camera binding names that same player, which is what makes the camera follow the body.
+
+### Controls
 
 | Action | Button |
 | --- | --- |
-| Turn and tilt | C buttons |
-| Pull in and out | L and R |
+| Walk | Stick |
+| Jump | A |
+| Turn and tilt the camera | C buttons |
+| Pull the camera in and out | L and R |
 | Narrow and widen the lens | D-Up and D-Down |
 
 ### Building

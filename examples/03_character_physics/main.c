@@ -1,84 +1,149 @@
 /*
-	A body in a room: walk it, run it, jump it, push it into the water and up
-	the ladder. Everything the character does comes from its settings and the
-	solver; the engine has no movement of its own.
+	Character physics
 
-	The prefabs live one per file under prefabs/. What is here is the world:
-	where each one stands, the light, the camera and the one state that runs
-	the frame.
+	A body in a room standing on three shapes: walk it, run it and jump it into
+	a capsule, a box and a sphere, and climb on top of them.
+
+	What this example adds over example 02:
+
+		a collider built from primitive shapes declared in code
+		shapes declaring how much they grip and how much they give back
+		a body that runs: three gaits, sprint and the stamina behind it
+		content split one file per piece, which is how a scene grows
+
+	The room's collision is still a triangle mesh, as in example 02. What is new
+	is the primitives: a shape declared in code, with no asset behind it, which
+	is what props and moving bodies are built from.
+
+	Content lives one file per piece: room and character under prefabs/, the
+	light, the fog and the camera under scene/, the button bindings under
+	controls/. What is left here is the world itself, where each piece stands,
+	and the one state that runs the frame.
+
+	The three primitives are declared here instead, so what a collider takes
+	reads next to where it is placed.
 */
 #include <libdragon.h>
 
-#include "game/e64_game.h"
-#include "scene3d/e64_scene3d.h"
-#include "entity/e64_entity3d.h"
-#include "character3d/e64_character3d.h"
-#include "viewport/e64_viewport.h"
-#include "player/e64_player.h"
-#include "control/e64_controller.h"
-#include "control/e64_camera_control.h"
-#include "control/e64_character3d_control.h"
-#include "control/e64_player_control.h"
-#include "shaders/e64_water.h"
-#include "time/e64_time.h"
-#include "debug/e64_debug.h"
+#include "game/e64_game.h"               /* init, state table, frame step    */
+#include "scene3d/e64_scene3d.h"         /* scene declaration and live scene */
+#include "entity/e64_entity3d.h"         /* colliders and shapes for a prefab */
+#include "viewport/e64_viewport.h"       /* screen modes and the live camera  */
+#include "camera/e64_spring_arm.h"       /* reading the arm back for debug    */
+#include "player/e64_player.h"           /* the seat a controller drives      */
+#include "control/e64_camera_control.h"  /* buttons wired to camera motion    */
+#include "control/e64_player_control.h"  /* the controls a state declares     */
+#include "time/e64_time.h"               /* frame delta                       */
+#include "debug/e64_debug.h"             /* on-screen debug lines             */
 
 
-/* --- prefabs ---------------------------------------------------------------
-	One file each, under prefabs/: the seven pieces of content, and the camera,
-	the light and the fog the scene runs with.
-*/
-
+/* Everything declared in the other files, referenced here to build the scene
+   and to run the frame. */
 extern const Prefab3D room;
-
-extern const Prefab3D water;
-extern const Prefab3D ladder;
-
-extern const Prefab3D capsule;
-extern const Prefab3D cube;
-extern const Prefab3D sphere;
-
 extern const Prefab3D character;
 
 extern const CameraDef camera;
 extern const LightDef  light;
 extern const FogDef    fog;
 
+extern const ControlsDef controls;
 
-/* --- the scene -------------------------------------------------------------
-	Placements are in metres, like the colliders the prefabs declare. The room
-	is 50 across, five quads of ten a side. The platform rises 5 in one
-	corner, the mound peaks at 2 across from it, and the pool is sunk 2.5 into
-	the middle.
+
+/* --- the primitives --------------------------------------------------------
+	Collision is declared in two steps, and both are needed. A PhysicsShapeDef
+	is one solid: its kind, the measurements that kind takes, and what it does
+	on contact. An Entity3DColliderDef is the array of those shapes plus how
+	many there are, and that is what the prefab points at. They are separate
+	because one body can carry several shapes, each with its own offset, so a
+	prefab always takes a collider even when it holds a single shape.
+
+	Shapes are in metres, like the placements below. Friction is how much the
+	surface grips, restitution how much of an impact comes back.
 */
 
+/* --- capsule --------------------------------------------------------------*/
+
+/* Half height is the segment between the two caps, so the whole capsule stands
+   radius plus half height either side of its centre. Raised by that centre, it
+   rests on the floor. */
+static const PhysicsShapeDef capsule_shapes[] = {
+	{ .type = SHAPE_CAPSULE, .capsule = {
+		.tx          = { .position = { 0.0f, 0.0f, 0.90f } },
+		.radius      = 0.35f,
+		.half_height = 0.55f,
+		.friction    = 0.8f,
+		.restitution = 0.1f,
+	}},
+};
+
+static const Entity3DColliderDef capsule_collider = { capsule_shapes, 1 };
+
+static const Prefab3D capsule = {
+
+	.type     = PREFAB3D_PROP,
+	.model    = "rom:/models/capsule.t3dm",
+	.collider = &capsule_collider,
+};
+
+/* --- box ------------------------------------------------------------------*/
+
+/* Box extents are measured from the centre out, so a one metre cube is half a
+   metre on each axis. */
+static const PhysicsShapeDef box_shapes[] = {
+	{ .type = SHAPE_BOX, .box = {
+		.e           = { 0.5f, 0.5f, 0.5f },
+		.friction    = 0.8f,
+		.restitution = 0.1f,
+	}},
+};
+
+static const Entity3DColliderDef box_collider = { box_shapes, 1 };
+
+static const Prefab3D cube = {
+
+	.type     = PREFAB3D_PROP,
+	.model    = "rom:/models/cube.t3dm",
+	.collider = &box_collider,
+};
+
+/* --- sphere ---------------------------------------------------------------*/
+
+static const PhysicsShapeDef sphere_shapes[] = {
+	{ .type = SHAPE_SPHERE, .sphere = {
+		.radius      = 0.5f,
+		.friction    = 0.8f,
+		.restitution = 0.1f,
+	}},
+};
+
+static const Entity3DColliderDef sphere_collider = { sphere_shapes, 1 };
+
+static const Prefab3D sphere = {
+
+	.type     = PREFAB3D_PROP,
+	.model    = "rom:/models/sphere.t3dm",
+	.collider = &sphere_collider,
+};
+
+
+/* --- the scene -------------------------------------------------------------*/
+
 /* One row per placement: which prefab, then where it stands. Declaring them
-   here is the whole job — the load builds each one in order, registers it in
+   here is the whole job: the load builds each one in order, registers it in
    the physics and draws it, with nothing else to call. What is left out stays
    zero, and a zero scale means original size. */
 static Scene3DPrefab scene_prefabs[] = {
 
-	{ &character, { 20.0f, -20.0f, 0.0f }, { 0.0f, 0.0f, 135.0f } },
+	{ &character, { 0.0f, -6.0f, 0.0f } },
 
-	/* Three still bodies in a row, parallel to the water's edge. The cube and
-	   the ball are modelled around their middle, so at double size they sit
-	   a metre up to rest on the floor. The scale carries their collision
-	   with it. */
+	/* One of each, in a row in front of the body. The cube and the ball are
+	   modelled around their middle, so at double size they sit a metre up to
+	   rest on the floor. The scale carries their collision with it. */
 	{ &capsule, {   0.0f, 0.0f, 0.0f } },
 	{ &cube,    { -10.0f, 0.0f, 1.0f }, {0}, { 2.0f, 2.0f, 2.0f } },
 	{ &sphere,  {  10.0f, 0.0f, 1.0f }, {0}, { 2.0f, 2.0f, 2.0f } },
 
-	/* Halfway along the platform's east face, facing the mound, 5 tall,
-	   which is exactly the climb. Stood off the wall on purpose: flush
-	   against it the body meets the platform before it can reach the volume
-	   it grabs, and the climb never starts. */
-	{ &ladder, { -4.8f, -10.0f, 0.0f }, { 0.0f, 0.0f, -90.0f } },
-
 	{ &room },
-
-	/* Last on purpose: the water is transparent, so it has to blend over
-	   everything already drawn. */
-	{ &water, { 0.0f, 10.0f, -0.5f } },
 };
 
 static Scene3DDef scene = {
@@ -99,77 +164,44 @@ static Scene3DDef scene = {
 	camera follows it.
 */
 
-static const CameraControlBinding camera_binding = {
-	
-	.player = PLAYER_1,
-	
-	.pan_left  = BTN_C_LEFT,
-	.pan_right = BTN_C_RIGHT,
-	.tilt_up   = BTN_C_UP,
-	.tilt_down = BTN_C_DOWN,
-	
-	.distance_in  = BTN_L,
-	.distance_out = BTN_R,
-	
-	.fov_in    = BTN_D_UP,
-	.fov_out   = BTN_D_DOWN,
-};
+enum { GAMEPLAY3D, STATE_COUNT };
 
-static const Character3DControlBinding character3d_binding = {
-
-	.player = PLAYER_1,
-
-	.jump   = BTN_A,
-	.roll   = BTN_B,
-	.sprint = BTN_Z,
-};
-
-/* The scene loads its characters in placement order; this one is the only one,
-   so the player declared on the binding takes the only one sitting at index 0. */
-static void GameStateExample_bindCharacter(void)
-{
-	player_setCharacter3D(scene3d_getCharacter3D(0), &character3d_binding);
-}
-
-static void GameStateExample_update(void)
+static void gameplay3d_update(void)
 {
 	Viewport *viewport = viewport_get();
 	float delta = time_get()->delta;
 
 	player_setCharacter3DControl(PLAYER_1, viewport);
 	player_update();
-
-	water_update(delta);
-
-	/* A character is not placed by the solver: it collides itself against the
-	world the solver just settled, and from there reaches what draws it. */
+	
 	scene3d_updateCharacters(viewport->fb_index);
 
-	cameraControl_update(&viewport->camera, &camera_binding, scene3d_get(), delta);
+	cameraControl_update(&viewport->camera, viewport->camera.binding, scene3d_get(), delta);
 	viewport_setPerspectiveCamera();
 
-	/* Ladder readout, one line per link of the chain: whether the sensor sees
-	   the body at all, where the body stands against the ladder's own spot,
-	   and whether the stick is asking for a climb once it does. Position is
-	   in centimetres so it fits, and the ladder stands at -480, -1000. */
-	const Character3D     *body   = scene3d_getCharacter3D(0);
-	const MovementCommand *cmd    = &player_get()[PLAYER_1].character3d.cmd;
-
-	debugUI_setRight(0, "lad %d st %d", (int)body->movement.data.on_ladder, (int)body->movement.current);
-	debugUI_setRight(1, "pos %d %d", (int)(body->body.position.x * 100.0f), (int)(body->body.position.y * 100.0f));
-	debugUI_setRight(2, "climb %d yaw %d", (int)(cmd->climb * 100.0f), (int)cmd->target_yaw);
+	/* Debug lines have to be rewritten every frame; nothing persists. */
+	debugUI_set(0, "STICK walk");
+	debugUI_set(1, "A jump");
+	debugUI_set(2, "Z sprint");
+	debugUI_set(4, "CBUTTONS orbit camera");
+	debugUI_set(5, "L R arm length");
+	debugUI_set(6, "DPAD fov");
 
 	debugUI_showFPS();
+	debugUI_setRight(0, "arm %.1f", cameraSpringArm_getLength(&viewport->camera));
+	debugUI_setRight(1, "fov %.1f", viewport->camera.field_of_view);
 }
 
-enum { GAME_STATE_EXAMPLE, STATE_COUNT };
-
 static const GameStateDef states[STATE_COUNT] = {
-	
-	[GAME_STATE_EXAMPLE] = {
-		.update        = GameStateExample_update,
-		.bindCharacter = GameStateExample_bindCharacter,
+
+	[GAMEPLAY3D] = {
+		.update        = gameplay3d_update,
 		.scene3d       = &scene,
+
+		/* Wired once, after the scene is loaded and before the first update:
+		   the player is seated on the body its binding names, and the camera
+		   answers to the buttons that name it. */
+		.controls      = &controls,
 
 		/* The engine opens no screen by itself, so a state that draws has to
 		   name one. */
@@ -189,7 +221,7 @@ int main()
 
 	debugUI_init();
 
-	game_start(states, STATE_COUNT, GAME_STATE_EXAMPLE);
+	game_start(states, STATE_COUNT, GAMEPLAY3D);
 
 	for (;;) game_runStep();
 

@@ -2,6 +2,7 @@
 #define ENGINE64_CHARACTER2D_CONTROL_H
 
 #include "e64_controller.h"
+#include "prefab/e64_prefab2d.h"
 #include "character2d/e64_character2d.h"
 #include "character2d/e64_character2d_movement.h"
 
@@ -18,6 +19,10 @@ typedef struct Character2DControlBinding {
 
 	/* Whose seat drives this body. */
 	PlayerID player;
+
+	/* Which body it drives: the prefab it was placed from, in whatever layer
+	   of the scene it stands. */
+	const Prefab2D *character;
 
 	ButtonID jump;
 	ButtonID roll;

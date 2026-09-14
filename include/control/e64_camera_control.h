@@ -8,6 +8,11 @@ typedef struct CameraControlBinding {
 
 	PlayerID player;
 
+	/* Which camera it moves, by the declaration the scene placed it from.
+	   One scene runs one camera today; naming it here is what lets a second
+	   one answer to a different set of buttons. */
+	const CameraDef *camera;
+
 	ButtonID pan_left;
 	ButtonID pan_right;
 	ButtonID tilt_up;

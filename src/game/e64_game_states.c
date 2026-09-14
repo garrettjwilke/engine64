@@ -9,6 +9,7 @@
 #include "scene3d/e64_scene3d.h"
 #include "scene2d/e64_scene2d.h"
 #include "player/e64_player.h"
+#include "control/e64_player_control.h"
 #include "viewport/e64_viewport.h"
 #include "game/e64_game.h"
 #include "game/e64_game_states.h"
@@ -29,11 +30,13 @@ static void gameState_load(GameState id)
 	/* The screen first: the scenes below place cameras against it. */
 	if (game_state[id].viewport) viewport_setMode(game_state[id].viewport);
 
-	if (game_state[id].scene3d) {
-		scene3d_load(game_state[id].scene3d);
-		if (game_state[id].bindCharacter) game_state[id].bindCharacter();
-	}
+	if (game_state[id].scene3d) scene3d_load(game_state[id].scene3d);
 	if (game_state[id].scene2d) scene2d_load(game_state[id].scene2d);
+
+	/* After the scenes: the bodies the controls name exist from here on. */
+	controls_bind(game_state[id].controls, game_state[id].scene3d);
+	controls_bind2D(game_state[id].controls, game_state[id].scene2d);
+
 	if (game_state[id].onEnter) game_state[id].onEnter();
 }
 

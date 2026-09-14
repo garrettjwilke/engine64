@@ -18,7 +18,7 @@
 #define RENDER_MAX_2D_ELEMENTS 1024
 /* One entry per visible mesh part, not per entity: a skinned character alone
    contributes several, so this has to clear the scene's entity budget. */
-#define RENDER_MAX_3D_ELEMENTS    32
+#define RENDER_MAX_3D_ELEMENTS    64
 #define RENDER_MAX_SECTIONS        8
 
 typedef struct Scene3D          Scene3D;

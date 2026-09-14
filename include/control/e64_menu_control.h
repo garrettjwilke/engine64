@@ -3,16 +3,18 @@
 
 #include "e64_controller.h"
 
-typedef struct Player Player;
-typedef struct Game   Game;
-
+/* The menu module reads this binding, so naming its declaration is as far as
+   this file can go towards it. */
+typedef struct MenuDef MenuDef;
 
 typedef struct MenuControlBinding {
 
-	/* Whose seat drives the menus. There is one menu, so it cannot be told
-	   from anything else: the game names the player here, the way it does
-	   for the camera. */
+	/* Whose controller moves the cursor. There is one cursor, so the game
+	   names the player here, the way it does for the camera. */
 	PlayerID player;
+
+	/* Which menu these buttons put up and walk through. */
+	const MenuDef *menu;
 
 	ButtonID confirm;
 	ButtonID cancel;
