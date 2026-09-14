@@ -56,6 +56,10 @@ typedef struct MassData {
 typedef struct PhysicsShape {
 	ShapeType            type;
 	Transform            local;
+	/* body->tx composed with local, kept current by attach and by
+	   rigidBody_synchronizeProxies, which runs whenever the body moves. A
+	   static shape used to recompose this in every query of every frame. */
+	Transform            world;
 
 	struct PhysicsShape *next;
 	struct RigidBody    *body;
@@ -102,10 +106,11 @@ bool physicsShape_fromDef(PhysicsShape *shape, const PhysicsShapeDef *def, Vecto
 void physicsShape_release(PhysicsShape *shape);
 
 
-/* Narrowphase / body dispatch — switches on shape->type. */
-int   physicsShape_testPoint  (const PhysicsShape *shape, const Transform *body_tx, const Vector3 *p);
-int   physicsShape_raycast    (const PhysicsShape *shape, const Transform *body_tx, RaycastData *raycast);
-void  physicsShape_computeAABB(const PhysicsShape *shape, const Transform *body_tx, AABB *aabb);
+/* Narrowphase / body dispatch — switches on shape->type. All three read the
+   cached shape->world. */
+int   physicsShape_testPoint  (const PhysicsShape *shape, const Vector3 *p);
+int   physicsShape_raycast    (const PhysicsShape *shape, RaycastData *raycast);
+void  physicsShape_computeAABB(const PhysicsShape *shape, AABB *aabb);
 void  physicsShape_computeMass(const PhysicsShape *shape, MassData *md);
 
 

@@ -8,16 +8,6 @@
 #define LN2 0.6931472f
 
 
-float deg_to_rad(float angle)
-{
-	return PI / 180 * angle;
-}
-
-float rad_to_deg(float rad)
-{
-	return 180 / PI * rad;
-}
-
 float angle_wrap(float angle)
 {
 	while (angle >  180.0f) angle -= 360.0f;
@@ -30,11 +20,6 @@ float angle_wrap_relative(float angle, float reference)
 	while (angle >  reference + 180.0f) angle -= 360.0f;
 	while (angle <= reference - 180.0f) angle += 360.0f;
 	return angle;
-}
-
-float lerpf(float a, float b, float t)
-{
-	return a + t * (b - a);
 }
 
 float qi_sqrt(float x)

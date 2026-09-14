@@ -11,9 +11,29 @@ typedef struct Matrix3 {
 } Matrix3;
 
 
+/* Nine stores each, inline: as a call the 36-byte result would be written
+   once by the callee and copied again by the caller. */
+
+static inline Matrix3 matrix3_identity(void)
+{
+	return (Matrix3){
+		.ex = {1.0f, 0.0f, 0.0f},
+		.ey = {0.0f, 1.0f, 0.0f},
+		.ez = {0.0f, 0.0f, 1.0f},
+	};
+}
+
+static inline Matrix3 matrix3_transposed(const Matrix3 *m)
+{
+	return (Matrix3){
+		.ex = {m->ex.x, m->ey.x, m->ez.x},
+		.ey = {m->ex.y, m->ey.y, m->ez.y},
+		.ez = {m->ex.z, m->ey.z, m->ez.z},
+	};
+}
+
 Matrix3 matrix3_create(float a, float b, float c, float d, float e, float f, float g, float h, float i);
 Matrix3 matrix3_fromColumns(const Vector3 *ex, const Vector3 *ey, const Vector3 *ez);
-Matrix3 matrix3_identity(void);
 Matrix3 matrix3_zero(void);
 Matrix3 matrix3_diagonal(float x, float y, float z);
 Matrix3 matrix3_fromAxisAngle(const Vector3 *axis, float angle);
@@ -33,7 +53,6 @@ void matrix3_scale(Matrix3 *m, float scalar);
 void matrix3_add(Matrix3 *m, const Matrix3 *n);
 void matrix3_sub(Matrix3 *m, const Matrix3 *n);
 
-Matrix3 matrix3_transposed(const Matrix3 *m);
 Matrix3 matrix3_scaled(const Matrix3 *m, float scalar);
 Matrix3 matrix3_sum(const Matrix3 *a, const Matrix3 *b);
 Matrix3 matrix3_product(const Matrix3 *a, const Matrix3 *b);
@@ -41,10 +60,19 @@ Matrix3 matrix3_product(const Matrix3 *a, const Matrix3 *b);
 Vector3 matrix3_transformVector(const Matrix3 *m, const Vector3 *v);
 Vector3 matrix3_transformVectorTransposed(const Matrix3 *m, const Vector3 *v);
 
-Vector3 matrix3_column0(const Matrix3 *m);
-Vector3 matrix3_column1(const Matrix3 *m);
-Vector3 matrix3_column2(const Matrix3 *m);
-float   matrix3_get(const Matrix3 *m, int i, int j);
+/* Element access is inline: a couple of loads, smaller than a call. With
+   literal indices, as the box-box solver uses them, matrix3_get folds to a
+   single load. */
+
+static inline Vector3 matrix3_column0(const Matrix3 *m) { return (Vector3){m->ex.x, m->ey.x, m->ez.x}; }
+static inline Vector3 matrix3_column1(const Matrix3 *m) { return (Vector3){m->ex.y, m->ey.y, m->ez.y}; }
+static inline Vector3 matrix3_column2(const Matrix3 *m) { return (Vector3){m->ex.z, m->ey.z, m->ez.z}; }
+
+static inline float matrix3_get(const Matrix3 *m, int i, int j)
+{
+	const Vector3 *col = (i == 0) ? &m->ex : (i == 1) ? &m->ey : &m->ez;
+	return (j == 0) ? col->x : (j == 1) ? col->y : col->z;
+}
 
 
 #endif

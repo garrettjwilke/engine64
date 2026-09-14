@@ -15,20 +15,8 @@
 
 static Game game;
 
-static RenderContext render_context;
-
 
 Game *game_get(void) { return &game; }
-
-GameContext game_getContext(void)
-{
-	return (GameContext){
-		.game     = &game,
-		.viewport = viewport_get(),
-		.scene3d  = scene3d_get(),
-		.player   = player_get(),
-	};
-}
 
 void game_init()
 {
@@ -41,6 +29,7 @@ void game_init()
 	rdpq_init();
 	
 	joypad_init();
+	
 	controller_start();
 	
 	time_init();
@@ -61,22 +50,17 @@ void game_init()
 
 void game_runStep(void)
 {
+	sound_poll();
+	
 	time_update();
 
-	GameContext ctx = game_getContext();
-
 	controller_poll();
-	player_setControllerData(ctx.game);
 
-	game_updateState(&ctx);
+	game_updateState();
 
 	sound_update();
 
-	GameRenderDescriptor desc = game_getRenderDescriptor(&ctx);
-	render_setContext(&render_context, desc.scene3d, ctx.viewport->fb_index, desc.scene2d);
-	render(&render_context, &ctx.viewport->fb_index);
-
-	sound_poll();
+	render();
 }
 
 void game_close()

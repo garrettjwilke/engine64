@@ -6,6 +6,7 @@
 #include <t3d/t3dmath.h>
 
 #include "physics/e64_physics.h"
+#include "physics/math/e64_math_common.h"    /* RENDER_SCALE */
 #include "scene3d/e64_lighting.h"
 
 
@@ -14,14 +15,25 @@ static Light light;
 Light *light_get(void) { return &light; }
 
 
+/* A scene declares its lights in metres, where it stands and how far it
+   carries, and the hardware measures both against the geometry it is lighting.
+   Converting at the load leaves the per frame path untouched. */
 void light_init(const LightDef *def)
 {
 	light = *def;
 
 	for (int i = 0; i < LIGHT_COUNT; i++) {
 		if (light.source[i].type == LIGHT_NONE) break;
-		if (light.source[i].type == LIGHT_DIRECTIONAL)
+
+		if (light.source[i].type == LIGHT_DIRECTIONAL) {
 			t3d_vec3_norm(&light.source[i].directional.direction);
+			continue;
+		}
+
+		for (int axis = 0; axis < 3; axis++)
+			light.source[i].point.position.v[axis] *= RENDER_SCALE;
+
+		light.source[i].point.size *= RENDER_SCALE;
 	}
 }
 

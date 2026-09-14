@@ -1,13 +1,6 @@
 #include "physics/math/e64_transform.h"
 
 
-void transform_init(Transform *t)
-{
-	t->position = vector3_zero();
-	t->rotation = matrix3_identity();
-}
-
-
 Transform transform_inverse(const Transform *t)
 {
 	Transform inv;

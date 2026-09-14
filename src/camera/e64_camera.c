@@ -64,7 +64,24 @@ void camera_setViewTarget(Camera *camera, const Vector3 *from, float duration)
 	camera->blend_duration = duration;
 }
 
-void camera_update(Camera *camera, Vector3 *center, float dt)
+/* The near runs at a fifth of the arm, floored at a metre (the engine is
+   in centimetres): the cut zone ends at 20% of the way to the pivot, so it
+   never reaches the pieces in view. The far rides the arm whole, so the
+   back plane keeps its authored distance past the pivot at any zoom. */
+void camera_fitClipping(Camera *camera, const struct Scene3D *scene)
+{
+	if (!camera->auto_clipping) return;
+	if (camera->type != CAMERA_TYPE_SPRING_ARM) return;
+
+	float arm  = camera->spring_arm.data.arm_length;
+	float near = arm * 0.2f;
+
+	camera->near_clipping = near > camera->base_near_clipping
+	                      ? near : camera->base_near_clipping;
+	camera->far_clipping  = arm + camera->base_far_clipping;
+}
+
+void camera_update(Camera *camera, Vector3 *center, const struct Scene3D *scene, float dt)
 {
 	if (camera->type == CAMERA_TYPE_NONE) return;
 
@@ -86,4 +103,8 @@ void camera_update(Camera *camera, Vector3 *center, float dt)
 	}
 
 	camera_handler[camera->type](camera, center, dt);
+
+	/* The flags read here are the previous frame's cull: the planes trail
+	   the visibility by one frame. */
+	camera_fitClipping(camera, scene);
 }

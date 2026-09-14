@@ -17,7 +17,12 @@ typedef struct Transform {
 } Transform;
 
 
-void      transform_init(Transform *t);
+static inline void transform_init(Transform *t)
+{
+	t->position = vector3_zero();
+	t->rotation = matrix3_identity();
+}
+
 Transform transform_inverse(const Transform *t);
 
 Vector3   transform_mulVector(const Transform *t, const Vector3 *v);

@@ -18,6 +18,12 @@ float cameraSpringArm_getYaw(const Camera *camera)
 	return camera->spring_arm.data.yaw;
 }
 
+float cameraSpringArm_getLength(const Camera *camera)
+{
+	if (camera->type != CAMERA_TYPE_SPRING_ARM) return 0.0f;
+	return camera->spring_arm.data.arm_length;
+}
+
 
 static void cameraSpringArm_setVelocity(Camera *camera, float dt)
 {
@@ -55,7 +61,7 @@ static void cameraSpringArm_setPosition(Camera *camera, Vector3 *center, float d
 	Vector3 forward = { cos_pitch * sin_yaw, cos_pitch * cos_yaw, -sin_pitch };
 	Vector3 right   = { cos_yaw, -sin_yaw, 0.0f };
 
-	Vector3 pivot = { center->x, center->y, center->z + data->pivot_height };
+	Vector3 pivot = { center->x, center->y, center->z + data->height_offset };
 
 	camera->position.x = pivot.x - forward.x * data->arm_length + right.x * data->side_offset;
 	camera->position.y = pivot.y - forward.y * data->arm_length + right.y * data->side_offset;
@@ -78,7 +84,7 @@ void cameraSpringArm_init(Camera *camera, const CameraSpringArmDef *def)
 		.side_offset        = def->side_offset,
 		.yaw               = def->yaw,
 		.pitch             = def->pitch,
-		.pivot_height      = def->pivot_height,
+		.height_offset      = def->height_offset,
 	};
 }
 

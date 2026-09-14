@@ -48,11 +48,6 @@ typedef struct WaterDef {
 
 	const char *mesh_path;
 
-	/* Splash of this surface, played for whatever enters it. One is picked
-	   at random; the plunge speed sets the volume. */
-	const SoundID *entry_sound;
-	uint8_t        entry_sound_count;
-	
 	WaterWave wave[WATER_MAX_WAVES];
 	uint8_t   wave_count;
 
@@ -83,7 +78,14 @@ typedef struct Water {
 	uint16_t count;
 
 	float amplitude_sum; /* of every wave; normalises the height for shading */
-	float base_z;        /* resting surface height, metres */
+	float base_z;        /* resting surface height, metres, mesh space */
+
+	/* Placement of the bound sensor body, cached at bind time: the model is
+	   authored in local space, the physics asks in world space. Zero until
+	   the water is bound. Translation only: buoyancy models the surface as
+	   z = h(x, y) under vertical gravity, so a rotated placement is out of
+	   the model regardless. */
+	Vector3 placement;
 
 	BuoyancyVolume volume;   /* lent to the physics world by water_bindPhysics */
 
@@ -108,14 +110,19 @@ Water *water_create(const WaterDef *def);
    does not freeze mid-wave; only the per-point work is skipped. */
 void water_update(float delta);
 
-/* Height of the surface over any world (x, y), metres: the resting height
-   plus the same wave sum the render points use, evaluated analytically. */
-float water_surfaceHeight(const Water *water, float x, float y);
+/* Height of the surface over any world (x, y), metres: the query drops into
+   mesh space through the bound body's placement, rides the same wave sum the
+   render points use, and comes back out with the placement's height. */
+float water_getSurfaceHeight(const Water *water, float x, float y);
 
 /* Binds the surface to the static body carrying the water's sensor shape
    and registers the pair as a buoyancy volume in the world. From then on
    every dynamic body inside the sensor floats against these waves. */
 void water_bindPhysics(Water *water, struct RigidBody *body, struct PhysicsWorld *world);
+
+/* The surface water_bindPhysics tied to this body. NULL: the body carries no
+   water. */
+Water *water_getBoundSurface(const struct RigidBody *body);
 
 /* Deletes every registered surface. Runs with scene3d_unload. */
 void water_clear(void);

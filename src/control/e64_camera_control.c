@@ -2,6 +2,7 @@
 #include <fmath.h>
 
 #include "physics/math/e64_math_common.h"
+#include "physics/math/e64_math_functions.h"
 #include "camera/e64_camera.h"
 #include "camera/e64_spring_arm.h"
 #include "control/e64_camera_control.h"
@@ -65,33 +66,49 @@ static void cameraControl_setAiming(Camera *camera, bool aiming, float dt)
 }
 
 
-/* Opposite binds cancel out, so a controller that has the C stick under both
-   of them hands over the axis with its own magnitude. */
-void cameraControl_update(Camera *camera, const CameraControlBinding *binding, float dt)
+/* Opposite binds cancel out, so holding both leaves the camera still.
+
+   The C stick takes over each axis it is pushed on. An N64 controller has none
+   and reads zero, so the buttons are the whole push and the camera swings at
+   one speed. A GameCube one reports how far its stick went, and the camera
+   moves as fast as it is pushed. */
+void cameraControl_update(Camera *camera, const CameraControlBinding *binding,
+                          const struct Scene3D *scene, float dt)
 {
 	const Controller *controller = &controller_get()[binding->player];
 
-	float x = button_getPressed(controller, &controller->held, binding->pan_right)
-	        - button_getPressed(controller, &controller->held, binding->pan_left);
+	Vector2 push = controller_getCStickNormalized(controller);
 
-	float y = button_getPressed(controller, &controller->held, binding->tilt_up)
-	        - button_getPressed(controller, &controller->held, binding->tilt_down);
+	if (push.x == 0.0f)
+		push.x = button_isHeld(controller, binding->pan_right)
+		       - button_isHeld(controller, binding->pan_left);
 
-	cameraControl_setInput(camera, x, y);
+	if (push.y == 0.0f)
+		push.y = button_isHeld(controller, binding->tilt_up)
+		       - button_isHeld(controller, binding->tilt_down);
+
+	cameraControl_setInput(camera, push.x, push.y);
 
 	if (camera->type == CAMERA_TYPE_SPRING_ARM) {
 		const CameraSpringArmSettings *settings = &camera->spring_arm.settings;
 
-		float distance = button_getPressed(controller, &controller->held, binding->distance_out)
-		               - button_getPressed(controller, &controller->held, binding->distance_in);
+		float distance = button_isHeld(controller, binding->distance_out)
+		               - button_isHeld(controller, binding->distance_in);
 
-		float fov = button_getPressed(controller, &controller->held, binding->fov_out)
-		          - button_getPressed(controller, &controller->held, binding->fov_in);
+		float fov = button_isHeld(controller, binding->fov_out)
+		          - button_isHeld(controller, binding->fov_in);
 
 		/* The stick moves what the arm is asked for, never where it is: the
 		   aim rides on top of this and the two never fight over one field. */
 		camera->spring_arm.data.target_arm_length += distance * settings->distance_speed * dt;
 		camera->target_field_of_view              += fov      * settings->fov_speed      * dt;
+
+		camera->target_field_of_view = clampf(camera->target_field_of_view,
+		                                      CAMERA_FOV_MIN, CAMERA_FOV_MAX);
+
+		camera->spring_arm.data.target_arm_length = clampf(
+			camera->spring_arm.data.target_arm_length,
+			SPRING_ARM_MIN_LENGTH, SPRING_ARM_MAX_LENGTH);
 	}
 
 	/* The binding names the player, so the camera knows what to follow on its
@@ -102,10 +119,11 @@ void cameraControl_update(Camera *camera, const CameraControlBinding *binding, f
 	/* The body it follows is also the body that aims, so the pose needs no
 	   call of its own. */
 	cameraControl_setAiming(camera,
-		player->character && player->character->movement.data.aiming, dt);
+		player->type == PLAYER_CHARACTER_3D && player->character3d.character
+		&& player->character3d.character->movement.data.aiming, dt);
 
 	if (player->entity)
-		camera_update(camera, &player->entity->transform.position, dt);
+		camera_update(camera, &player->entity->transform.position, scene, dt);
 }
 
 
@@ -125,6 +143,10 @@ void cameraControl_setFieldOfView(Camera *camera, float field_of_view, float dt)
 	if (camera->type != CAMERA_TYPE_SPRING_ARM) return;
 
 	float rate = camera->spring_arm.settings.zoom_response_rate;
+
+	/* The aim's offset rides on top of the target, so the bound goes here,
+	   on the final ask, not only on the stick's side. */
+	field_of_view = clampf(field_of_view, CAMERA_FOV_MIN, CAMERA_FOV_MAX);
 
 	camera->field_of_view = lerpf(camera->field_of_view, field_of_view, 1.0f - fm_expf(-rate * dt));
 }

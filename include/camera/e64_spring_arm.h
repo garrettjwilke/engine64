@@ -4,9 +4,20 @@
 #include <stdint.h>
 #include "physics/math/e64_vector2.h"
 #include "physics/math/e64_vector3.h"
+#include "physics/math/e64_math_common.h"
 
 
 typedef struct Camera Camera;
+
+/* Hard zoom-out ceiling, in metres like the rest of a scene. The near inherits
+   it, and inside it the fixed-point projection never leaves its envelope. */
+#define SPRING_ARM_MAX_LENGTH 120.0f
+
+/* Zoom-in floor. At zero the camera lands on the point it is watching, the
+   view direction comes out a null vector, and normalising that poisons every
+   number downstream. Small enough to be no limit at all in a scene built in
+   metres, and still far from where a float starts losing the direction. */
+#define SPRING_ARM_MIN_LENGTH 0.1f
 
 typedef struct CameraSpringArmSettings {
 
@@ -48,7 +59,7 @@ typedef struct CameraSpringArmData {
 	float yaw;
 	float pitch;
 
-	float pivot_height;
+	float height_offset;
 
 	Vector2 velocity;
 	Vector2 target_velocity;
@@ -63,7 +74,7 @@ typedef struct CameraSpringArmDef {
 
 	float yaw;
 	float pitch;
-	float pivot_height;
+	float height_offset;
 
 	CameraSpringArmSettings settings;
 
@@ -78,5 +89,6 @@ void cameraSpringArm_update(Camera *camera, Vector3 *center, float dt);
    nothing to do. */
 float cameraSpringArm_getPitch(const Camera *camera);
 float cameraSpringArm_getYaw(const Camera *camera);
+float cameraSpringArm_getLength(const Camera *camera);
 
 #endif

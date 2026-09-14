@@ -48,6 +48,6 @@ typedef struct MenuControls {
 
 
 void menuControls_map(MenuControls *controls, const Controller *controller, const MenuControlBinding *binding);
-void menuControl_update(Game *game);
+void menuControl_update(void);
 
 #endif

@@ -14,10 +14,16 @@
 #include "particles/e64_particles.h"
 #include "render/e64_render.h"
 #include "scene2d/e64_scene2d.h"
+#include "debug/e64_debug.h"
 #include "time/e64_time.h"
 #include "scene3d/e64_scene3d.h"
 
 #include "game/e64_game.h"
+
+
+/* The frame's draw list. Filled by the scenes and consumed here, every
+   frame; nobody outside sees it. */
+static RenderContext render_context;
 
 
 void renderTransform_init(RenderTransform *t)
@@ -39,132 +45,73 @@ void render_initContext(RenderContext *ctx)
 }
 
 
-static RenderSection *render_beginSection(RenderContext *ctx)
-{
-	RenderSection *section = &ctx->section[ctx->section_count++];
-	section->element_start = ctx->element_count;
-	section->element_count = 0;
-	section->has_scissor   = false;
-	return section;
-}
-
-static void render_endSection(RenderContext *ctx, RenderSection *section)
-{
-	section->element_count = ctx->element_count - section->element_start;
-}
-
-
-
-/* Bound and frustum are both in world space and both already built: the mesh
-   placed its boxes with the matrix, the viewport its frustum with the camera,
-   both before the context. */
-static bool render_isBoundVisible(const MeshBound *bound, const T3DViewport *viewport)
-{
-	return t3d_frustum_vs_aabb(&viewport->viewFrustum, &bound->min, &bound->max);
-}
-
-static void render_setScene3DContext(RenderContext *ctx, const Scene3D *s, uint8_t fb_index)
-{
-	const T3DViewport *viewport = &viewport_get()->t3d_viewport;
-
-	for (int i = 0; i < s->entity_count; i++) {
-		Entity    *e      = s->entity[i];
-		Mesh *mesh  = e->mesh;
-		T3DMat4FP  *matrix = mesh->matrix_buffer ? &mesh->matrix_buffer[fb_index] : NULL;
-		T3DSkeleton *skel  = mesh->skeleton;
-
-		if (e->cull) {
-			mesh->culled = !render_isBoundVisible(&mesh->bound[0], viewport);
-			if (mesh->culled) continue;
-		}
-
-		/* Whatever drives this mesh has already moved: fold the new positions
-		   into this frame's vertex buffer, then point the segment its recorded
-		   display list reads from at that same copy. */
-		mesh_updateDeform(mesh, fb_index);
-		mesh_bindDeformFrame(mesh, fb_index);
-
-		if (mesh->dl_count == 0) {
-			uint8_t b = 1;
-			T3DModelIter it = t3d_model_iter_create(mesh->model, T3D_CHUNK_TYPE_OBJECT);
-			while (t3d_model_iter_next(&it) && b < mesh->bound_count) {
-				it.object->isVisible = !e->cull || render_isBoundVisible(&mesh->bound[b], viewport);
-				b++;
-			}
-
-			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
-			ctx->object[ctx->object_count++] = (Element3D){ NULL, mesh->model, matrix, skel, mesh->draw_conf };
-			continue;
-		}
-
-		for (int part = 0; part < mesh->dl_count; part++) {
-			if (!(mesh->visible & (1u << part))) continue;
-
-			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
-			ctx->object[ctx->object_count++] = (Element3D){ mesh->dl[part], NULL, matrix, skel };
-		}
-	}
-}
-
-/* One section per layer: the elements come from the live scene, the scissor
-   from the definition that built it. */
-static void render_setScene2DContext(RenderContext *ctx, const Scene2D *scene2d)
-{
-	if (!scene2d->def) return;
-
-	for (int i = 0; i < scene2d->def->layer_count; i++) {
-		const Scene2DLayer *src = &scene2d->def->layer[i];
-
-		RenderSection *dst = render_beginSection(ctx);
-		memcpy(ctx->element + ctx->element_count,
-			   scene2d->element + scene2d->layer_start[i],
-			   src->element_count * sizeof(Element2D));
-		ctx->element_count += src->element_count;
-		render_endSection(ctx, dst);
-
-		dst->has_scissor = src->has_scissor;
-		dst->scissor_x   = src->scissor_x;
-		dst->scissor_y   = src->scissor_y;
-		dst->scissor_w   = src->scissor_w;
-		dst->scissor_h   = src->scissor_h;
-	}
-}
-
-void render_setContext(RenderContext *ctx, const Scene3D *scene3d, uint8_t fb_index, const Scene2D *scene2d)
-{
-	render_initContext(ctx);
-	if (scene3d) render_setScene3DContext(ctx, scene3d, fb_index);
-	if (scene2d) render_setScene2DContext(ctx, scene2d);
-}
-
 static void render_start(int *fb_index)
 {
 	*fb_index = (*fb_index + 1) % FB_COUNT;
 
-	/* Geometry fades toward the fog color, so the background must be it. */
+	/* Geometry fades toward the fog color, so the background must be it. A
+	   2D scene that declares a sky paints that instead. */
 	Fog *fog = fog_get();
-	viewport_clear(fog->enabled ? fog->color : RGBA32(0, 0, 0, 0xFF));
+	color_t clear = fog->enabled ? fog->color : RGBA32(0, 0, 0, 0xFF);
+
+	const Scene2D *scene2d = scene2d_get();
+	if (scene2d->def && scene2d->def->background.a) clear = scene2d->def->background;
+
+	viewport_attach();
+
+	/* The 3D pipeline is only up while a 3D scene is, and it starts its own
+	   frame: the render state it leaves is the one the clear and everything
+	   after it run under, which is why it goes first. */
+	if (viewport_has3D()) {
+		t3d_frame_start();
+		t3d_viewport_attach(&viewport_get()->t3d_viewport);
+	}
+
+	viewport_clear(clear);
+
+	/* Only the 3D pipeline writes depth. */
+	if (viewport_has3D()) t3d_screen_clear_depth();
 }
 
 static void render_end(void)
 {
-	rdpq_detach_show();
+	viewport_detach();
 }
 
-/* Uniform fade for textured elements, the stamina wheel way: env alpha
-   modulates only the alpha channel while RGB passes TEX0 untouched, so
-   prim color stays free for tinting. */
-static void render_setTransparency(const Element2D *element)
-{
-	if (element->transparency == 0) return;
+/* No transparency a sprite could carry: the RDP is not on a sprite mode. */
+#define SPRITE_MODE_UNSET (-1)
 
-	rdpq_set_env_color(RGBA32(0, 0, 0, 255 - element->transparency));
-	rdpq_mode_combiner(RDPQ_COMBINER1((0,0,0,TEX0), (TEX0,0,ENV,0)));
+/* The whole RDP state a sprite draws under, in one batch: the mode API
+   calls between begin and end are programmed as a single change instead of
+   one apiece. Uniform fade for textured elements, the stamina wheel way:
+   env alpha modulates only the alpha channel while RGB passes TEX0
+   untouched, so prim color stays free for tinting.
+
+   A run of sprites sharing a transparency sets this once: a stage's tiles
+   are hundreds of elements under the very same state. */
+static void render_setSpriteMode(uint8_t transparency)
+{
+	rdpq_mode_begin();
+		rdpq_set_mode_standard();
+		rdpq_mode_blender(RDPQ_BLENDER_MULTIPLY);
+		rdpq_mode_alphacompare(1);
+		if (transparency) rdpq_mode_combiner(RDPQ_COMBINER1((0,0,0,TEX0), (TEX0,0,ENV,0)));
+	rdpq_mode_end();
+
+	/* Not a mode call, so it is issued on its own either way. */
+	if (transparency) rdpq_set_env_color(RGBA32(0, 0, 0, 255 - transparency));
 }
 
-void render(RenderContext *ctx, int *fb_index)
+void render(void)
 {
-	render_start(fb_index);
+	RenderContext *ctx = &render_context;
+	Viewport *viewport = viewport_get();
+
+	render_initContext(ctx);
+	scene3d_setRenderContext(scene3d_get(), ctx, viewport);
+	scene2d_setRenderContext(scene2d_get(), ctx);
+
+	render_start(&viewport->fb_index);
 
 	if (ctx->object_count > 0) {
 		light_set(light_get());
@@ -219,7 +166,7 @@ void render(RenderContext *ctx, int *fb_index)
 		   must not emit a single command, scissor setup included. */
 		bool any_visible = false;
 		for (int i = 0; i < section->element_count; i++) {
-			if (!ctx->element[section->element_start + i].is_hidden) {
+			if (!ctx->element[section->element_start + i].graphic->is_hidden) {
 				any_visible = true;
 				break;
 			}
@@ -234,20 +181,59 @@ void render(RenderContext *ctx, int *fb_index)
 				section->scissor_y + section->scissor_h);
 		}
 
+		/* The sprite state the RDP is already programmed with: the
+		   transparency it was set for, or SPRITE_MODE_UNSET when a shape or
+		   a text left the mode on something else. Only a change pays. */
+		int sprite_mode = SPRITE_MODE_UNSET;
+
+		/* The texture already in TMEM, so a run of elements sharing one
+		   sprite uploads it once. Anything that draws its own way leaves it
+		   unknown and the next upload is paid again. */
+		const sprite_t *loaded = NULL;
+
 		for (int i = 0; i < section->element_count; i++) {
 			Element2D *element = &ctx->element[section->element_start + i];
-			if (element->is_hidden) continue;
-			switch (element->type) {
-				case ELEMENT2D_RECTANGLE:    shape_drawRectangle(&element->rectangle, element->position, element->scale);                          break;
-				case ELEMENT2D_TEXT:         text_draw(&element->text, element->position);                                                         break;
-				case ELEMENT2D_SPRITE:       sprite_setMode(); render_setTransparency(element); sprite_draw(&element->sprite, element->position, element->scale, element->rotation); break;
-				case ELEMENT2D_TILED_SPRITE: sprite_setMode(); render_setTransparency(element); sprite_drawTiled(&element->sprite, element->position, element->scale);               break;
+			const Graphic *graphic = element->graphic;
+			if (graphic->is_hidden) continue;
+			switch (graphic->type) {
+				case GRAPHIC_RECTANGLE:
+					shape_drawRectangle(&graphic->rectangle, element->position, element->scale);
+					sprite_mode = SPRITE_MODE_UNSET;
+					loaded      = NULL;
+					break;
+				case GRAPHIC_TEXT:
+					text_draw(&graphic->text, element->position);
+					sprite_mode = SPRITE_MODE_UNSET;
+					loaded      = NULL;
+					break;
+				case GRAPHIC_SPRITE:
+					if (sprite_mode != graphic->transparency) {
+						render_setSpriteMode(graphic->transparency);
+						sprite_mode = graphic->transparency;
+					}
+
+					if (sprite_isLoadable(&graphic->sprite, element->rotation)) {
+						if (graphic->sprite.asset != loaded) {
+							sprite_loadTexture(&graphic->sprite);
+							loaded = graphic->sprite.asset;
+						}
+						sprite_drawLoaded(&graphic->sprite, element->position, element->scale);
+						break;
+					}
+
+					if (graphic->sprite.tiled) sprite_drawTiled(&graphic->sprite, element->position, element->scale);
+					else                       sprite_draw(&graphic->sprite, element->position, element->scale, element->rotation);
+					loaded = NULL;
+					break;
 			}
 		}
 
+		/* Back to the whole screen, whatever the display mode is now. */
 		if (section->has_scissor)
-			rdpq_set_scissor(0, 0, 320, 240);
+			rdpq_set_scissor(0, 0, display_get_width(), display_get_height());
 	}
+
+	debugUI_draw();
 
 	render_end();
 }

@@ -1,16 +1,15 @@
 #ifndef ENGINE64_GAME_STATES_H
 #define ENGINE64_GAME_STATES_H
 
+#include <stdbool.h>
 #include <stdint.h>
-#include "resources/e64_resources.h"
 
 
 typedef struct Game                 Game;
-typedef struct GameContext          GameContext;
-typedef struct GameRenderDescriptor GameRenderDescriptor;
 typedef struct Scene3DDef           Scene3DDef;
 typedef struct Scene2DDef           Scene2DDef;
 typedef struct Player               Player;
+typedef struct ViewportModeDef      ViewportModeDef;
 
 /* Index into the state table the game hands to game_start. */
 typedef uint8_t GameState;
@@ -23,7 +22,7 @@ typedef uint8_t GameState;
 
 typedef struct GameStateDef {
 
-	void (*update)(GameContext *);
+	void (*update)(void);
 	void (*bindCharacter)(void);
 	void (*onEnter)(void);
 	void (*onExit)(void);
@@ -34,15 +33,17 @@ typedef struct GameStateDef {
 
 	/* Per-state input handling (menus, pause); NULL for none. The controller is
 	   already polled: the game reads it with controller_get. */
-	void (*control)(Game *);
-
-	/* Loaded on enter, freed on exit. An overlay rides its base's set. */
-	ResourceSet resources;
+	void (*control)(void);
 
 	/* The scenes this state runs on, either or both: the 3D world and the
 	   2D one drawn over it. */
 	Scene3DDef          *scene3d;
 	const Scene2DDef    *scene2d;
+
+	/* The screen this state is played on. The engine opens none by itself,
+	   so the first state entered is what puts one up, and a state that wants
+	   the one already there declares the same. */
+	const ViewportModeDef *viewport;
 
 	/* The state this one rides on top of; GAME_STATE_NONE for none.
 	   Switching between an overlay and its base leaves the base untouched. */
@@ -58,7 +59,7 @@ void game_start(const GameStateDef *states, uint8_t count, GameState initial);
 const GameStateDef *gameState_get(GameState id);
 
 void game_setState(Game *game, GameState new_state);
-void game_updateState(GameContext *ctx);
+void game_updateState(void);
 
 
 #endif

@@ -371,10 +371,13 @@ AABB dynamicAABBTree_getFatAABB(const DynamicAABBTree *t, int32_t id)
 
 #define TREE_QUERY_STACK_CAP 256
 
+/* libdragon builds with -ftrivial-auto-var-init=pattern, which would fill
+   this 1 KB stack on every query. Only the slots below sp are ever read, so
+   both queries opt out of the fill. */
 
 void dynamicAABBTree_queryAABB(const DynamicAABBTree *t, void *cb, PhysicsQueryCallback callback, AABB aabb)
 {
-	int32_t stack[TREE_QUERY_STACK_CAP];
+	int32_t stack[TREE_QUERY_STACK_CAP] __attribute__((uninitialized));
 	int32_t sp = 1;
 	stack[0] = t->root;
 
@@ -399,13 +402,23 @@ void dynamicAABBTree_queryAABB(const DynamicAABBTree *t, void *cb, PhysicsQueryC
 void dynamicAABBTree_queryRay(const DynamicAABBTree *t, void *cb, PhysicsQueryCallback callback, RaycastData *raycast)
 {
 	const float k_epsilon = 1.0e-6f;
-	int32_t stack[TREE_QUERY_STACK_CAP];
+	int32_t stack[TREE_QUERY_STACK_CAP] __attribute__((uninitialized));
 	int32_t sp = 1;
 	stack[0] = t->root;
 
 	Vector3 p0     = raycast->start;
 	Vector3 dir_t  = vector3_scaled(&raycast->dir, raycast->t);
 	Vector3 p1     = vector3_sum(&p0, &dir_t);
+
+	/* Segment terms, the same for every node visited. */
+	Vector3 d      = vector3_difference(&p1, &p0);
+	Vector3 p_sum  = vector3_sum(&p0, &p1);
+	float   adx    = fabsf(d.x);
+	float   ady    = fabsf(d.y);
+	float   adz    = fabsf(d.z);
+	float   adx_e  = adx + k_epsilon;
+	float   ady_e  = ady + k_epsilon;
+	float   adz_e  = adz + k_epsilon;
 
 	while (sp) {
 		assert(sp < TREE_QUERY_STACK_CAP);
@@ -414,26 +427,17 @@ void dynamicAABBTree_queryRay(const DynamicAABBTree *t, void *cb, PhysicsQueryCa
 
 		const DynamicAABBTreeNode *n = t->nodes + id;
 
-		Vector3 e = vector3_difference(&n->aabb.max, &n->aabb.min);
-		Vector3 d = vector3_difference(&p1, &p0);
-		Vector3 p_sum  = vector3_sum(&p0, &p1);
+		Vector3 e      = vector3_difference(&n->aabb.max, &n->aabb.min);
 		Vector3 m_tmp  = vector3_difference(&p_sum, &n->aabb.min);
 		Vector3 m      = vector3_difference(&m_tmp, &n->aabb.max);
 
-		float adx = fabsf(d.x);
 		if (fabsf(m.x) > e.x + adx) continue;
-		float ady = fabsf(d.y);
 		if (fabsf(m.y) > e.y + ady) continue;
-		float adz = fabsf(d.z);
 		if (fabsf(m.z) > e.z + adz) continue;
 
-		adx += k_epsilon;
-		ady += k_epsilon;
-		adz += k_epsilon;
-
-		if (fabsf(m.y * d.z - m.z * d.y) > e.y * adz + e.z * ady) continue;
-		if (fabsf(m.z * d.x - m.x * d.z) > e.x * adz + e.z * adx) continue;
-		if (fabsf(m.x * d.y - m.y * d.x) > e.x * ady + e.y * adx) continue;
+		if (fabsf(m.y * d.z - m.z * d.y) > e.y * adz_e + e.z * ady_e) continue;
+		if (fabsf(m.z * d.x - m.x * d.z) > e.x * adz_e + e.z * adx_e) continue;
+		if (fabsf(m.x * d.y - m.y * d.x) > e.x * ady_e + e.y * adx_e) continue;
 
 		if (dynamicAABBTreeNode_isLeaf(n)) {
 			if (!callback(cb, id)) return;

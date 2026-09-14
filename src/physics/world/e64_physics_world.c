@@ -433,8 +433,7 @@ static int queryAABB_cb(void *ctx_v, int32_t id)
 	QueryAABB_ctx *ctx = (QueryAABB_ctx *)ctx_v;
 	PhysicsShape *shape = (PhysicsShape *)dynamicAABBTree_getUserData(&ctx->broadphase->tree, id);
 	AABB aabb;
-	Transform body_tx = rigidBody_getTransform(shape->body);
-	physicsShape_computeAABB(shape, &body_tx, &aabb);
+	physicsShape_computeAABB(shape, &aabb);
 	if (aabb_overlaps(&ctx->aabb, &aabb)) {
 		return ctx->cb(ctx->cb_user_data, shape);
 	}
@@ -463,8 +462,7 @@ static int queryPoint_cb(void *ctx_v, int32_t id)
 {
 	QueryPoint_ctx *ctx = (QueryPoint_ctx *)ctx_v;
 	PhysicsShape *shape = (PhysicsShape *)dynamicAABBTree_getUserData(&ctx->broadphase->tree, id);
-	Transform body_tx = rigidBody_getTransform(shape->body);
-	if (physicsShape_testPoint(shape, &body_tx, &ctx->point)) {
+	if (physicsShape_testPoint(shape, &ctx->point)) {
 		ctx->cb(ctx->cb_user_data, shape);
 	}
 	return 1;
@@ -498,8 +496,7 @@ static int queryRaycast_cb(void *ctx_v, int32_t id)
 {
 	QueryRaycast_ctx *ctx = (QueryRaycast_ctx *)ctx_v;
 	PhysicsShape *shape = (PhysicsShape *)dynamicAABBTree_getUserData(&ctx->broadphase->tree, id);
-	Transform body_tx = rigidBody_getTransform(shape->body);
-	if (physicsShape_raycast(shape, &body_tx, ctx->raycast)) {
+	if (physicsShape_raycast(shape, ctx->raycast)) {
 		return ctx->cb(ctx->cb_user_data, shape);
 	}
 	return 1;

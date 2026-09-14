@@ -125,6 +125,11 @@ static void computeIncidentFace(Transform itx, Vector3 e, Vector3 n, ClipVertex 
 	n = vector3_inverted(&n_local);
 	Vector3 abs_n = vector3_abs(&n);
 
+	/* Only in_i/out_i are set per face below; the reference halves of the key
+	   are filled by the clipper. Start from ~0 as qu3e's ClipVertex does, so a
+	   key is the same bytes step after step and warm starting can match it. */
+	for (int32_t i = 0; i < 4; ++i) out[i].f.key = ~0;
+
 	if (abs_n.x > abs_n.y && abs_n.x > abs_n.z) {
 		if (n.x > 0.0f) {
 			out[0].v = vector3_create( e.x,  e.y, -e.z);
@@ -259,8 +264,10 @@ static int32_t clipFace(Vector3 r_pos, Vector3 e, uint8_t *clip_edges, Matrix3 b
 {
 	int32_t in_count = 4;
 	int32_t out_count;
-	ClipVertex in[8];
-	ClipVertex out[8];
+	/* Ping-pong buffers, always written up to their count before being
+	   read: no pattern-init fill (libdragon's -ftrivial-auto-var-init). */
+	ClipVertex in[8]  __attribute__((uninitialized));
+	ClipVertex out[8] __attribute__((uninitialized));
 
 	for (int32_t i = 0; i < 4; ++i) {
 		Vector3 diff = vector3_difference(&incident[i].v, &r_pos);
@@ -537,15 +544,15 @@ void boxToBox(ContactManifold *m, PhysicsShape *a, PhysicsShape *b)
 			n = vector3_inverted(&n);
 		}
 
-		ClipVertex incident[4];
+		ClipVertex incident[4] __attribute__((uninitialized));
 		computeIncidentFace(itx, e_i, n, incident);
 		uint8_t clip_edges[4] = { 0, 0, 0, 0 };
 		Matrix3 basis         = matrix3_identity();
 		Vector3 e             = vector3_zero();
 		computeReferenceEdgesAndBasis(e_r, rtx, n, axis, clip_edges, &basis, &e);
 
-		ClipVertex out[8];
-		float depths[8];
+		ClipVertex out[8]  __attribute__((uninitialized));
+		float      depths[8] __attribute__((uninitialized));
 		int32_t out_num = clipFace(rtx.position, e, clip_edges, basis, incident, out, depths);
 
 		if (out_num) {
@@ -1147,8 +1154,9 @@ static void boxToTriangle(ContactManifold *m, const Box *box, const Transform *w
 
 
 /* Runs the shape against every triangle its AABB reaches and merges the hits.
-   The mesh tree is in mesh-local space, so the shape moves by -origin going in
-   and the contact points move back on the way out. */
+   The mesh tree is in mesh-local space, so the shape goes in through the
+   inverse of the mesh's world transform, and the contact points and the
+   normal come back out through it. */
 static void shapeToMesh(ContactManifold *m, PhysicsShape *shape, PhysicsShape *mesh_shape)
 {
 	/* The contact manager runs computeBasis on this normal without checking
@@ -1160,28 +1168,30 @@ static void shapeToMesh(ContactManifold *m, PhysicsShape *shape, PhysicsShape *m
 	const CollisionMesh *mesh = mesh_shape->mesh;
 	if (mesh == NULL) return;
 
-	Vector3 origin = mesh_shape->local.position;
-	if (mesh_shape->body) {
-		Transform world = transform_product(&mesh_shape->body->tx, &mesh_shape->local);
-		origin = world.position;
-	}
+	Transform mesh_world = mesh_shape->local;
+	if (mesh_shape->body) mesh_world = transform_product(&mesh_shape->body->tx, &mesh_shape->local);
 
 	Transform shape_world = shape->local;
 	if (shape->body) shape_world = transform_product(&shape->body->tx, &shape->local);
 
-	Transform local_world = shape_world;
-	local_world.position  = vector3_difference(&shape_world.position, &origin);
+	Transform local_world = transform_productTransposed(&mesh_world, &shape_world);
 
-	PhysicsShape probe = *shape;
-	probe.body  = NULL;
-	probe.local = local_world;
+	/* The shape's bound in mesh-local space, straight from its primitive:
+	   going through physicsShape_computeAABB would copy the whole shape and
+	   multiply its transform by the identity first. */
+	AABB aabb __attribute__((uninitialized));
+	switch (shape->type) {
+		case SHAPE_SPHERE:  sphere_computeAABB (&shape->sphere,  &local_world, &aabb); break;
+		case SHAPE_BOX:     box_computeAABB    (&shape->box,     &local_world, &aabb); break;
+		case SHAPE_CAPSULE: capsule_computeAABB(&shape->capsule, &local_world, &aabb); break;
+		default:            return;
+	}
 
-	AABB aabb;
-	Transform identity;
-	transform_init(&identity);
-	physicsShape_computeAABB(&probe, &identity, &aabb);
-
-	MeshQuery query = { .mesh = mesh };
+	/* count gates the triangle array; the designated initializer would zero
+	   all of it. */
+	MeshQuery query __attribute__((uninitialized));
+	query.mesh  = mesh;
+	query.count = 0;
 	collisionMesh_queryAABB(mesh, &query, collision_collectTriangle, aabb);
 
 	/* Starts at infinity, not at zero: a contact that merely touches still has
@@ -1189,10 +1199,15 @@ static void shapeToMesh(ContactManifold *m, PhysicsShape *shape, PhysicsShape *m
 	float deepest = FLT_MAX;
 
 	for (int32_t t = 0; t < query.count; t++) {
-		Triangle triangle;
+		Triangle triangle __attribute__((uninitialized));
 		collisionMesh_getTriangle(mesh, query.triangle[t], &triangle);
 
-		ContactManifold hit = {0};
+		/* contact_count gates the hit: normal, position, penetration and key
+		   are written by each routine whenever it sets a contact, and only
+		   those four are read below. Zeroing the whole manifold was a
+		   476-byte memset per candidate triangle. */
+		ContactManifold hit __attribute__((uninitialized));
+		hit.contact_count = 0;
 
 		switch (shape->type) {
 			case SHAPE_SPHERE:
@@ -1212,15 +1227,15 @@ static void shapeToMesh(ContactManifold *m, PhysicsShape *shape, PhysicsShape *m
 			if (m->contact_count >= 8) break;
 
 			ContactPoint *c = &m->contacts[m->contact_count];
-			*c = hit.contacts[i];
-			c->position = vector3_sum(&c->position, &origin);
+			c->position    = transform_mulVector(&mesh_world, &hit.contacts[i].position);
+			c->penetration = hit.contacts[i].penetration;
 			/* Key by triangle so warm starting can match points across steps. */
-			c->fp.key   = ((uint32_t)query.triangle[t] << 4) | (c->fp.key & 0xF);
+			c->fp.key      = ((uint32_t)query.triangle[t] << 4) | (hit.contacts[i].fp.key & 0xF);
 			m->contact_count++;
 
 			if (c->penetration < deepest) {
 				deepest  = c->penetration;
-				m->normal = hit.normal;
+				m->normal = matrix3_transformVector(&mesh_world.rotation, &hit.normal);
 			}
 		}
 	}

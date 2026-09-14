@@ -25,6 +25,7 @@
 */
 #include <assert.h>
 #include <stddef.h>
+#include <fmath.h>
 
 #include "physics/body/e64_rigid_body.h"
 #include "physics/shapes/e64_physics_shape.h"
@@ -150,9 +151,10 @@ static PhysicsShape *rigidBody_attachShape(RigidBody *b, PhysicsShape *shape,
 	shape->broadphase_index = -1;
 	shape->next        = b->shapes;
 	b->shapes          = shape;
+	shape->world       = transform_product(&b->tx, &shape->local);
 
 	AABB aabb;
-	physicsShape_computeAABB(shape, &b->tx, &aabb);
+	physicsShape_computeAABB(shape, &aabb);
 
 	rigidBody_calculateMassData(b);
 
@@ -430,6 +432,29 @@ void rigidBody_setTransformPositionAxisAngle(RigidBody *b, Vector3 position, Vec
 }
 
 
+/* Yaw only, for a body that never tilts: the quaternion and the matrix come
+   straight from the half angle's sine and cosine, the same values the
+   axis-angle path would reach through the general quaternion-to-matrix
+   expansion with every other term zero. */
+void rigidBody_setTransformPositionYaw(RigidBody *b, Vector3 position, float yaw)
+{
+	float s, c;
+	fm_sincosf(0.5f * yaw, &s, &c);
+
+	float ss2 = 2.0f * s * s;   /* 1 - cos(yaw) */
+	float sc2 = 2.0f * s * c;   /* sin(yaw) */
+
+	b->world_center = position;
+	b->q            = (Quaternion){ 0.0f, 0.0f, s, c };
+	b->tx.rotation  = (Matrix3){
+		.ex = { 1.0f - ss2,  sc2,        0.0f },
+		.ey = { -sc2,        1.0f - ss2, 0.0f },
+		.ez = { 0.0f,        0.0f,       1.0f },
+	};
+	rigidBody_synchronizeProxies(b);
+}
+
+
 void rigidBody_calculateMassData(RigidBody *b)
 {
 	Matrix3 inertia      = matrix3_diagonal(0.0f, 0.0f, 0.0f);
@@ -500,11 +525,11 @@ void rigidBody_synchronizeProxies(RigidBody *b)
 	b->tx.position = vector3_difference(&b->world_center, &rlc);
 
 	AABB aabb;
-	Transform tx = b->tx;
 
 	PhysicsShape *shape = b->shapes;
 	while (shape) {
-		physicsShape_computeAABB(shape, &tx, &aabb);
+		shape->world = transform_product(&b->tx, &shape->local);
+		physicsShape_computeAABB(shape, &aabb);
 		broadPhase_updateShape(b->world, shape->broadphase_index, aabb);
 		shape = shape->next;
 	}

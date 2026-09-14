@@ -9,11 +9,13 @@
 #include <t3d/t3dmodel.h>
 #include <t3d/t3dskeleton.h>
 #include "graphics/e64_shapes.h"
-#include "graphics/e64_sprites.h"
-#include "graphics/e64_font.h"
+#include "graphics/e64_graphic.h"
 #include "physics/math/e64_vector3.h"
+#include "viewport/e64_viewport.h"
 
-#define RENDER_MAX_2D_ELEMENTS   64
+/* A stage contributes one entry per visible tile: a full screen of 16 px
+   cells is 300 of them per layer. */
+#define RENDER_MAX_2D_ELEMENTS 1024
 /* One entry per visible mesh part, not per entity: a skinned character alone
    contributes several, so this has to clear the scene's entity budget. */
 #define RENDER_MAX_3D_ELEMENTS    32
@@ -28,31 +30,13 @@ typedef struct RenderTransform {
 	Vector3 scale;
 } RenderTransform;
 
-typedef enum {
-
-	ELEMENT2D_RECTANGLE,
-	ELEMENT2D_SPRITE,
-	ELEMENT2D_TILED_SPRITE,   /* repeated sprite: position = origin, scale = size in px */
-	ELEMENT2D_TEXT,
-
-} Element2DType;
-
 typedef struct {
 
-	Element2DType type;
+	const Graphic *graphic;
 
-	union {
-		Rectangle rectangle;
-		Sprite    sprite;
-		Text      text;
-	};
-
-	Vector2 scale;
 	Vector2 position;
-	float rotation;
-	uint8_t transparency;
-
-	bool    is_hidden;
+	Vector2 scale;
+	float   rotation;
 
 } Element2D;
 
@@ -68,8 +52,9 @@ typedef struct {
 
 typedef struct {
 
-	uint8_t element_start;
-	uint8_t element_count;
+	/* 16 bits: a stage puts hundreds of tiles in one section. */
+	uint16_t element_start;
+	uint16_t element_count;
 
 	bool    has_scissor;
 	float   scissor_x;
@@ -82,7 +67,7 @@ typedef struct {
 typedef struct RenderContext {
 
 	Element2D     element[RENDER_MAX_2D_ELEMENTS];
-	uint8_t       element_count;
+	uint16_t      element_count;
 
 	RenderSection section[RENDER_MAX_SECTIONS];
 	uint8_t       section_count;
@@ -96,8 +81,11 @@ typedef struct RenderContext {
 void renderTransform_init(RenderTransform *t);
 
 void render_initContext(RenderContext *ctx);
-void render_setContext(RenderContext *ctx, const Scene3D *scene3d, uint8_t fb_index, const Scene2D *scene2d);
-void render(RenderContext *ctx, int *fb_index);
+
+/* Draws the frame: hands its context to each scene to fill, then paints it.
+   A scene that is not loaded pushes nothing, so whatever is up is what
+   shows. Reaches the scenes and the viewport itself. */
+void render(void);
 
 
 #endif

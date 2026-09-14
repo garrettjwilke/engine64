@@ -145,8 +145,8 @@ void physicsIsland_solve(PhysicsIsland *island)
 		Vector3 pos_delta = vector3_scaled(&body->linear_velocity, island->dt);
 		body->world_center = vector3_sum(&body->world_center, &pos_delta);
 
+		/* integrate normalizes on its own way out. */
 		quaternion_integrate(&body->q, &body->angular_velocity, island->dt);
-		body->q = quaternion_normalized(&body->q);
 		body->tx.rotation = quaternion_toMatrix3(&body->q);
 	}
 

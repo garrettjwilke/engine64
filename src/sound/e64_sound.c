@@ -1,8 +1,8 @@
 #include <math.h>
-#include <malloc.h>
 #include <assert.h>
 
 #include "sound/e64_sound.h"
+#include "resource/e64_resource.h"
 #include "time/e64_time.h"
 #include "player/e64_player.h"
 #include "viewport/e64_viewport.h"
@@ -33,7 +33,7 @@ typedef struct {
 
 typedef struct {
 
-	SoundID id;
+	const Sound *sound;
 	Vector3 position;
 	float volume_scale;
 	float duration;
@@ -47,11 +47,6 @@ typedef struct {
 } SoundEmitterState;
 
 
-/* The game's bank, handed over at sound_init. */
-static const SoundDef *sound_bank;
-static uint8_t         sound_count;
-
-static wav64_t **sound_wave;
 static SoundEmitterState sound_emitter[SOUND_MAX_EMITTERS];
 static SoundListener sound_listener;
 
@@ -169,10 +164,8 @@ static void sound_dropChannel(SoundEmitterState *emitter)
 
 static bool sound_startEmitter(SoundEmitterState *emitter, float gain, float pan)
 {
-	const SoundDef *def = &sound_bank[emitter->id];
-	wav64_t *wave = sound_wave[emitter->id];
-
-	if (!wave) return false;
+	const SoundDef *def = emitter->sound->def;
+	wav64_t *wave = emitter->sound->wave;
 
 	bool stereo = wave->wave.channels == 2;
 	int channel;
@@ -206,33 +199,13 @@ static void sound_releaseEmitter(SoundEmitterState *emitter)
 }
 
 
-void sound_init(const SoundDef *bank, uint8_t count)
+void sound_init(void)
 {
-	sound_bank  = bank;
-	sound_count = count;
-
-	sound_wave = calloc(count, sizeof(wav64_t *));
-	assert(sound_wave);
-
 	audio_init(SOUND_OUTPUT_RATE, AUDIO_DEFAULT_LATENCY);
 	mixer_init(SOUND_MIXER_CHANNELS);
 	mixer_set_vol(SOUND_MASTER_VOLUME);
 
 	sound_listener.right = vector3_create(0.0f, -1.0f, 0.0f);
-
-	for (int i = 0; i < sound_count; i++) {
-		const SoundDef *def = &sound_bank[i];
-
-		wav64_loadparms_t parms = {
-			.streaming_mode = def->preload ? WAV64_STREAMING_NONE
-			                               : WAV64_STREAMING_FULL,
-		};
-
-		sound_wave[i] = wav64_load(def->path, &parms);
-
-		if (sound_wave[i] && def->loop)
-			wav64_set_loop(sound_wave[i], true);
-	}
 
 	for (int i = 0; i < SOUND_MAX_EMITTERS; i++)
 		sound_emitter[i].channel = -1;
@@ -245,29 +218,56 @@ void sound_init(const SoundDef *bank, uint8_t count)
 void sound_close(void)
 {
 	sound_stopAll();
-
-	for (int i = 0; i < sound_count; i++) {
-		if (!sound_wave[i]) continue;
-
-		wav64_close(sound_wave[i]);
-		sound_wave[i] = NULL;
-	}
-
 	mixer_close();
 	audio_close();
 }
 
 
-SoundEmitter sound_play(SoundID id, const Vector3 *position, float volume_scale, float duration)
+Sound sound_load(const SoundDef *def)
 {
-	if (id >= sound_count || !sound_wave[id]) return SOUND_NO_EMITTER;
+	assert(def && def->path);
+
+	wav64_loadparms_t parms = {
+		.streaming_mode = def->preload ? WAV64_STREAMING_NONE
+		                               : WAV64_STREAMING_FULL,
+	};
+
+	wav64_t *wave = resource_load(def->path, RESOURCE_WAVE, &parms);
+	assert(wave);
+
+	if (def->loop)
+		wav64_set_loop(wave, true);
+
+	return (Sound){ .def = def, .wave = wave };
+}
+
+void sound_unload(Sound *sound)
+{
+	if (!sound->wave) return;
+
+	/* Nothing may keep playing a file about to close. */
+	for (int i = 0; i < SOUND_MAX_EMITTERS; i++) {
+		if (sound_emitter[i].active && sound_emitter[i].sound == sound)
+			sound_releaseEmitter(&sound_emitter[i]);
+	}
+
+	resource_unload(sound->wave);
+	sound->wave = NULL;
+}
+
+
+SoundEmitter sound_play(const Sound *sound, const Vector3 *position, float volume_scale, float duration)
+{
+	if (!sound || !sound->wave) return SOUND_NO_EMITTER;
+
+	const SoundDef *def = sound->def;
 
 	for (int i = 0; i < SOUND_MAX_EMITTERS; i++) {
 		SoundEmitterState *emitter = &sound_emitter[i];
 
 		if (emitter->active) continue;
 
-		emitter->id           = id;
+		emitter->sound        = sound;
 		emitter->position     = *position;
 		emitter->volume_scale = volume_scale;
 		emitter->duration     = duration;
@@ -276,8 +276,6 @@ SoundEmitter sound_play(SoundID id, const Vector3 *position, float volume_scale,
 
 		/* Placed straight away so the first frame already opens at the right
 		   volume instead of ramping up from wherever the channel was. */
-		const SoundDef *def = &sound_bank[id];
-
 		Vector3 to_emitter = vector3_difference(position, &sound_listener.position);
 		float distance = vector3_magnitude(&to_emitter);
 		float gain = def->volume * volume_scale * sound_attenuation(def, distance);
@@ -332,17 +330,26 @@ void sound_poll(void)
 }
 
 
-/* The ear rides the driven body — the camera floats away on the spring arm,
-   and hearing from there detaches the sound from the character. With nobody
-   possessed (menus, cutscenes) it falls back to the camera. The right vector
-   is always the camera's: panning follows what the screen shows. */
+static SoundListenerMode sound_listener_mode = SOUND_LISTENER_PLAYER;
+
+void sound_setListenerMode(SoundListenerMode mode)
+{
+	sound_listener_mode = mode;
+}
+
+/* The ear rides the driven body or the camera, as the game chose. With
+   nobody possessed (menus, cutscenes) the body falls back to the camera.
+   The right vector is always the camera's: panning follows what the screen
+   shows. */
 static void sound_updateListener(void)
 {
 	const Player   *player   = player_get();
 	const Viewport *viewport = viewport_get();
 
-	Vector3 ear = player[0].entity ? player[0].entity->transform.position
-	                               : viewport->camera.position;
+	bool on_player = sound_listener_mode == SOUND_LISTENER_PLAYER && player[0].entity;
+
+	Vector3 ear = on_player ? player[0].entity->transform.position
+	                        : viewport->camera.position;
 	Vector3 right = camera_getRight(&viewport->camera);
 
 	sound_setListener(&ear, &right);
@@ -361,7 +368,7 @@ void sound_update(void)
 
 		if (!emitter->active) continue;
 
-		const SoundDef *def = &sound_bank[emitter->id];
+		const SoundDef *def = emitter->sound->def;
 
 		/* A one-shot that ran out, or lost its channel to a later sound,
 		   gives its slot back. A looping one keeps the emitter and asks for

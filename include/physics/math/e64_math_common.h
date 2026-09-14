@@ -6,17 +6,38 @@
 
 #define TOLERANCE 0.000001f
 
-#define RENDER_SCALE      100.0f
-#define RENDER_SCALE_INV  0.01f
+/* Render units per metre, defined by the build so that the engine, the model
+   importer and the collision importer all work off the same number. A power of
+   two: scaling by it only moves a float's exponent, so metres and render units
+   convert back and forth with nothing lost. Vertices are 16 bit integers,
+   which makes the unit the smallest step a vertex can take: 1.56 cm at 64, and
+   512 m the most that fits around the origin. */
+#ifndef RENDER_SCALE
+#define RENDER_SCALE 64.0f
+#endif
+
+#define RENDER_SCALE_INV (1.0f / RENDER_SCALE)
 
 
-float deg_to_rad(float angle);
-float rad_to_deg(float rad);
+/* One-liners are inline: the body is a single float op, a call is not. */
+
+static inline float deg_to_rad(float angle)
+{
+	return PI / 180 * angle;
+}
+
+static inline float rad_to_deg(float rad)
+{
+	return 180 / PI * rad;
+}
+
+static inline float lerpf(float a, float b, float t)
+{
+	return a + t * (b - a);
+}
 
 float angle_wrap(float angle);
 float angle_wrap_relative(float angle, float reference);
-
-float lerpf(float a, float b, float t);
 
 /*
 	Fast inverse square root, Kaze's variant of the Quake III Q_rsqrt.

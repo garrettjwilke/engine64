@@ -101,52 +101,62 @@ void physicsShape_release(PhysicsShape *shape)
 }
 
 
-int physicsShape_testPoint(const PhysicsShape *shape, const Transform *body_tx, const Vector3 *p)
+int physicsShape_testPoint(const PhysicsShape *shape, const Vector3 *p)
 {
-	Transform world = transform_product(body_tx, &shape->local);
+	const Transform *world = &shape->world;
 
 	switch (shape->type) {
-		case SHAPE_BOX:     return box_testPoint    (&shape->box,     &world, p);
-		case SHAPE_SPHERE:  return sphere_testPoint (&shape->sphere,  &world, p);
-		case SHAPE_CAPSULE: return capsule_testPoint(&shape->capsule, &world, p);
+		case SHAPE_BOX:     return box_testPoint    (&shape->box,     world, p);
+		case SHAPE_SPHERE:  return sphere_testPoint (&shape->sphere,  world, p);
+		case SHAPE_CAPSULE: return capsule_testPoint(&shape->capsule, world, p);
 		case SHAPE_MESH:    break;   /* static-only, never on a rigid body */
 	}
 	return 0;
 }
 
 
-int physicsShape_raycast(const PhysicsShape *shape, const Transform *body_tx, RaycastData *raycast)
+int physicsShape_raycast(const PhysicsShape *shape, RaycastData *raycast)
 {
-	Transform world = transform_product(body_tx, &shape->local);
+	const Transform *world = &shape->world;
 
 	switch (shape->type) {
-		case SHAPE_BOX:     return box_raycast    (&shape->box,     &world, raycast);
-		case SHAPE_SPHERE:  return sphere_raycast (&shape->sphere,  &world, raycast);
-		case SHAPE_CAPSULE: return capsule_raycast(&shape->capsule, &world, raycast);
-		case SHAPE_MESH:    return collisionMesh_raycast(shape->mesh, &world, raycast);
+		case SHAPE_BOX:     return box_raycast    (&shape->box,     world, raycast);
+		case SHAPE_SPHERE:  return sphere_raycast (&shape->sphere,  world, raycast);
+		case SHAPE_CAPSULE: return capsule_raycast(&shape->capsule, world, raycast);
+		case SHAPE_MESH:    return collisionMesh_raycast(shape->mesh, world, raycast);
 	}
 	return 0;
 }
 
 
-void physicsShape_computeAABB(const PhysicsShape *shape, const Transform *body_tx, AABB *aabb)
+void physicsShape_computeAABB(const PhysicsShape *shape, AABB *aabb)
 {
-	Transform world = transform_product(body_tx, &shape->local);
+	const Transform *world = &shape->world;
 
 	switch (shape->type) {
-		case SHAPE_BOX:     box_computeAABB    (&shape->box,     &world, aabb); break;
-		case SHAPE_SPHERE:  sphere_computeAABB (&shape->sphere,  &world, aabb); break;
-		case SHAPE_CAPSULE: capsule_computeAABB(&shape->capsule, &world, aabb); break;
+		case SHAPE_BOX:     box_computeAABB    (&shape->box,     world, aabb); break;
+		case SHAPE_SPHERE:  sphere_computeAABB (&shape->sphere,  world, aabb); break;
+		case SHAPE_CAPSULE: capsule_computeAABB(&shape->capsule, world, aabb); break;
 
-		/* The tree's root already bounds every triangle, in mesh-local space:
-		   shifting it by the shape's own transform puts it in the world. */
+		/* The tree's root already bounds every triangle, in mesh-local space.
+		   Taken as a box centred on that bound and carried by the mesh's
+		   world transform, it is bounded again in the world, rotation
+		   included. */
 		case SHAPE_MESH: {
 			*aabb = (AABB){ vector3_zero(), vector3_zero() };
 			if (shape->mesh == NULL || shape->mesh->tree.root < 0) break;
 
-			*aabb = dynamicAABBTree_getFatAABB(&shape->mesh->tree, shape->mesh->tree.root);
-			aabb->min = vector3_sum(&aabb->min, &world.position);
-			aabb->max = vector3_sum(&aabb->max, &world.position);
+			AABB    root   = dynamicAABBTree_getFatAABB(&shape->mesh->tree, shape->mesh->tree.root);
+			Vector3 center = vector3_sum(&root.min, &root.max);
+			center         = vector3_scaled(&center, 0.5f);
+
+			Box bound;
+			bound.e = vector3_difference(&root.max, &center);
+
+			Transform bound_tx = *world;
+			bound_tx.position  = transform_mulVector(world, &center);
+
+			box_computeAABB(&bound, &bound_tx, aabb);
 			break;
 		}
 	}

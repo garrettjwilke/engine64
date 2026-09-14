@@ -44,11 +44,6 @@ void halfSpace_setFromNormalPoint(HalfSpace *h, const Vector3 *n, const Vector3 
 	h->distance = vector3_dot(&h->normal, p);
 }
 
-Vector3 halfSpace_origin(const HalfSpace *h)
-{
-	return vector3_scaled(&h->normal, h->distance);
-}
-
 float halfSpace_distance(const HalfSpace *h, const Vector3 *p)
 {
 	return vector3_dot(&h->normal, p) - h->distance;

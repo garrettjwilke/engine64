@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <libdragon.h>
 
+#include "physics/math/e64_vector2.h"
+
 typedef enum {
 
 	/* Unbound: reads as never pressed. Zero on purpose, so an action left
@@ -21,6 +23,13 @@ typedef enum {
 /* Centred, the stick does not rest at zero: it wanders by a couple of units.
    Under this it reads as centred, so that wander reaches nothing. */
 #define STICK_DEADZONE 6
+
+/* How far each stick actually travels, which is what a normalised reading
+   divides by. The hardware reports up to 127, but an N64 controller in good
+   condition reaches around 85 and a worn one less. The C stick only exists on
+   a GameCube pad, and goes to 76. */
+#define STICK_RANGE  85.0f
+#define CSTICK_RANGE 76.0f
 
 /* Who a binding belongs to. The port and the player are the same index: the
    first controller drives the first player. */
@@ -61,6 +70,28 @@ Controller *controller_get(void);
 void controller_start(void);
 void controller_poll(void);
 
-float button_getPressed(const Controller *controller, const joypad_buttons_t *button, ButtonID id);
+/* Pressed is the frame a button goes down, held is every frame it stays down,
+   released is the frame it comes up.
+
+   The C buttons read as buttons, which is what they are. A GameCube pad has
+   none, and libdragon fills them in from its C stick. */
+bool button_isPressed(const Controller *pad, ButtonID id);
+bool button_isHeld(const Controller *pad, ButtonID id);
+bool button_isReleased(const Controller *pad, ButtonID id);
+
+/* The sticks as the hardware reports them, each axis from -127 to 127. An N64
+   controller has no C stick and reads zero there. */
+Vector2 controller_getStick(const Controller *controller);
+Vector2 controller_getCStick(const Controller *controller);
+
+/* The same, brought to -1 to 1 with the deadzone taken out. How far the stick
+   went is what drives anything with a speed. */
+Vector2 controller_getStickNormalized(const Controller *controller);
+Vector2 controller_getCStickNormalized(const Controller *controller);
+
+/* Which way it points and nothing else: -1, 0 or 1 per axis, which is what a
+   menu moves on. */
+Vector2 controller_getStickDirection(const Controller *controller);
+Vector2 controller_getCStickDirection(const Controller *controller);
 
 #endif

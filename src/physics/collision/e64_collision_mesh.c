@@ -134,13 +134,14 @@ static int collisionMesh_raycastLeaf(void *cb, int32_t id)
 	return 1;
 }
 
-/* The tree lives in mesh-local space, so the ray is shifted by -origin. A mesh
-   only ever hangs off a static body and is never rotated, same assumption the
-   rest of the mesh code makes. */
+/* The tree lives in mesh-local space: the ray goes in through the inverse of
+   the mesh's world transform and the hit normal is rotated back out. The
+   time of impact is a distance along the ray, so it survives as is. */
 int collisionMesh_raycast(const CollisionMesh *mesh, const Transform *world, RaycastData *raycast)
 {
 	RaycastData local = *raycast;
-	local.start = vector3_difference(&raycast->start, &world->position);
+	local.start = transform_mulVectorTransposed(world, &raycast->start);
+	local.dir   = matrix3_transformVectorTransposed(&world->rotation, &raycast->dir);
 
 	MeshRaycast query = { .mesh = mesh, .ray = &local, .hit = 0 };
 	dynamicAABBTree_queryRay(&mesh->tree, &query, collisionMesh_raycastLeaf, &local);
@@ -148,6 +149,6 @@ int collisionMesh_raycast(const CollisionMesh *mesh, const Transform *world, Ray
 	if (!query.hit) return 0;
 
 	raycast->toi    = local.toi;
-	raycast->normal = local.normal;
+	raycast->normal = matrix3_transformVector(&world->rotation, &local.normal);
 	return 1;
 }

@@ -183,7 +183,7 @@ static uint16_t weldVertex(CollisionMesh *mesh, VertexHash *hash, Vec3 v)
 */
 
 /* Folds between two walkable faces must never produce a blocking normal, so
-   the threshold is the character's walkable limit (CHARACTER_FLOOR_MAX_SLOPE),
+   the threshold is the character's walkable limit (CHARACTER3D_FLOOR_MAX_SLOPE),
    not Jolt's 5-degree default, which is tuned for rigid-body fidelity. */
 #define ACTIVE_EDGE_COS_THRESHOLD 0.6428f   /* cos(50 degrees) */
 
@@ -508,17 +508,33 @@ static void writeFile(const CollisionMesh *mesh, const char *path)
 
 int main(int argc, char **argv)
 {
-	if (argc < 3) {
-		fprintf(stderr, "Uso: %s entrada.glb salida.col [mesh ...]\n", argv[0]);
+	/* This reads the same .glb the model is built from, so it takes the two
+	   numbers the build already knows: the scale the game imports its models
+	   at, which is what puts the file in render units, and the render units a
+	   metre is worth, which is what physics runs in. Neither is written here. */
+	float model_scale  = 0.0f;
+	float render_scale = 0.0f;
+
+	int arg = 1;
+	for (; arg < argc; arg++) {
+		if (strncmp(argv[arg], "--model-scale=", 14) == 0)
+			model_scale = strtof(argv[arg] + 14, NULL);
+		else if (strncmp(argv[arg], "--render-scale=", 15) == 0)
+			render_scale = strtof(argv[arg] + 15, NULL);
+		else break;
+	}
+
+	if (argc - arg < 2 || model_scale <= 0.0f || render_scale <= 0.0f) {
+		fprintf(stderr, "usage: %s --model-scale=<n> --render-scale=<units per metre> input.glb output.collision [mesh ...]\n", argv[0]);
 		return 1;
 	}
 
-	/* glb files are authored in render units; physics runs in metres. */
-	const float base_scale = 0.01f;
+	const char *input  = argv[arg++];
+	const char *output = argv[arg++];
 
 	CollisionMesh mesh = {0};
-	convert(argv[1], &mesh, base_scale, &argv[3], argc - 3);
-	writeFile(&mesh, argv[2]);
+	convert(input, &mesh, model_scale / render_scale, &argv[arg], argc - arg);
+	writeFile(&mesh, output);
 
 	return 0;
 }

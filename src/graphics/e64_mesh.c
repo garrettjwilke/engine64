@@ -93,16 +93,118 @@ static void mesh_placeBound(MeshBound *bound, const int16_t *min, const int16_t 
 	}
 }
 
+static bool mesh_getBoundMatrix(const Mesh *mesh, uint8_t bound, const T3DMat4 *entity_matrix, T3DMat4 *world);
+
 static void mesh_updateBounds(Mesh *mesh, const T3DMat4 *matrix)
 {
 	if (mesh->bound == NULL) return;
 
 	mesh_placeBound(&mesh->bound[0], mesh->local_min, mesh->local_max, matrix);
 
+	/* A part drawn away from the rest of the model gets its box placed with
+	   its own matrix, or it would be cut from the frame by where it was
+	   modelled instead of where it ends up. */
 	uint8_t i = 1;
 	T3DModelIter it = t3d_model_iter_create(mesh->model, T3D_CHUNK_TYPE_OBJECT);
-	while (t3d_model_iter_next(&it) && i < mesh->bound_count)
-		mesh_placeBound(&mesh->bound[i++], it.object->aabbMin, it.object->aabbMax, matrix);
+	while (t3d_model_iter_next(&it) && i < mesh->bound_count) {
+		T3DMat4 world;
+		const T3DMat4 *m = mesh_getBoundMatrix(mesh, i, matrix, &world) ? &world : matrix;
+
+		mesh_placeBound(&mesh->bound[i++], it.object->aabbMin, it.object->aabbMax, m);
+	}
+}
+
+void mesh_cull(Mesh *mesh, const T3DViewport *viewport)
+{
+	/* The model's own box only holds what was modelled inside it, so a model
+	   with a part drawn somewhere else cannot be cut by it: that part would go
+	   down with a box it was never in. Those go straight to the per part test
+	   below, which is the only one that knows where the pieces ended up. */
+	mesh->culled = mesh->part_offset
+	             ? false
+	             : !t3d_frustum_vs_aabb(&viewport->viewFrustum,
+	                                    &mesh->bound[0].min, &mesh->bound[0].max);
+	if (mesh->culled) return;
+
+	/* A model recorded in parts cuts each named part against its own box, so
+	   two pieces of one model come and go on their own. Part 0 is everything
+	   left unnamed and rides the whole-model box tested above. */
+	if (mesh->dl_count != 0) {
+		mesh->part_culled = 0;
+
+		if (mesh->part_offset
+		 && !t3d_frustum_vs_aabb(&viewport->viewFrustum,
+		                         &mesh->bound[0].min, &mesh->bound[0].max))
+			mesh->part_culled |= 1u;
+
+		for (int i = 0; i < mesh->part_count; i++) {
+			uint8_t b = mesh->part_bound[i];
+			if (b == 0) continue;
+
+			if (!t3d_frustum_vs_aabb(&viewport->viewFrustum,
+			                         &mesh->bound[b].min, &mesh->bound[b].max))
+				mesh->part_culled |= (uint8_t)(1u << (1 + i));
+		}
+		return;
+	}
+
+	uint8_t b = 1;
+	T3DModelIter it = t3d_model_iter_create(mesh->model, T3D_CHUNK_TYPE_OBJECT);
+	while (t3d_model_iter_next(&it) && b < mesh->bound_count) {
+		it.object->isVisible = t3d_frustum_vs_aabb(&viewport->viewFrustum,
+		                                           &mesh->bound[b].min, &mesh->bound[b].max);
+		b++;
+	}
+}
+
+
+/* An offset part is drawn with the entity's matrix carrying its own on top, so
+   it follows whatever the entity does and keeps its displacement inside it. */
+static void mesh_setPartMatrices(Mesh *mesh, const T3DMat4 *entity_matrix, uint8_t fb_index)
+{
+	if (!mesh->part_matrix) return;
+
+	for (int i = 0; i < mesh->part_count; i++) {
+		const RenderTransform *offset = &mesh->part_offset[i];
+
+		T3DMat4 local, world;
+		t3d_mat4_from_srt_euler(
+			&local,
+			(float[3]){ offset->scale.x, offset->scale.y, offset->scale.z },
+			(float[3]){ deg_to_rad(offset->rotation.x), deg_to_rad(offset->rotation.y), deg_to_rad(offset->rotation.z) },
+			(float[3]){ offset->position.x * RENDER_SCALE, offset->position.y * RENDER_SCALE, offset->position.z * RENDER_SCALE }
+		);
+
+		t3d_mat4_mul(&world, entity_matrix, &local);
+		t3d_mat4_to_fixed_3x4(&mesh->part_matrix[i * FB_COUNT + fb_index], &world);
+	}
+}
+
+/* The matrix a part's box has to be placed with: its own when it is offset,
+   and the model's for everything else. Returns false when this box belongs to
+   no part, which is the common case. */
+static bool mesh_getBoundMatrix(const Mesh *mesh, uint8_t bound, const T3DMat4 *entity_matrix, T3DMat4 *world)
+{
+	if (!mesh->part_offset || !mesh->part_bound) return false;
+
+	for (int i = 0; i < mesh->part_count; i++) {
+		if (mesh->part_bound[i] != bound) continue;
+
+		const RenderTransform *offset = &mesh->part_offset[i];
+
+		T3DMat4 local;
+		t3d_mat4_from_srt_euler(
+			&local,
+			(float[3]){ offset->scale.x, offset->scale.y, offset->scale.z },
+			(float[3]){ deg_to_rad(offset->rotation.x), deg_to_rad(offset->rotation.y), deg_to_rad(offset->rotation.z) },
+			(float[3]){ offset->position.x * RENDER_SCALE, offset->position.y * RENDER_SCALE, offset->position.z * RENDER_SCALE }
+		);
+
+		t3d_mat4_mul(world, entity_matrix, &local);
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -122,6 +224,7 @@ void mesh_setMatrixFromBody(Mesh *mesh, const Vector3 *position, const Quaternio
 	);
 
 	t3d_mat4_to_fixed_3x4(&mesh->matrix_buffer[fb_index], &matrix);
+	mesh_setPartMatrices(mesh, &matrix, fb_index);
 	mesh_updateBounds(mesh, &matrix);
 }
 
@@ -138,10 +241,11 @@ void mesh_setMatrix(Mesh *mesh, const RenderTransform *transform, uint8_t fb_ind
 
 		(float[3]){transform->scale.x,         transform->scale.y,         transform->scale.z},
 		(float[3]){deg_to_rad(transform->rotation.x), deg_to_rad(transform->rotation.y), deg_to_rad(transform->rotation.z)},
-		(float[3]){transform->position.x,      transform->position.y,      transform->position.z}
+		(float[3]){transform->position.x * RENDER_SCALE, transform->position.y * RENDER_SCALE, transform->position.z * RENDER_SCALE}
 	);
 
 	t3d_mat4_to_fixed_3x4(&mesh->matrix_buffer[fb_index], &matrix);
+	mesh_setPartMatrices(mesh, &matrix, fb_index);
 	mesh_updateBounds(mesh, &matrix);
 }
 
@@ -236,14 +340,44 @@ void mesh_recordObjects(Mesh *mesh)
 		it.object->userBlock = rspq_block_end();
 	}
 
-	mesh->dl       = NULL;
-	mesh->dl_count = 0;
-	mesh->visible  = 1;
+	mesh->dl          = NULL;
+	mesh->dl_count    = 0;
+	mesh->visible     = 1;
+	mesh->part_name   = NULL;
+	mesh->part_count  = 0;
+	mesh->part_bound  = NULL;
+	mesh->part_culled = 0;
+	mesh->part_offset = NULL;
+	mesh->part_matrix = NULL;
 }
 
 void mesh_recordParts(Mesh *mesh, const char *const *names, uint8_t count, const T3DMat4FP *matrices)
 {
+	assert(1 + count <= MESH_MAX_PARTS);
+
 	MeshPartFilter filter = { .names = names, .count = count };
+
+	/* The names are kept so a part can be found by the name it was declared
+	   with; only the pointers are copied, the strings stay where they are. */
+	mesh->part_count  = count;
+	mesh->part_offset = NULL;
+	mesh->part_matrix = NULL;
+	mesh->part_culled = 0;
+	mesh->part_name   = count ? malloc(sizeof(char *) * count) : NULL;
+	mesh->part_bound  = count ? calloc(count, sizeof(uint8_t)) : NULL;
+
+	for (int i = 0; i < count; i++) mesh->part_name[i] = names[i];
+
+	/* The boxes are kept in the model's own object order, so each part is
+	   matched to the one its object left behind. */
+	uint8_t b = 1;
+	T3DModelIter it = t3d_model_iter_create(mesh->model, T3D_CHUNK_TYPE_OBJECT);
+	while (t3d_model_iter_next(&it) && b < mesh->bound_count) {
+		for (int i = 0; i < count; i++)
+			if (it.object->name && strcmp(it.object->name, names[i]) == 0)
+				mesh->part_bound[i] = b;
+		b++;
+	}
 
 	mesh->dl_count = 1 + count;
 	mesh->dl = malloc(sizeof(rspq_block_t *) * mesh->dl_count);
@@ -258,4 +392,62 @@ void mesh_recordParts(Mesh *mesh, const char *const *names, uint8_t count, const
 	}
 
 	mesh->visible = 1;
+}
+
+uint8_t mesh_findPart(const Mesh *mesh, const char *name)
+{
+	for (int i = 0; i < mesh->part_count; i++)
+		if (strcmp(mesh->part_name[i], name) == 0) return 1 + i;
+	return 0;
+}
+
+void mesh_setPartVisible(Mesh *mesh, uint8_t part, bool visible)
+{
+	assert(part < mesh->dl_count);
+
+	if (visible) mesh->visible |=  (uint8_t)(1u << part);
+	else         mesh->visible &= (uint8_t)~(1u << part);
+}
+
+bool mesh_isPartVisible(const Mesh *mesh, uint8_t part)
+{
+	return (mesh->visible & (1u << part)) != 0;
+}
+
+void mesh_setPartOffset(Mesh *mesh, uint8_t part, const RenderTransform *offset)
+{
+	assert(part > 0 && part <= mesh->part_count);
+
+	/* Nothing is reserved until a part is actually moved: a model whose parts
+	   only ever show and hide pays for none of this. */
+	if (!mesh->part_offset) {
+		mesh->part_offset = malloc(sizeof(RenderTransform) * mesh->part_count);
+		assert(mesh->part_offset);
+
+		/* The parts not being moved have to come out where they already were,
+		   so they start at no offset and original size, not at zero. */
+		for (int i = 0; i < mesh->part_count; i++)
+			mesh->part_offset[i] = (RenderTransform){ .scale = { 1.0f, 1.0f, 1.0f } };
+
+		mesh->part_matrix = malloc_uncached(sizeof(T3DMat4FP) * mesh->part_count * FB_COUNT);
+		assert(mesh->part_matrix);
+		for (int i = 0; i < mesh->part_count * FB_COUNT; i++)
+			t3d_mat4fp_identity(&mesh->part_matrix[i]);
+	}
+
+	mesh->part_offset[part - 1] = *offset;
+}
+
+const RenderTransform *mesh_getPartOffset(const Mesh *mesh, uint8_t part)
+{
+	if (!mesh->part_offset || part == 0 || part > mesh->part_count) return NULL;
+	return &mesh->part_offset[part - 1];
+}
+
+const T3DMat4FP *mesh_getPartMatrix(const Mesh *mesh, uint8_t part, uint8_t fb_index)
+{
+	if (!mesh->part_matrix || part == 0 || part > mesh->part_count)
+		return mesh->matrix_buffer ? &mesh->matrix_buffer[fb_index] : NULL;
+
+	return &mesh->part_matrix[(part - 1) * FB_COUNT + fb_index];
 }

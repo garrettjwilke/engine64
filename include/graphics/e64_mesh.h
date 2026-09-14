@@ -13,6 +13,14 @@
 
 struct MeshDeform;
 
+/* Parts are selected through one bitmask, and that is what caps them. */
+#define MESH_MAX_PARTS 8
+
+/* The two lists a prefab declares its parts with, written inline where they
+   are used so the game never has to name a type or spell out a literal. */
+#define MESH_PARTS(...)          (const char *const[]){ __VA_ARGS__ }
+#define MESH_PART_POSITIONS(...) (const Vector3[])   { __VA_ARGS__ }
+
 typedef struct {
 	T3DVec3 min, max;
 } MeshBound;
@@ -21,9 +29,32 @@ typedef struct {
 	rspq_block_t **dl;            /* one block per part */
 	uint8_t        dl_count;
 	uint8_t        visible;       /* bitmask: parts to render */
+
+	/* The names the parts were recorded from, one per named part. Part 0 has
+	   no name: it is everything the list did not claim. */
+	const char **part_name;
+	uint8_t      part_count;
+
+	/* Which of the boxes below belongs to each named part, so a part can be
+	   cut from the frame on its own. Zero for a name the model has no object
+	   for, which is never cut. */
+	uint8_t *part_bound;
+
+	/* Bitmask, numbered like the visibility one: the parts the frustum threw
+	   out this frame. */
+	uint8_t part_culled;
+
+	/* A named part can be drawn away from the rest of the model. Its offset is
+	   held in the entity's own space and turned into a matrix of its own every
+	   frame, one per framebuffer. Both stay NULL until a part is actually
+	   offset, and a part left at zero keeps using the entity's matrix.
+	   Indexed by named part, so part 1 is the first entry. */
+	RenderTransform *part_offset;
+	T3DMat4FP       *part_matrix;
+
 	T3DMat4FP     *matrix_buffer; /* NULL = matrix baked in dl (static mesh) */
 	T3DModel      *model;
-	T3DSkeleton   *skeleton;      /* NULL = static mesh (set by character_create) */
+	T3DSkeleton   *skeleton;      /* NULL = static mesh (set by character3d_create) */
 
 	/* Where the vertices come from when something else drives them. The
 	   binding lives in its own module, so the mesh only needs to know it is
@@ -49,6 +80,11 @@ typedef struct {
 
 void mesh_initBounds(Mesh *mesh);
 
+/* Tests the world boxes against the frustum and writes the mesh's own
+   visibility: culled for the whole mesh, isVisible per model object for
+   meshes drawn through the object path. */
+void mesh_cull(Mesh *mesh, const T3DViewport *viewport);
+
 void mesh_setMatrix(Mesh *mesh, const RenderTransform *transform, uint8_t fb_index);
 
 /* Same, but from a simulated body: position in metres and a quaternion, which
@@ -58,8 +94,32 @@ void mesh_setMatrixFromBody(Mesh *mesh, const Vector3 *position, const Quaternio
 
 /* Records part 0 (every object not in the list) plus one part per named
    object, in list order. Pass the skeleton segment placeholder as matrices
-   for skinned models, NULL for static ones. */
+   for skinned models, NULL for static ones. The parts share one visibility
+   bitmask, so a model can declare at most MESH_MAX_PARTS - 1 names. */
 void mesh_recordParts(Mesh *mesh, const char *const *names, uint8_t count, const T3DMat4FP *matrices);
+
+/* Part index for a recorded name, 0 when the mesh has no part by that name.
+   Part 0 is the unnamed remainder, so it never comes back from a lookup. */
+uint8_t mesh_findPart(const Mesh *mesh, const char *name);
+
+/* Turns one recorded part on or off. Everything the parts left over sits in
+   part 0, which is on unless something turns it off too. */
+void mesh_setPartVisible(Mesh *mesh, uint8_t part, bool visible);
+
+bool mesh_isPartVisible(const Mesh *mesh, uint8_t part);
+
+/* Moves one named part away from the rest of the model, in the entity's own
+   space: position in render units, rotation in degrees, and a zero scale left
+   as original size. The part is given matrices of its own the first time it is
+   offset, and follows the entity from then on. */
+void mesh_setPartOffset(Mesh *mesh, uint8_t part, const RenderTransform *offset);
+
+/* The offset a part is currently drawn with, NULL when it has none. */
+const RenderTransform *mesh_getPartOffset(const Mesh *mesh, uint8_t part);
+
+/* The matrix a part has to be drawn with: its own when it is offset, and the
+   mesh's otherwise. Part 0 always draws with the mesh's. */
+const T3DMat4FP *mesh_getPartMatrix(const Mesh *mesh, uint8_t part, uint8_t fb_index);
 
 /* Records one block per model object, in the object's own userBlock. */
 void mesh_recordObjects(Mesh *mesh);

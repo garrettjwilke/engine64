@@ -31,12 +31,11 @@ typedef struct {
 } ParticleBuffer;
 
 
-typedef struct GameContext GameContext;
 typedef struct Particle Particle;
 
 /* Dedicated input function: reads whatever drives the effect and fills
-   visibility and this frame's matrix. */
-typedef void (*ParticleUpdate)(Particle *particle, const GameContext *ctx, uint8_t fb_index);
+   visibility and this frame's matrix. Reaches what it reads itself. */
+typedef void (*ParticleUpdate)(Particle *particle, uint8_t fb_index);
 
 /* rdpq state (combiner, textures) set right before the buffer is drawn. */
 typedef void (*ParticleSetRenderState)(void);
@@ -56,7 +55,7 @@ struct Particle {
 void particles_init(void);
 
 Particle *particles_add(const Particle *def);
-void particles_update(const GameContext *ctx, uint8_t fb_index);
+void particles_update(uint8_t fb_index);
 void particles_draw(void);
 
 ParticleBuffer particleBuffer_create(ParticleType type, uint32_t count);

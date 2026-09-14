@@ -18,15 +18,6 @@ Matrix3 matrix3_fromColumns(const Vector3 *ex, const Vector3 *ey, const Vector3 
 	return (Matrix3){ .ex = *ex, .ey = *ey, .ez = *ez };
 }
 
-Matrix3 matrix3_identity(void)
-{
-	return (Matrix3){
-		.ex = {1.0f, 0.0f, 0.0f},
-		.ey = {0.0f, 1.0f, 0.0f},
-		.ez = {0.0f, 0.0f, 1.0f},
-	};
-}
-
 Matrix3 matrix3_zero(void)
 {
 	return (Matrix3){0};
@@ -98,16 +89,6 @@ void matrix3_setRows(Matrix3 *m, const Vector3 *ex, const Vector3 *ey, const Vec
 	m->ex = *ex;
 	m->ey = *ey;
 	m->ez = *ez;
-}
-
-Vector3 matrix3_column0(const Matrix3 *m) { return (Vector3){m->ex.x, m->ey.x, m->ez.x}; }
-Vector3 matrix3_column1(const Matrix3 *m) { return (Vector3){m->ex.y, m->ey.y, m->ez.y}; }
-Vector3 matrix3_column2(const Matrix3 *m) { return (Vector3){m->ex.z, m->ey.z, m->ez.z}; }
-
-float matrix3_get(const Matrix3 *m, int i, int j)
-{
-	const Vector3 *col = (i == 0) ? &m->ex : (i == 1) ? &m->ey : &m->ez;
-	return (j == 0) ? col->x : (j == 1) ? col->y : col->z;
 }
 
 
@@ -192,15 +173,6 @@ void matrix3_add(Matrix3 *m, const Matrix3 *n)
 	vector3_add(&m->ex, &n->ex);
 	vector3_add(&m->ey, &n->ey);
 	vector3_add(&m->ez, &n->ez);
-}
-
-Matrix3 matrix3_transposed(const Matrix3 *m)
-{
-	return (Matrix3){
-		.ex = {m->ex.x, m->ey.x, m->ez.x},
-		.ey = {m->ex.y, m->ey.y, m->ez.y},
-		.ez = {m->ex.z, m->ey.z, m->ez.z},
-	};
 }
 
 Matrix3 matrix3_scaled(const Matrix3 *m, float scalar)

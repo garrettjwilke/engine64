@@ -1,22 +1,18 @@
 #include <assert.h>
-#include <malloc.h>
 #include "graphics/e64_font.h"
+#include "resource/e64_resource.h"
 
 
-/* The game's table, handed over at font_init. */
+/* The game's table, handed over at font_init. rdpq keeps the loaded font
+   behind its id, so nothing else is stored here. */
 static const FontDef *font_def;
 static uint8_t        font_count;
-
-static rdpq_font_t **font;
 
 
 void font_init(const FontDef *fonts, uint8_t count)
 {
 	font_def   = fonts;
 	font_count = count;
-
-	font = calloc(count, sizeof(rdpq_font_t *));
-	assert(font);
 }
 
 void font_loadAsset(uint8_t id)
@@ -25,20 +21,20 @@ void font_loadAsset(uint8_t id)
 
 	const FontDef *def = &font_def[id];
 
-	font[id] = rdpq_font_load(def->path);
-	assert(font[id]);
+	rdpq_font_t *font = resource_load(def->path, RESOURCE_FONT, NULL);
+	assert(font);
 
 	for (int i = 0; i < def->style_count; i++)
-		rdpq_font_style(font[id], def->style[i].id, &def->style[i].style);
+		rdpq_font_style(font, def->style[i].id, &def->style[i].style);
 
-	rdpq_text_register_font(id, font[id]);
+	rdpq_text_register_font(id, font);
 }
 
 void font_unloadAsset(uint8_t id)
 {
+	rdpq_font_t *font = (rdpq_font_t *)rdpq_text_get_font(id);
 	rdpq_text_unregister_font(id);
-	rdpq_font_free(font[id]);
-	font[id] = NULL;
+	resource_unload(font);
 }
 
 void text_draw(const Text *element, Vector2 position)

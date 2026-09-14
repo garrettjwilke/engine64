@@ -1,6 +1,6 @@
 /*
-	Track animation over the elements of a 2D scene. A track names the
-	element it writes and which of its fields, so the animation is data: it
+	Track animation over the entities of a 2D scene. A track names the
+	entity it writes and which of its fields, so the animation is data: it
 	holds no addresses and survives the scene being loaded again.
 */
 #include <stddef.h>
@@ -22,7 +22,8 @@ typedef struct {
 
 static FieldRef uiAnimation_field(Scene2D *scene2d, const UIAnimationTrack *track)
 {
-	Element2D *e = scene2d_getElement(scene2d, track->layer, track->element);
+	Entity2D *e = scene2d_getEntity(scene2d, track->layer, track->entity);
+	Graphic  *g = e->graphic;
 
 	switch (track->field) {
 
@@ -32,21 +33,21 @@ static FieldRef uiAnimation_field(Scene2D *scene2d, const UIAnimationTrack *trac
 		case UI_FIELD_SCALE_Y:      return (FieldRef){ .as_float = &e->scale.y };
 		case UI_FIELD_ROTATION:     return (FieldRef){ .as_float = &e->rotation };
 
-		case UI_FIELD_TRANSPARENCY: return (FieldRef){ .as_u8 = &e->transparency };
-		case UI_FIELD_TEXT_STYLE:   return (FieldRef){ .as_u8 = &e->text.style };
-		case UI_FIELD_SPRITE_FRAME: return (FieldRef){ .as_u8 = &e->sprite.frame };
+		case UI_FIELD_TRANSPARENCY: return (FieldRef){ .as_u8 = &g->transparency };
+		case UI_FIELD_TEXT_STYLE:   return (FieldRef){ .as_u8 = &g->text.style };
+		case UI_FIELD_SPRITE_FRAME: return (FieldRef){ .as_u8 = &g->sprite.frame };
 
-		case UI_FIELD_COLOR_R:      return (FieldRef){ .as_u8 = &e->rectangle.color.r };
-		case UI_FIELD_COLOR_G:      return (FieldRef){ .as_u8 = &e->rectangle.color.g };
-		case UI_FIELD_COLOR_B:      return (FieldRef){ .as_u8 = &e->rectangle.color.b };
-		case UI_FIELD_COLOR_A:      return (FieldRef){ .as_u8 = &e->rectangle.color.a };
+		case UI_FIELD_COLOR_R:      return (FieldRef){ .as_u8 = &g->rectangle.color.r };
+		case UI_FIELD_COLOR_G:      return (FieldRef){ .as_u8 = &g->rectangle.color.g };
+		case UI_FIELD_COLOR_B:      return (FieldRef){ .as_u8 = &g->rectangle.color.b };
+		case UI_FIELD_COLOR_A:      return (FieldRef){ .as_u8 = &g->rectangle.color.a };
 
-		case UI_FIELD_GRADIENT_R:   return (FieldRef){ .as_u8 = &e->rectangle.gradient[track->corner].r };
-		case UI_FIELD_GRADIENT_G:   return (FieldRef){ .as_u8 = &e->rectangle.gradient[track->corner].g };
-		case UI_FIELD_GRADIENT_B:   return (FieldRef){ .as_u8 = &e->rectangle.gradient[track->corner].b };
-		case UI_FIELD_GRADIENT_A:   return (FieldRef){ .as_u8 = &e->rectangle.gradient[track->corner].a };
+		case UI_FIELD_GRADIENT_R:   return (FieldRef){ .as_u8 = &g->rectangle.gradient[track->corner].r };
+		case UI_FIELD_GRADIENT_G:   return (FieldRef){ .as_u8 = &g->rectangle.gradient[track->corner].g };
+		case UI_FIELD_GRADIENT_B:   return (FieldRef){ .as_u8 = &g->rectangle.gradient[track->corner].b };
+		case UI_FIELD_GRADIENT_A:   return (FieldRef){ .as_u8 = &g->rectangle.gradient[track->corner].a };
 
-		case UI_FIELD_HIDDEN:       return (FieldRef){ .as_bool = &e->is_hidden };
+		case UI_FIELD_HIDDEN:       return (FieldRef){ .as_bool = &g->is_hidden };
 	}
 
 	return (FieldRef){0};
@@ -123,7 +124,7 @@ static float uiAnimation_progress(const UIAnimationTrack *track, float local)
 
 /* Backwards is the same motion seen in reverse, so the curve mirrors too:
    what eases in on the way in eases out on the way out. Re-easing forward
-   instead would hold the element still and then snap it. */
+   instead would hold the entity still and then snap it. */
 static float uiAnimation_progressReversed(const UIAnimationTrack *track, float local)
 {
 	float t = uiAnimation_time(track, local);
@@ -167,7 +168,7 @@ static void uiAnimation_applyTrackReversed(Scene2D *scene2d, const UIAnimationTr
 	}
 
 	if (ref.as_bool) {
-		/* The element stays the way the animation left it for as long as it
+		/* The entity stays the way the animation left it for as long as it
 		   takes to leave; a step holds it to the end. */
 		bool in_window = (track->duration <= 0.0f) || (time < track->duration);
 		*ref.as_bool = in_window ? track->to_bool : track->from_bool;

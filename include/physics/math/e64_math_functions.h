@@ -4,7 +4,13 @@
 #include "physics/math/e64_vector3.h"
 
 
-float clampf(float v, float lo, float hi);
+/* Two compares, inline. */
+static inline float clampf(float v, float lo, float hi)
+{
+	if (v < lo) return lo;
+	if (v > hi) return hi;
+	return v;
+}
 
 Vector3 segment_closestToPoint(const Vector3 *a, const Vector3 *b, const Vector3 *point);
 

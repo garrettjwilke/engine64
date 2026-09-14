@@ -1,54 +1,38 @@
-#include <assert.h>
-#include <malloc.h>
 #include <libdragon.h>
 #include "graphics/e64_sprites.h"
 
 
-/* The game's table, handed over at sprite_init. */
-static const char *const *sprite_path;
-static uint8_t             sprite_count;
+/* Half of TMEM: the other half takes the palette of a colour indexed
+   texture, and a tile never comes close to either. */
+#define SPRITE_LOADABLE_BYTES 2048
 
-static sprite_t **sprite;
-
-
-void sprite_init(const char *const *paths, uint8_t count)
+bool sprite_isLoadable(const Sprite *element, float rotation)
 {
-	sprite_path  = paths;
-	sprite_count = count;
+	if (rotation != 0.0f || element->flip_x || element->tiled) return false;
+	if (element->cols > 1 || element->rows > 1)                return false;
 
-	sprite = calloc(count, sizeof(sprite_t *));
-	assert(sprite);
+	sprite_t *s = element->asset;
+	return TEX_FORMAT_PIX2BYTES(sprite_get_format(s), s->width * s->height) <= SPRITE_LOADABLE_BYTES;
 }
 
-void sprite_loadAsset(SpriteID id)
+void sprite_loadTexture(const Sprite *element)
 {
-	assert(id < sprite_count);
-	sprite[id] = sprite_load(sprite_path[id]);
-	assert(sprite[id]);
+	rdpq_sprite_upload(TILE0, element->asset, NULL);
 }
 
-void sprite_unloadAsset(SpriteID id)
+void sprite_drawLoaded(const Sprite *element, Vector2 position, Vector2 scale)
 {
-	sprite_free(sprite[id]);
-	sprite[id] = NULL;
-}
+	sprite_t *s = element->asset;
 
-sprite_t *sprite_getAsset(SpriteID id)
-{
-	return sprite[id];
-}
-
-void sprite_setMode()
-{
-	rdpq_set_mode_standard();
-	rdpq_mode_blender(RDPQ_BLENDER_MULTIPLY);
-	rdpq_mode_alphacompare(1);
+	rdpq_texture_rectangle_scaled(TILE0,
+		position.x, position.y,
+		position.x + s->width * scale.x, position.y + s->height * scale.y,
+		0, 0, s->width, s->height);
 }
 
 void sprite_drawTiled(const Sprite *element, Vector2 position, Vector2 size)
 {
-	sprite_t *s = sprite[element->id];
-	rdpq_sprite_upload(TILE0, s, &(rdpq_texparms_t){
+	rdpq_sprite_upload(TILE0, element->asset, &(rdpq_texparms_t){
 		.s = { .repeats = REPEAT_INFINITE },
 		.t = { .repeats = REPEAT_INFINITE },
 	});
@@ -58,17 +42,26 @@ void sprite_drawTiled(const Sprite *element, Vector2 position, Vector2 size)
 
 void sprite_draw(const Sprite *element, Vector2 position, Vector2 scale, float rotation)
 {
-	sprite_t *s = sprite[element->id];
-	int count = element->frame_count ? element->frame_count : 1;
-	int h     = s->height / count;
+	sprite_t *s = element->asset;
+	int cols = element->cols ? element->cols : 1;
+	int rows = element->rows ? element->rows : 1;
+	int w    = s->width  / cols;
+	int h    = s->height / rows;
+
+	/* The cell of the frame: column across, row down. */
+	int col = element->frame % cols;
+	int row = element->frame / cols;
 
 	rdpq_sprite_blit(s, position.x, position.y, &(rdpq_blitparms_t){
-		.t0      = element->frame * h,
+		.s0      = col * w,
+		.t0      = row * h,
+		.width   = w,
 		.height  = h,
+		.flip_x  = element->flip_x,
 		.scale_x = scale.x,
 		.scale_y = scale.y,
 		.theta   = rotation,
-		.cx      = (rotation != 0.0f) ? s->width / 2 : 0,
+		.cx      = (rotation != 0.0f) ? w / 2 : 0,
 		.cy      = (rotation != 0.0f) ? h / 2 : 0,
 	});
 }

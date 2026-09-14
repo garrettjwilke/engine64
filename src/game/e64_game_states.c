@@ -5,11 +5,11 @@
 #include <assert.h>
 #include <libdragon.h>
 
-#include "resources/e64_resources.h"
 #include "time/e64_time.h"
 #include "scene3d/e64_scene3d.h"
 #include "scene2d/e64_scene2d.h"
 #include "player/e64_player.h"
+#include "viewport/e64_viewport.h"
 #include "game/e64_game.h"
 #include "game/e64_game_states.h"
 
@@ -26,7 +26,9 @@ const GameStateDef *gameState_get(GameState id)
 
 static void gameState_load(GameState id)
 {
-	resources_load(&game_state[id].resources);
+	/* The screen first: the scenes below place cameras against it. */
+	if (game_state[id].viewport) viewport_setMode(game_state[id].viewport);
+
 	if (game_state[id].scene3d) {
 		scene3d_load(game_state[id].scene3d);
 		if (game_state[id].bindCharacter) game_state[id].bindCharacter();
@@ -43,7 +45,6 @@ static void gameState_unload(GameState id)
 		player_init();
 		scene3d_unload();
 	}
-	resources_unload(&game_state[id].resources);
 }
 
 static bool gameState_isOverlayPair(GameState prev, GameState next)
@@ -108,22 +109,10 @@ void game_start(const GameStateDef *states, uint8_t count, GameState initial)
 	time_reset();
 }
 
-void game_updateState(GameContext *ctx)
+void game_updateState(void)
 {
-	game_state[ctx->game->state].update(ctx);
-	gameState_settle(ctx->game);
-}
+	Game *game = game_get();
 
-/* What the state draws: its own scenes. An overlay draws the 3D world of
-   the state it rides on, which is the one still loaded. */
-GameRenderDescriptor game_getRenderDescriptor(const GameContext *ctx)
-{
-	const GameStateDef *def = &game_state[ctx->game->state];
-
-	bool on_3d = def->scene3d || def->overlay_of != GAME_STATE_NONE;
-
-	return (GameRenderDescriptor){
-		.scene3d = on_3d ? ctx->scene3d : NULL,
-		.scene2d = def->scene2d ? scene2d_get() : NULL,
-	};
+	game_state[game->state].update();
+	gameState_settle(game);
 }

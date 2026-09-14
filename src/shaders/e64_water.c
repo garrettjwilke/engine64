@@ -174,17 +174,19 @@ void water_update(float delta)
 
 /* Same sum as water_waves, at one arbitrary point instead of the mesh's:
    the buoyancy samples ask here, so a body floats on the exact surface the
-   player sees. Waves ride on the rest height, which lives in mesh space —
-   identical to world space, since water models bake their placement. */
-float water_surfaceHeight(const Water *water, float x, float y)
+   player sees. Waves ride on the rest height, which lives in mesh space;
+   the cached placement pulls the world query in and lifts the result out. */
+float water_getSurfaceHeight(const Water *water, float x, float y)
 {
 	const WaterDef *def = &water->def;
-	float height = water->base_z;
+	float local_x = x - water->placement.x;
+	float local_y = y - water->placement.y;
+	float height  = water->placement.z + water->base_z;
 
 	for (uint8_t w = 0; w < def->wave_count; w++) {
 		const WaterWave *wave = &def->wave[w];
 
-		float phase = (wave->direction_x * x + wave->direction_y * y)
+		float phase = (wave->direction_x * local_x + wave->direction_y * local_y)
 		            * wave->frequency + water->time * wave->speed;
 		height += wave->amplitude * fm_sinf(phase);
 	}
@@ -194,11 +196,14 @@ float water_surfaceHeight(const Water *water, float x, float y)
 
 static float water_volumeSurfaceHeight(const void *surface, float x, float y)
 {
-	return water_surfaceHeight(surface, x, y);
+	return water_getSurfaceHeight(surface, x, y);
 }
 
 void water_bindPhysics(Water *water, struct RigidBody *body, struct PhysicsWorld *world)
 {
+	/* The body is static: its placement is settled for good at bind time. */
+	water->placement = rigidBody_getTransform(body).position;
+
 	water->volume = (BuoyancyVolume){
 		.body           = body,
 		.density        = water->def.density,
@@ -209,6 +214,13 @@ void water_bindPhysics(Water *water, struct RigidBody *body, struct PhysicsWorld
 	};
 
 	physicsWorld_addBuoyancy(world, &water->volume);
+}
+
+Water *water_getBoundSurface(const struct RigidBody *body)
+{
+	for (uint8_t i = 0; i < water_count; i++)
+		if (water_pool[i].volume.body == body) return &water_pool[i];
+	return NULL;
 }
 
 void water_clear(void)

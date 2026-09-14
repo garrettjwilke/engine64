@@ -37,7 +37,7 @@ typedef enum {
 } UIAnimationPlayMode;
 
 
-/* What of an element a track writes. The name carries the type: the first
+/* What of an entity a track writes. The name carries the type: the first
    block is written as a float, the next as a byte, hidden as a flag. */
 typedef enum {
 
@@ -79,9 +79,9 @@ typedef enum {
 
 typedef struct {
 
-	/* Which element of the live scene, and what of it. */
+	/* Which entity of the live scene, by layer and placement, and what of it. */
 	uint8_t  layer;
-	uint8_t  element;
+	uint8_t  entity;
 	uint8_t  field;      /* UIField */
 	uint8_t  corner;     /* gradient corner, 0..3 */
 

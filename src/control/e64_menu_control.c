@@ -19,25 +19,9 @@
 /* How far the stick has to stay pushed to count as still held. The edge
    libdragon reports arrives at half the stick's travel, so the repeat reads
    the same line: under it, the input that opened the step is over. */
-#define STICK_REPEAT_THRESHOLD (JOYPAD_RANGE_N64_STICK_MAX / 2)
+/* Half the stick's travel, on a reading that comes in from -1 to 1. */
+#define STICK_REPEAT_THRESHOLD 0.5f
 
-
-/* The stick drives the same four directions as the buttons. How far it is
-   pushed is what the menu reads for speed; the frame it crosses into a
-   direction is what it reads as a step, so one push moves the index once.
-
-   Centred it does not rest at zero, it wanders by a couple of units: without
-   the deadzone that wander reaches whatever rides on this, and the roll a
-   button is driving loses a different sliver of its speed every frame. */
-static float stick_getInput(int8_t axis)
-{
-	if (axis <= STICK_DEADZONE) return 0.0f;
-
-	float input = (axis - STICK_DEADZONE)
-	            / (float)(JOYPAD_RANGE_N64_STICK_MAX - STICK_DEADZONE);
-
-	return (input > 1.0f) ? 1.0f : input;
-}
 
 typedef enum {
 
@@ -100,52 +84,56 @@ static bool direction_getStep(MenuDirection direction, bool pressed, bool held)
 
 void menuControls_map(MenuControls *controls, const Controller *controller, const MenuControlBinding *binding)
 {
+	/* Holding a direction repeats it, but only past half the stick's travel:
+	   near the centre it would repeat on the slightest lean. */
+	Vector2 stick = controller_getStickNormalized(controller);
+
 	const bool up    = direction_getStep(MENU_DIR_UP,
-		button_getPressed(controller, &controller->pressed, binding->up)
+		button_isPressed(controller, binding->up)
 		|| controller->stick_pressed_y > 0,
-		button_getPressed(controller, &controller->held, binding->up)
-		|| controller->input.stick_y > STICK_REPEAT_THRESHOLD);
+		button_isHeld(controller, binding->up)
+		|| stick.y > STICK_REPEAT_THRESHOLD);
 
 	const bool down  = direction_getStep(MENU_DIR_DOWN,
-		button_getPressed(controller, &controller->pressed, binding->down)
+		button_isPressed(controller, binding->down)
 		|| controller->stick_pressed_y < 0,
-		button_getPressed(controller, &controller->held, binding->down)
-		|| controller->input.stick_y < -STICK_REPEAT_THRESHOLD);
+		button_isHeld(controller, binding->down)
+		|| stick.y < -STICK_REPEAT_THRESHOLD);
 
 	const bool left  = direction_getStep(MENU_DIR_LEFT,
-		button_getPressed(controller, &controller->pressed, binding->left)
+		button_isPressed(controller, binding->left)
 		|| controller->stick_pressed_x < 0,
-		button_getPressed(controller, &controller->held, binding->left)
-		|| controller->input.stick_x < -STICK_REPEAT_THRESHOLD);
+		button_isHeld(controller, binding->left)
+		|| stick.x < -STICK_REPEAT_THRESHOLD);
 
 	const bool right = direction_getStep(MENU_DIR_RIGHT,
-		button_getPressed(controller, &controller->pressed, binding->right)
+		button_isPressed(controller, binding->right)
 		|| controller->stick_pressed_x > 0,
-		button_getPressed(controller, &controller->held, binding->right)
-		|| controller->input.stick_x > STICK_REPEAT_THRESHOLD);
+		button_isHeld(controller, binding->right)
+		|| stick.x > STICK_REPEAT_THRESHOLD);
 
 	*controls = (MenuControls){
-		.confirm   = button_getPressed(controller, &controller->pressed, binding->confirm),
-		.cancel    = button_getPressed(controller, &controller->pressed, binding->cancel),
-		.pause     = button_getPressed(controller, &controller->pressed, binding->pause),
+		.confirm   = button_isPressed(controller, binding->confirm),
+		.cancel    = button_isPressed(controller, binding->cancel),
+		.pause     = button_isPressed(controller, binding->pause),
 
 		.up        = up,
 		.down      = down,
 		.left      = left,
 		.right     = right,
 
-		.up_held   = fmaxf(button_getPressed(controller, &controller->held, binding->up),
-		                   stick_getInput( controller->input.stick_y)),
-		.down_held = fmaxf(button_getPressed(controller, &controller->held, binding->down),
-		                   stick_getInput(-controller->input.stick_y)),
+		/* How fast, not whether: a button is all the way, the stick is as far
+		   as it is pushed, and whichever asks for more wins. */
+		.up_held   = fmaxf(button_isHeld(controller, binding->up),   fmaxf( stick.y, 0.0f)),
+		.down_held = fmaxf(button_isHeld(controller, binding->down), fmaxf(-stick.y, 0.0f)),
 
-		.tab_left  = button_getPressed(controller, &controller->pressed, binding->tab_left),
-		.tab_right = button_getPressed(controller, &controller->pressed, binding->tab_right),
+		.tab_left  = button_isPressed(controller, binding->tab_left),
+		.tab_right = button_isPressed(controller, binding->tab_right),
 	};
 }
 
-void menuControl_update(Game *game)
+void menuControl_update(void)
 {
-	const GameStateDef *def = gameState_get(game->state);
-	if (def->control) def->control(game);
+	const GameStateDef *def = gameState_get(game_get()->state);
+	if (def->control) def->control();
 }

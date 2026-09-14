@@ -206,11 +206,37 @@ void contactManager_testCollisions(ContactManager *m)
 			continue;
 		}
 
-		ContactManifold *manifold    = &constraint->manifold;
-		ContactManifold  old         = constraint->manifold;
-		Vector3          ot0         = old.tangent_vectors[0];
-		Vector3          ot1         = old.tangent_vectors[1];
+		ContactManifold *manifold = &constraint->manifold;
+
+		/* Warm start needs only the previous impulses, keyed by feature, and
+		   the tangents they were measured on: a copy of the whole manifold
+		   would move 600 bytes per pair per step for these 130. */
+		struct {
+			uint32_t key;
+			float    normal_impulse;
+			float    tangent_impulse[2];
+		} old_points[8] __attribute__((uninitialized));
+		int32_t old_count = manifold->contact_count;
+		for (int32_t j = 0; j < old_count; ++j) {
+			const ContactPoint *oc = manifold->contacts + j;
+			old_points[j].key                = oc->fp.key;
+			old_points[j].normal_impulse     = oc->normal_impulse;
+			old_points[j].tangent_impulse[0] = oc->tangent_impulse[0];
+			old_points[j].tangent_impulse[1] = oc->tangent_impulse[1];
+		}
+		Vector3 ot0 = manifold->tangent_vectors[0];
+		Vector3 ot1 = manifold->tangent_vectors[1];
+
 		contactConstraint_solveCollision(constraint);
+
+		/* Tangents are read by the solver and by next step's warm start, both
+		   gated by contact_count: a pair that does not touch skips the
+		   normalization the basis costs. */
+		if (!manifold->contact_count) {
+			constraint = constraint->next;
+			continue;
+		}
+
 		vector3_computeBasis(&manifold->normal, &manifold->tangent_vectors[0], &manifold->tangent_vectors[1]);
 
 		for (int32_t i = 0; i < manifold->contact_count; ++i) {
@@ -221,13 +247,12 @@ void contactManager_testCollisions(ContactManager *m)
 			uint8_t old_warm      = c->warm_started;
 			c->warm_started       = 0;
 
-			for (int32_t j = 0; j < old.contact_count; ++j) {
-				ContactPoint *oc = old.contacts + j;
-				if (c->fp.key == oc->fp.key) {
-					c->normal_impulse = oc->normal_impulse;
+			for (int32_t j = 0; j < old_count; ++j) {
+				if (c->fp.key == old_points[j].key) {
+					c->normal_impulse = old_points[j].normal_impulse;
 
-					Vector3 t0_imp     = vector3_scaled(&ot0, oc->tangent_impulse[0]);
-					Vector3 t1_imp     = vector3_scaled(&ot1, oc->tangent_impulse[1]);
+					Vector3 t0_imp     = vector3_scaled(&ot0, old_points[j].tangent_impulse[0]);
+					Vector3 t1_imp     = vector3_scaled(&ot1, old_points[j].tangent_impulse[1]);
 					Vector3 friction   = vector3_sum(&t0_imp, &t1_imp);
 					c->tangent_impulse[0] = vector3_dot(&friction, &manifold->tangent_vectors[0]);
 					c->tangent_impulse[1] = vector3_dot(&friction, &manifold->tangent_vectors[1]);

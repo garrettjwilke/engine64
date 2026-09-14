@@ -79,25 +79,42 @@ void contactSolver_preSolve(ContactSolver *s, float dt)
 		Vector3 vB = s->velocities[cs->index_b].v;
 		Vector3 wB = s->velocities[cs->index_b].w;
 
+		/* A static or kinematic side has inv_mass 0 and a zero inverse
+		   inertia: every term it contributes is 0 and no impulse can move it.
+		   Most contacts in a game have one such side, so that half is
+		   skipped rather than multiplied out to nothing. */
+		int move_a = cs->mA != 0.0f;
+		int move_b = cs->mB != 0.0f;
+
 		for (int32_t j = 0; j < cs->contact_count; ++j) {
 			ContactState *c = cs->contacts + j;
 
-			Vector3 raCn = vector3_cross(&c->ra, &cs->normal);
-			Vector3 rbCn = vector3_cross(&c->rb, &cs->normal);
 			float nm = cs->mA + cs->mB;
 			float tm[2] = { nm, nm };
 
-			Vector3 iA_raCn = matrix3_transformVector(&cs->iA, &raCn);
-			Vector3 iB_rbCn = matrix3_transformVector(&cs->iB, &rbCn);
-			nm += vector3_dot(&raCn, &iA_raCn) + vector3_dot(&rbCn, &iB_rbCn);
+			if (move_a) {
+				Vector3 raCn    = vector3_cross(&c->ra, &cs->normal);
+				Vector3 iA_raCn = matrix3_transformVector(&cs->iA, &raCn);
+				nm += vector3_dot(&raCn, &iA_raCn);
+			}
+			if (move_b) {
+				Vector3 rbCn    = vector3_cross(&c->rb, &cs->normal);
+				Vector3 iB_rbCn = matrix3_transformVector(&cs->iB, &rbCn);
+				nm += vector3_dot(&rbCn, &iB_rbCn);
+			}
 			c->normal_mass = invert_or_zero(nm);
 
 			for (int32_t k = 0; k < 2; ++k) {
-				Vector3 raCt = vector3_cross(&cs->tangent_vectors[k], &c->ra);
-				Vector3 rbCt = vector3_cross(&cs->tangent_vectors[k], &c->rb);
-				Vector3 iA_raCt = matrix3_transformVector(&cs->iA, &raCt);
-				Vector3 iB_rbCt = matrix3_transformVector(&cs->iB, &rbCt);
-				tm[k] += vector3_dot(&raCt, &iA_raCt) + vector3_dot(&rbCt, &iB_rbCt);
+				if (move_a) {
+					Vector3 raCt    = vector3_cross(&cs->tangent_vectors[k], &c->ra);
+					Vector3 iA_raCt = matrix3_transformVector(&cs->iA, &raCt);
+					tm[k] += vector3_dot(&raCt, &iA_raCt);
+				}
+				if (move_b) {
+					Vector3 rbCt    = vector3_cross(&cs->tangent_vectors[k], &c->rb);
+					Vector3 iB_rbCt = matrix3_transformVector(&cs->iB, &rbCt);
+					tm[k] += vector3_dot(&rbCt, &iB_rbCt);
+				}
 				c->tangent_mass[k] = invert_or_zero(tm[k]);
 			}
 
@@ -114,17 +131,20 @@ void contactSolver_preSolve(ContactSolver *s, float dt)
 				P = vector3_sum(&P, &t1);
 			}
 
-			Vector3 P_a = vector3_scaled(&P, cs->mA);
-			vA = vector3_difference(&vA, &P_a);
-			Vector3 cross_ra_P = vector3_cross(&c->ra, &P);
-			Vector3 iA_cross_a = matrix3_transformVector(&cs->iA, &cross_ra_P);
-			wA = vector3_difference(&wA, &iA_cross_a);
-
-			Vector3 P_b = vector3_scaled(&P, cs->mB);
-			vB = vector3_sum(&vB, &P_b);
-			Vector3 cross_rb_P = vector3_cross(&c->rb, &P);
-			Vector3 iB_cross_b = matrix3_transformVector(&cs->iB, &cross_rb_P);
-			wB = vector3_sum(&wB, &iB_cross_b);
+			if (move_a) {
+				Vector3 P_a = vector3_scaled(&P, cs->mA);
+				vA = vector3_difference(&vA, &P_a);
+				Vector3 cross_ra_P = vector3_cross(&c->ra, &P);
+				Vector3 iA_cross_a = matrix3_transformVector(&cs->iA, &cross_ra_P);
+				wA = vector3_difference(&wA, &iA_cross_a);
+			}
+			if (move_b) {
+				Vector3 P_b = vector3_scaled(&P, cs->mB);
+				vB = vector3_sum(&vB, &P_b);
+				Vector3 cross_rb_P = vector3_cross(&c->rb, &P);
+				Vector3 iB_cross_b = matrix3_transformVector(&cs->iB, &cross_rb_P);
+				wB = vector3_sum(&wB, &iB_cross_b);
+			}
 
 			/* rel = (vB + wB × rb) - vA - wA × ra */
 			Vector3 wb_rb  = vector3_cross(&wB, &c->rb);
@@ -154,6 +174,10 @@ void contactSolver_solve(ContactSolver *s)
 		Vector3 vB = s->velocities[cs->index_b].v;
 		Vector3 wB = s->velocities[cs->index_b].w;
 
+		/* Same skip as preSolve: an impulse on a massless side is a no-op. */
+		int move_a = cs->mA != 0.0f;
+		int move_b = cs->mB != 0.0f;
+
 		for (int32_t j = 0; j < cs->contact_count; ++j) {
 			ContactState *c = cs->contacts + j;
 
@@ -174,17 +198,20 @@ void contactSolver_solve(ContactSolver *s)
 
 					Vector3 impulse = vector3_scaled(&cs->tangent_vectors[k], lambda);
 
-					Vector3 imp_a = vector3_scaled(&impulse, cs->mA);
-					vA = vector3_difference(&vA, &imp_a);
-					Vector3 cross_ra = vector3_cross(&c->ra, &impulse);
-					Vector3 iA_cra   = matrix3_transformVector(&cs->iA, &cross_ra);
-					wA = vector3_difference(&wA, &iA_cra);
-
-					Vector3 imp_b = vector3_scaled(&impulse, cs->mB);
-					vB = vector3_sum(&vB, &imp_b);
-					Vector3 cross_rb = vector3_cross(&c->rb, &impulse);
-					Vector3 iB_crb   = matrix3_transformVector(&cs->iB, &cross_rb);
-					wB = vector3_sum(&wB, &iB_crb);
+					if (move_a) {
+						Vector3 imp_a = vector3_scaled(&impulse, cs->mA);
+						vA = vector3_difference(&vA, &imp_a);
+						Vector3 cross_ra = vector3_cross(&c->ra, &impulse);
+						Vector3 iA_cra   = matrix3_transformVector(&cs->iA, &cross_ra);
+						wA = vector3_difference(&wA, &iA_cra);
+					}
+					if (move_b) {
+						Vector3 imp_b = vector3_scaled(&impulse, cs->mB);
+						vB = vector3_sum(&vB, &imp_b);
+						Vector3 cross_rb = vector3_cross(&c->rb, &impulse);
+						Vector3 iB_crb   = matrix3_transformVector(&cs->iB, &cross_rb);
+						wB = vector3_sum(&wB, &iB_crb);
+					}
 				}
 			}
 
@@ -203,17 +230,20 @@ void contactSolver_solve(ContactSolver *s)
 
 			Vector3 impulse = vector3_scaled(&cs->normal, lambda);
 
-			Vector3 imp_a = vector3_scaled(&impulse, cs->mA);
-			vA = vector3_difference(&vA, &imp_a);
-			Vector3 cross_ra = vector3_cross(&c->ra, &impulse);
-			Vector3 iA_cra   = matrix3_transformVector(&cs->iA, &cross_ra);
-			wA = vector3_difference(&wA, &iA_cra);
-
-			Vector3 imp_b = vector3_scaled(&impulse, cs->mB);
-			vB = vector3_sum(&vB, &imp_b);
-			Vector3 cross_rb = vector3_cross(&c->rb, &impulse);
-			Vector3 iB_crb   = matrix3_transformVector(&cs->iB, &cross_rb);
-			wB = vector3_sum(&wB, &iB_crb);
+			if (move_a) {
+				Vector3 imp_a = vector3_scaled(&impulse, cs->mA);
+				vA = vector3_difference(&vA, &imp_a);
+				Vector3 cross_ra = vector3_cross(&c->ra, &impulse);
+				Vector3 iA_cra   = matrix3_transformVector(&cs->iA, &cross_ra);
+				wA = vector3_difference(&wA, &iA_cra);
+			}
+			if (move_b) {
+				Vector3 imp_b = vector3_scaled(&impulse, cs->mB);
+				vB = vector3_sum(&vB, &imp_b);
+				Vector3 cross_rb = vector3_cross(&c->rb, &impulse);
+				Vector3 iB_crb   = matrix3_transformVector(&cs->iB, &cross_rb);
+				wB = vector3_sum(&wB, &iB_crb);
+			}
 		}
 
 		s->velocities[cs->index_a].v = vA;

@@ -5,9 +5,11 @@
 
 #include "shaders/e64_mesh_deform.h"
 #include "viewport/e64_viewport.h"
+#include "control/e64_camera_control.h"
+#include "time/e64_time.h"
 #include "scene3d/e64_lighting.h"
 #include "scene3d/e64_fog.h"
-#include "entity/e64_entity.h"
+#include "entity/e64_entity3d.h"
 #include "scene3d/e64_scene3d.h"
 #include "physics/world/e64_physics_world.h"
 #include "physics/shapes/e64_physics_shape.h"
@@ -19,19 +21,20 @@
 static Scene3D scene;
 static PhysicsWorld g_physics;
 
-/* The def whose placements hold the entity references, to clear on unload. */
-static Scene3DDef *loaded_def;
-
 Scene3D        *scene3d_get(void)        { return &scene; }
 PhysicsWorld *scene3d_getPhysics(void) { return &g_physics; }
 PhysicsWorld *physics_getWorld(void) { return &g_physics; }
 
-void scene3d_load(Scene3DDef *def)
+void scene3d_load(const Scene3DDef *def)
 {
 	/* A scene with no light def is left pitch black rather than lit by
 	   something the game never asked for. */
 	static const LightDef unlit;
 	static const FogDef   clear;
+
+	/* The 3D pipeline comes up with the scene that needs it and goes down
+	   with it, so a game that never loads one never pays for it. */
+	viewport_open3D();
 
 	const LightDef *light = def->light ? def->light : &unlit;
 	const FogDef   *fog   = def->fog   ? def->fog   : &clear;
@@ -46,6 +49,10 @@ void scene3d_load(Scene3DDef *def)
 		camera->field_of_view        = def->camera->field_of_view;
 		camera->near_clipping        = def->camera->near_clipping;
 		camera->far_clipping         = def->camera->far_clipping;
+		camera->base_near_clipping   = def->camera->near_clipping;
+		camera->base_far_clipping    = def->camera->far_clipping;
+		camera->auto_clipping        = def->camera->auto_clipping;
+		camera->binding              = def->camera->binding;
 	}
 	switch (def->camera ? def->camera->type : CAMERA_TYPE_NONE) {
 		case CAMERA_TYPE_SPRING_ARM:
@@ -64,8 +71,8 @@ void scene3d_load(Scene3DDef *def)
 	physicsWorld_setWind(&g_physics, def->wind);
 
 	for (int i = 0; i < def->prefab_count; i++) {
-		Scene3DPrefab *placed = &def->prefab[i];
-		const Prefab *prefab = placed->prefab;
+		const Scene3DPrefab *placed = &def->prefab[i];
+		const Prefab3D *prefab = placed->prefab;
 
 		Vector3 scale = placed->scale;
 		if (scale.x == 0.0f && scale.y == 0.0f && scale.z == 0.0f)
@@ -73,8 +80,13 @@ void scene3d_load(Scene3DDef *def)
 
 		/* entity.c builds from a flat parameter block: filled here straight
 		   from the prefab and its placement, and gone after the load. */
-		EntityDef entity_def = {
-			.model_path = prefab->model,
+		Entity3DDef entity_def = {
+			.model_path  = prefab->model,
+			.part          = prefab->part,
+			.part_count    = prefab->part_count,
+			.part_position = prefab->part_position,
+			.sound       = prefab->sound,
+			.sound_count = prefab->sound_count,
 			.position   = placed->position,
 			.rotation   = placed->rotation,
 			.scale      = scale,
@@ -83,24 +95,24 @@ void scene3d_load(Scene3DDef *def)
 		};
 
 		switch (prefab->type) {
-			case PREFAB_CHARACTER:
+			case PREFAB3D_CHARACTER:
 				entity_def.character = prefab->character;
 				break;
-			case PREFAB_PROP:
+			case PREFAB3D_PROP:
 				entity_def.body = prefab->prop;
 				break;
-			case PREFAB_CLOTH:
+			case PREFAB3D_CLOTH:
 				entity_def.cloth = prefab->cloth;
 				break;
-			case PREFAB_WATER:
+			case PREFAB3D_WATER:
 				entity_def.water = prefab->water;
 				break;
 		}
 
-		Entity *entity = entity_create(&entity_def);
+		Entity3D *entity = entity3d_create(&entity_def);
 
 		if (entity_def.collider)
-			entity_attachPhysics(entity, &entity_def, &g_physics);
+			entity3d_attachPhysics(entity, &entity_def, &g_physics);
 
 		if (entity_def.cloth) {
 			Cloth *cloth = physicsWorld_createCloth(&g_physics, entity_def.cloth);
@@ -131,16 +143,16 @@ void scene3d_load(Scene3DDef *def)
 		}
 
 		if (entity_def.character) {
-			assert(scene.character_count < SCENE_MAX_CHARACTERS);
-			Character *character = character_create(entity_def.character, entity);
-			scene.character[scene.character_count++] = character;
+			assert(scene.character3d_count < SCENE_MAX_CHARACTERS);
+			Character3D *character = character3d_create(entity_def.character, entity);
+			scene.character[scene.character3d_count++] = character;
 
-			characterPhysics_createBody(character, &g_physics);
+			character3dPhysics_createBody(character, &g_physics);
 
-			const CharacterWeaponsDef *weapons = entity_def.character->weapons_def;
+			const Character3DWeaponsDef *weapons = entity_def.character->weapons_def;
 			for (int slot = 0; weapons && slot < WEAPON_SLOT_COUNT; slot++)
 				if (weapons->weapon[slot])
-					character_equipWeapon(character, slot, weapons->weapon[slot]);
+					character3d_equipWeapon(character, slot, weapons->weapon[slot]);
 		}
 
 		if (!entity_def.character) {
@@ -148,12 +160,8 @@ void scene3d_load(Scene3DDef *def)
 				mesh_setMatrix(entity->mesh, &entity->transform, fb);
 		}
 
-		placed->entity = entity;
 		scene.entity[scene.entity_count++] = entity;
 	}
-
-	loaded_def = def;
-	prefabSound_start(def);
 }
 
 void scene3d_clear(void)
@@ -163,19 +171,15 @@ void scene3d_clear(void)
 
 void scene3d_unload(void)
 {
-	prefabSound_stop();
-	if (loaded_def) {
-		for (int i = 0; i < loaded_def->prefab_count; i++)
-			loaded_def->prefab[i].entity = NULL;
-		loaded_def = NULL;
-	}
-	for (int i = 0; i < scene.character_count; i++)
-		character_delete(scene.character[i]);
+	for (int i = 0; i < scene.character3d_count; i++)
+		character3d_delete(scene.character[i]);
 	for (int i = 0; i < scene.entity_count; i++)
-		entity_delete(scene.entity[i]);
+		entity3d_delete(scene.entity[i]);
 	water_clear();
 	scene3d_clear();
 	physicsWorld_shutdown(&g_physics);
+
+	viewport_close3D();
 }
 
 /* The characters' half of the frame after physics_update: each one collides
@@ -184,24 +188,93 @@ void scene3d_unload(void)
    out. The list is the scene's, which is why it lives here. */
 void scene3d_updateCharacters(uint8_t fb_index)
 {
-	for (int i = 0; i < scene.character_count; i++) {
-		Character *character = scene.character[i];
+	for (int i = 0; i < scene.character3d_count; i++) {
+		Character3D *character = scene.character[i];
 
-		characterPhysics_collide(character, &g_physics);
-		characterPhysics_syncBody(character);
-		entity_setTransform(character->entity, &character->body);
-		entity_setMatrix(character->entity, fb_index);
+		character3dPhysics_collide(character, &g_physics);
+		character3dPhysics_syncBody(character);
+		entity3d_setTransform(character->entity, &character->body);
+		entity3d_setMatrix(character->entity, fb_index);
 	}
 }
 
-void scene3d_addEntity(Entity *entity)
+/* The same for everything else in the world. What the solver moved is
+   somewhere new by the time the frame gets here, and the matrix it is drawn
+   with has to say so. Anything still was placed when the scene loaded and this
+   passes over it. The list is the scene's, which is why it lives here. */
+void scene3d_updateEntities(uint8_t fb_index)
+{
+	for (int i = 0; i < scene.entity_count; i++)
+		entity3d_setMatrixFromBody(scene.entity[i], fb_index);
+}
+
+/* The camera's half of the frame: it reads the buttons the scene declared for
+   it, settles where it now belongs around what it is watching, and hands the
+   result to the projection. Always these three, always in this order, so no
+   game writes them out. */
+void scene3d_updateCamera(const Vector3 *target)
+{
+	Camera *camera = &viewport_get()->camera;
+
+	if (camera->binding)
+		cameraControl_update(camera, camera->binding, &scene, time_get()->delta);
+
+	viewport_updateCamera((Vector3 *)target, &scene);
+	viewport_setPerspectiveCamera();
+}
+
+void scene3d_addEntity(Entity3D *entity)
 {
 	assert(scene.entity_count < SCENE_MAX_ENTITIES);
 	scene.entity[scene.entity_count++] = entity;
 }
 
-Character *scene3d_getCharacter(uint8_t index)
+Character3D *scene3d_getCharacter3D(uint8_t index)
 {
-	if (index >= scene.character_count) return NULL;
+	if (index >= scene.character3d_count) return NULL;
 	return scene.character[index];
+}
+
+void scene3d_setRenderContext(const Scene3D *s, RenderContext *ctx, const Viewport *viewport)
+{
+	uint8_t fb_index = viewport->fb_index;
+
+	for (int i = 0; i < s->entity_count; i++) {
+		Entity3D    *e      = s->entity[i];
+		Mesh        *mesh   = e->mesh;
+		if (!mesh) continue;
+		T3DMat4FP   *matrix = mesh->matrix_buffer ? &mesh->matrix_buffer[fb_index] : NULL;
+		T3DSkeleton *skel   = mesh->skeleton;
+
+		/* The mesh culls itself and writes its own flags; here they are
+		   only consumed. */
+		if (e->cull) {
+			mesh_cull(mesh, &viewport->t3d_viewport);
+			if (mesh->culled) continue;
+		}
+
+		/* Whatever drives this mesh has already moved: fold the new positions
+		   into this frame's vertex buffer, then point the segment its recorded
+		   display list reads from at that same copy. */
+		mesh_updateDeform(mesh, fb_index);
+		mesh_bindDeformFrame(mesh, fb_index);
+
+		if (mesh->dl_count == 0) {
+			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
+			ctx->object[ctx->object_count++] = (Element3D){ NULL, mesh->model, matrix, skel, mesh->draw_conf };
+			continue;
+		}
+
+		/* A part displaced from the rest of the model carries a matrix of its
+		   own; every other one draws with the entity's. */
+		for (int part = 0; part < mesh->dl_count; part++) {
+			if (!(mesh->visible & (1u << part))) continue;
+			if (e->cull && (mesh->part_culled & (1u << part))) continue;
+
+			T3DMat4FP *part_matrix = (T3DMat4FP *)mesh_getPartMatrix(mesh, part, fb_index);
+
+			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
+			ctx->object[ctx->object_count++] = (Element3D){ mesh->dl[part], NULL, part_matrix, skel };
+		}
+	}
 }

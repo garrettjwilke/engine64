@@ -4,14 +4,6 @@
 #define EPSILON 1e-6f
 
 
-float clampf(float v, float lo, float hi)
-{
-	if (v < lo) return lo;
-	if (v > hi) return hi;
-	return v;
-}
-
-
 Vector3 segment_closestToPoint(const Vector3 *a, const Vector3 *b, const Vector3 *point)
 {
 	Vector3 ab = {b->x - a->x, b->y - a->y, b->z - a->z};

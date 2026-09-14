@@ -33,10 +33,10 @@ Particle *particles_add(const Particle *def)
 	return added;
 }
 
-void particles_update(const GameContext *ctx, uint8_t fb_index)
+void particles_update(uint8_t fb_index)
 {
 	for (int i = 0; i < particle_count; i++)
-		particle[i].update(&particle[i], ctx, fb_index);
+		particle[i].update(&particle[i], fb_index);
 }
 
 void particles_draw(void)

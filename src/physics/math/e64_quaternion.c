@@ -156,3 +156,17 @@ Quaternion quaternion_nlerp(const Quaternion *a, const Quaternion *b, float t)
 	};
 	return quaternion_normalized(&q);
 }
+
+/* Rotates a vector by a unit quaternion. */
+Vector3 quaternion_rotateVector(const Quaternion *q, const Vector3 *v)
+{
+	float tx = 2.0f * (q->y * v->z - q->z * v->y);
+	float ty = 2.0f * (q->z * v->x - q->x * v->z);
+	float tz = 2.0f * (q->x * v->y - q->y * v->x);
+
+	return (Vector3){
+		v->x + q->w * tx + (q->y * tz - q->z * ty),
+		v->y + q->w * ty + (q->z * tx - q->x * tz),
+		v->z + q->w * tz + (q->x * ty - q->y * tx),
+	};
+}

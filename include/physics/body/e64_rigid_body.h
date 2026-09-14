@@ -170,6 +170,7 @@ float   rigidBody_getAngularDamping(const RigidBody *b);
 
 void    rigidBody_setTransformPosition         (RigidBody *b, Vector3 position);
 void    rigidBody_setTransformPositionAxisAngle(RigidBody *b, Vector3 position, Vector3 axis, float angle);
+void    rigidBody_setTransformPositionYaw      (RigidBody *b, Vector3 position, float yaw);   /* radians, about Z */
 
 float   rigidBody_getMass   (const RigidBody *b);
 float   rigidBody_getInvMass(const RigidBody *b);

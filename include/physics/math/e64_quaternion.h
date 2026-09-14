@@ -16,6 +16,7 @@ Quaternion quaternion_fromAxisAngle(const Vector3 *axis, float radians);
 Quaternion quaternion_product(const Quaternion *a, const Quaternion *b);
 Quaternion quaternion_normalized(const Quaternion *q);
 Quaternion quaternion_nlerp(const Quaternion *a, const Quaternion *b, float t);
+Vector3 quaternion_rotateVector(const Quaternion *q, const Vector3 *v);
 
 void quaternion_setAxisAngle(Quaternion *q, const Vector3 *axis, float radians);
 void quaternion_toAxisAngle(const Quaternion *q, Vector3 *axis, float *angle);

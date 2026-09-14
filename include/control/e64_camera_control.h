@@ -21,8 +21,10 @@ typedef struct CameraControlBinding {
 } CameraControlBinding;
 
 
-/* Reads the controller of the player the binding names. */
-void cameraControl_update(Camera *camera, const CameraControlBinding *binding, float dt);
+/* Reads the controller of the player the binding names. The scene rides
+   through to the camera update, for the clipping fit. */
+void cameraControl_update(Camera *camera, const CameraControlBinding *binding,
+                          const struct Scene3D *scene, float dt);
 void cameraControl_setDistance(Camera *camera, float distance, float dt);
 void cameraControl_setFieldOfView(Camera *camera, float field_of_view, float dt);
 void cameraControl_setSideOffset(Camera *camera, float side_offset, float dt);
