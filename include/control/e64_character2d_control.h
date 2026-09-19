@@ -2,6 +2,7 @@
 #define ENGINE64_CHARACTER2D_CONTROL_H
 
 #include "e64_controller.h"
+#include "engine/e64_common.h"
 #include "prefab/e64_prefab2d.h"
 #include "character2d/e64_character2d.h"
 #include "character2d/e64_character2d_movement.h"
@@ -20,9 +21,13 @@ typedef struct Character2DControlBinding {
 	/* Whose seat drives this body. */
 	PlayerID player;
 
-	/* Which body it drives: the prefab it was placed from, in whatever layer
-	   of the scene it stands. */
-	const Prefab2D *character;
+	/* Which bodies it drives, by the prefabs they were placed from, in
+	   whatever layer of the scene they stand. One layout serves several
+	   bodies: loading a scene seats the player on the first of these the
+	   scene holds, so a screen placing another one needs no binding of its
+	   own. */
+	const Prefab2D *const *character;
+	uint8_t                character_count;
 
 	ButtonID jump;
 	ButtonID roll;

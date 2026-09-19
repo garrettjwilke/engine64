@@ -1,19 +1,17 @@
-PROJECT_NAME = 02_character_3d
+PROJECT_NAME = 03_character_3d_collision
 
 # Path to the engine64 checkout. Set it to wherever the engine lives; this
 # example sits two levels down inside the repo.
 ENGINE_DIR = ../..
 
-# main.cpp, and one file per piece of the scene.
-src = $(wildcard *.cpp) $(wildcard scene/*.cpp)
+src = $(wildcard *.cpp) $(wildcard prefabs/*.cpp) $(wildcard scene/*.cpp) $(wildcard controls/*.cpp)
 
 # --asset-path: the importer looks every material's texture up by FILE NAME,
 # recursively, under this path, and builds the path left in the .t3dm by
 # replacing this prefix with "rom:/".
 GLTF_FLAGS = '--asset-path=assets'
 
-# The room is the only model that also needs a collision mesh: it is what the
-# character stands on.
+# Models that also need a collision mesh: the room is what the body walks on.
 assets_collision = filesystem/collision/room.collision
 
 include $(ENGINE_DIR)/engine.mk

@@ -2,6 +2,7 @@
 #define ENGINE64_CHARACTER3D_CONTROL_H
 
 #include "e64_controller.h"
+#include "engine/e64_common.h"
 #include "prefab/e64_prefab3d.h"
 #include "character3d/e64_character3d.h"
 #include "character3d/e64_character3d_movement.h"
@@ -16,10 +17,11 @@ typedef struct Character3DControlBinding {
 	/* Whose seat drives this body. */
 	PlayerID player;
 
-	/* Which body it drives: the prefab it was placed from. Loading a scene
-	   seats that player on the character built from this prefab, so the game
-	   binds nothing by hand. */
-	const Prefab3D *character;
+	/* Which bodies it drives, by the prefabs they were placed from. One layout
+	   serves several bodies: loading a scene seats that player on the first of
+	   these the scene holds, so the game binds nothing by hand. */
+	const Prefab3D *const *character;
+	uint8_t                character_count;
 
 	ButtonID jump;
 	ButtonID roll;

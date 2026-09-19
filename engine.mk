@@ -10,9 +10,6 @@
 #   BUILD_DIR     the project's build dir (optional, default build).
 #   ENGINE_SKIP   engine units the game replaces (optional), paths relative
 #                 to $(ENGINE_DIR)/src.
-#   MODEL_SCALE   the --base-scale the game imports its models with, so the
-#                 collision importer reads the .glb at that same size
-#                 (optional, default 1).
 #   GLTF_FLAGS    flags for the model importer (optional).
 #   COL_MESHES    mesh names to keep as collision (optional, default all).
 #
@@ -39,21 +36,10 @@ ifeq ($(origin T3D_GLTF_TO_3D),undefined)
 include $(T3D_INST)/t3d.mk
 endif
 
-# --- scale -------------------------------------------------------------------
-# Render units per metre. The engine converts physics with it and the collision
-# importer divides by it to reach metres, so it is the engine's number and both
-# sides read it from here. A power of two keeps that conversion exact.
-# How big a model comes in is the game's own call, through its GLTF_FLAGS.
-RENDER_SCALE = 64
-
-# The collision importer reads the same .glb the model comes from, so it needs
-# the size the game brings its models in at before it can reach metres.
-MODEL_SCALE ?= 1
-
-# $(ENGINE_DIR)/src is there to pull an engine unit in with <module/file.c>
-# for a partial override.
-N64_CFLAGS += -std=gnu2x -I$(ENGINE_DIR)/include -I$(ENGINE_DIR)/src \
-              -DRENDER_SCALE=$(RENDER_SCALE).0f
+# $(ENGINE_DIR)/src is there to pull an engine unit in with <module/file.cpp>
+# for a partial override. No exceptions, no RTTI: neither has a place on the
+# console and both cost binary size and unwind tables.
+N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -fno-rtti -I$(ENGINE_DIR)/include -I$(ENGINE_DIR)/src
 
 # --- sources -----------------------------------------------------------------
 # The order matters, and not for tidiness: the VR4300 icache is 16 KB direct
@@ -68,26 +54,26 @@ ENGINE_ORDER = \
 	camera viewport particles sound game scene2d stage2d character2d ui menu resource
 
 engine_listed = $(foreach m,$(ENGINE_ORDER),\
-	$(if $(filter %.c,$(m)),$(m),\
-	  $(patsubst $(ENGINE_DIR)/src/%,%,$(wildcard $(ENGINE_DIR)/src/$(m)/*.c))))
+	$(if $(filter %.cpp,$(m)),$(m),\
+	  $(patsubst $(ENGINE_DIR)/src/%,%,$(wildcard $(ENGINE_DIR)/src/$(m)/*.cpp))))
 
 engine_src = $(filter-out $(ENGINE_SKIP),$(engine_listed))
 
 # A module the order above misses would vanish from the build without a
 # word, so whatever is left over gets appended instead of lost.
-engine_all  = $(patsubst $(ENGINE_DIR)/src/%,%,$(shell find $(ENGINE_DIR)/src -name '*.c'))
+engine_all  = $(patsubst $(ENGINE_DIR)/src/%,%,$(shell find $(ENGINE_DIR)/src -name '*.cpp'))
 engine_rest = $(filter-out $(ENGINE_SKIP) $(engine_listed),$(engine_all))
 engine_src += $(engine_rest)
 
-objects = $(engine_src:%.c=$(BUILD_DIR)/engine/%.o) \
-          $(src:%.c=$(BUILD_DIR)/%.o)
+objects = $(engine_src:%.cpp=$(BUILD_DIR)/engine/%.o) \
+          $(src:%.cpp=$(BUILD_DIR)/%.o)
 
 # Engine objects land under the consumer's build/engine, so nothing is ever
 # written inside the engine repo.
-$(BUILD_DIR)/engine/%.o: $(ENGINE_DIR)/src/%.c
+$(BUILD_DIR)/engine/%.o: $(ENGINE_DIR)/src/%.cpp
 	@mkdir -p $(dir $@)
-	@echo "    [CC] $<"
-	$(CC) -c $(CFLAGS) -o $@ $<
+	@echo "    [CXX] $<"
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
 # --- assets ------------------------------------------------------------------
 assets_texture = $(wildcard assets/textures/*.png)
@@ -141,13 +127,13 @@ filesystem/audio/%.wav64: assets/audio/%.wav
 # collision unless COL_MESHES names the ones wanted.
 COLLISION_IMPORTER = $(ENGINE_DIR)/tools/collision_importer/collision_importer
 
-$(COLLISION_IMPORTER): $(ENGINE_DIR)/tools/collision_importer/main.c
+$(COLLISION_IMPORTER): $(ENGINE_DIR)/tools/collision_importer/main.cpp
 	$(MAKE) -C $(ENGINE_DIR)/tools/collision_importer
 
 filesystem/collision/%.collision: assets/models/%.glb $(COLLISION_IMPORTER)
 	@mkdir -p $(dir $@)
 	@echo "    [COLLISION] $@"
-	$(COLLISION_IMPORTER) --model-scale=$(MODEL_SCALE) --render-scale=$(RENDER_SCALE) "$<" $@ $(COL_MESHES)
+	$(COLLISION_IMPORTER) "$<" $@ $(COL_MESHES)
 	$(N64_BINDIR)/mkasset -c 1 -o $(dir $@) $@
 
 # --- stages ------------------------------------------------------------------
@@ -161,7 +147,7 @@ stage_pack = $(firstword $(subst /, ,$(1)))
 stage_tile = $(patsubst $(call stage_pack,$(1))/%,%,$(1))
 STAGE_IMPORTER = $(ENGINE_DIR)/tools/stage_importer/stage_importer
 
-$(STAGE_IMPORTER): $(ENGINE_DIR)/tools/stage_importer/main.c
+$(STAGE_IMPORTER): $(ENGINE_DIR)/tools/stage_importer/main.cpp
 	$(MAKE) -C $(ENGINE_DIR)/tools/stage_importer
 
 .SECONDEXPANSION:

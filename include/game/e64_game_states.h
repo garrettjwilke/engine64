@@ -16,13 +16,10 @@ typedef struct Game Game;
 /* Index into the state table the game hands to game_start. */
 typedef uint8_t GameState;
 
-/* No state: the overlay_of sentinel. A field left out of a designated
-   initializer is 0, which is a valid state, so every table entry must set
-   overlay_of explicitly. */
-#define GAME_STATE_NONE 0xFF
 
+typedef struct GameStateDef GameStateDef;
 
-typedef struct GameStateDef {
+struct GameStateDef {
 
 	void (*update)(void);
 	void (*onEnter)(void);
@@ -51,11 +48,12 @@ typedef struct GameStateDef {
 	   the one already there declares the same. */
 	const ViewportModeDef *viewport;
 
-	/* The state this one rides on top of; GAME_STATE_NONE for none.
-	   Switching between an overlay and its base leaves the base untouched. */
-	GameState          overlay_of;
+	/* The table entry this one rides on top of (&states[BASE]); NULL, the
+	   default, for none. Switching between an overlay and its base leaves
+	   the base untouched. */
+	const GameStateDef *overlay_of;
 
-} GameStateDef;
+};
 
 
 /* Hands the engine the game's state table and loads the initial state.

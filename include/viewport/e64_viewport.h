@@ -17,17 +17,10 @@
    splits every column in two, which is why its art goes at two across and one
    down. 640 by 480 is the only one that interlaces, and anything moving in it
    flickers. */
-#define SCREEN_320x240 (&(const ViewportModeDef){ \
-	.width = 320, .height = 240 })
-
-#define SCREEN_424x240 (&(const ViewportModeDef){ \
-	.width = 424, .height = 240 })
-
-#define SCREEN_640x240 (&(const ViewportModeDef){ \
-	.width = 640, .height = 240, .scale_x = 2.0f, .scale_y = 1.0f })
-
-#define SCREEN_640x480 (&(const ViewportModeDef){ \
-	.width = 640, .height = 480, .interlaced = INTERLACE_HALF })
+#define SCREEN_320x240 (&SCREEN_320x240_DEF)
+#define SCREEN_424x240 (&SCREEN_424x240_DEF)
+#define SCREEN_640x240 (&SCREEN_640x240_DEF)
+#define SCREEN_640x480 (&SCREEN_640x480_DEF)
 
 
 /* A screen the game can ask for. The engine names no mode of its own: the
@@ -61,6 +54,13 @@ typedef struct ViewportModeDef {
 	float            scale_y;
 
 } ViewportModeDef;
+
+/* The objects behind the SCREEN_ macros above: one definition shared by
+   every unit that includes this. */
+inline const ViewportModeDef SCREEN_320x240_DEF = { .width = 320, .height = 240 };
+inline const ViewportModeDef SCREEN_424x240_DEF = { .width = 424, .height = 240 };
+inline const ViewportModeDef SCREEN_640x240_DEF = { .width = 640, .height = 240, .scale_x = 2.0f, .scale_y = 1.0f };
+inline const ViewportModeDef SCREEN_640x480_DEF = { .width = 640, .height = 480, .interlaced = INTERLACE_HALF };
 
 
 typedef struct Viewport {
