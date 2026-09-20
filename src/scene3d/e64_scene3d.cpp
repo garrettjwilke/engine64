@@ -240,11 +240,10 @@ void scene3d_setRenderContext(const Scene3D *s, RenderContext *ctx, const Viewpo
 	uint8_t fb_index = viewport->fb_index;
 
 	for (int i = 0; i < s->entity_count; i++) {
-		Entity3D    *e      = s->entity[i];
-		Mesh        *mesh   = e->mesh;
+		Entity3D    *e    = s->entity[i];
+		Mesh        *mesh = e->mesh;
 		if (!mesh) continue;
-		T3DMat4FP   *matrix = mesh->matrix_buffer ? &mesh->matrix_buffer[fb_index] : NULL;
-		T3DSkeleton *skel   = mesh->skeleton;
+		T3DSkeleton *skel = mesh->skeleton;
 
 		/* The mesh culls itself and writes its own flags; here they are
 		   only consumed. */
@@ -259,22 +258,23 @@ void scene3d_setRenderContext(const Scene3D *s, RenderContext *ctx, const Viewpo
 		mesh_updateDeform(mesh, fb_index);
 		mesh_bindDeformFrame(mesh, fb_index);
 
-		if (mesh->dl_count == 0) {
-			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
-			ctx->object[ctx->object_count++] = (Element3D){ NULL, mesh, matrix, skel };
-			continue;
-		}
-
-		/* A part displaced from the rest of the model carries a matrix of its
-		   own; every other one draws with the entity's. */
-		for (int part = 0; part < mesh->dl_count; part++) {
+		/* One piece per object still on: its part turned on, and not cut by
+		   the frustum when the entity culls. A part displaced from the rest
+		   of the model carries a matrix of its own; every other object draws
+		   with the entity's. */
+		for (uint16_t o = 0; o < mesh->object_count; o++) {
+			uint8_t part = mesh->object_part[o];
 			if (!(mesh->visible & (1u << part))) continue;
-			if (e->cull && (mesh->part_culled & (1u << part))) continue;
+			if (e->cull && !mesh->object[o]->isVisible) continue;
 
-			T3DMat4FP *part_matrix = (T3DMat4FP *)mesh_getPartMatrix(mesh, part, fb_index);
-
-			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
-			ctx->object[ctx->object_count++] = (Element3D){ mesh->dl[part], NULL, part_matrix, skel };
+			assert(ctx->piece_count < RENDER_MAX_3D_PIECES);
+			ctx->piece[ctx->piece_count++] = (RenderPiece){
+				.material = mesh->object_material[o],
+				.object   = mesh->object[o],
+				.mesh     = mesh,
+				.matrix   = (T3DMat4FP *)mesh_getPartMatrix(mesh, part, fb_index),
+				.skeleton = skel,
+			};
 		}
 	}
 }

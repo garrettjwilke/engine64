@@ -18,9 +18,9 @@ namespace e64 {
 /* A stage contributes one entry per visible tile: a full screen of 16 px
    cells is 300 of them per layer. */
 #define RENDER_MAX_2D_ELEMENTS 1024
-/* One entry per visible mesh part, not per entity: a skinned character alone
-   contributes several, so this has to clear the scene's entity budget. */
-#define RENDER_MAX_3D_ELEMENTS    64
+/* One entry per visible model object, not per entity: a prop with four
+   materials is four of them, so this has to clear the scene's object count. */
+#define RENDER_MAX_3D_PIECES     256
 #define RENDER_MAX_SECTIONS        8
 
 typedef struct Scene3D          Scene3D;
@@ -44,14 +44,18 @@ typedef struct {
 
 struct Mesh;
 
+/* One visible model object: its geometry block sits in the object, its
+   material in the mesh module's table. The frame groups pieces by material
+   and draws each material once, ahead of every piece that uses it. */
 typedef struct {
 
-	rspq_block_t *dl;      /* NULL: draw the mesh's visible objects instead */
-	struct Mesh  *mesh;
-	T3DMat4FP    *matrix;
-	T3DSkeleton  *skeleton;
+	uint8_t            material;   /* table id, MESH_MATERIAL_NONE for none */
+	const T3DObject   *object;
+	const struct Mesh *mesh;       /* for the texture scroll */
+	T3DMat4FP         *matrix;
+	T3DSkeleton       *skeleton;
 
-} Element3D;
+} RenderPiece;
 
 typedef struct {
 
@@ -75,8 +79,8 @@ typedef struct RenderContext {
 	RenderSection section[RENDER_MAX_SECTIONS];
 	uint8_t       section_count;
 
-	Element3D     object[RENDER_MAX_3D_ELEMENTS];
-	uint8_t       object_count;
+	RenderPiece   piece[RENDER_MAX_3D_PIECES];
+	uint16_t      piece_count;
 
 } RenderContext;
 

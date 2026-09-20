@@ -80,8 +80,9 @@ void scene3d_updateCamera(const Vector3 *target);
 void scene3d_addEntity(Entity3D *entity);
 Character3D *scene3d_getCharacter3D(uint8_t index);
 
-/* Pushes one Element3D per visible mesh part into the frame's context. The
-   culling runs here, against the frame's frustum, before each mesh is read. */
+/* Pushes one RenderPiece per visible model object into the frame's context.
+   The culling runs here, against the frame's frustum, before each mesh is
+   read. */
 void scene3d_setRenderContext(const Scene3D *scene, RenderContext *ctx, const Viewport *viewport);
 
 }

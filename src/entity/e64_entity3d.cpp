@@ -66,23 +66,13 @@ Entity3D *create(const Def *def)
 	mesh_initBounds(entity->mesh);
 
 	if (def->character) {
-		entity->mesh->dl = NULL;   /* character3d_create builds the skinned parts */
-		entity->mesh->dl_count = 0;
-		entity->mesh->visible  = 0;
-	} else if (def->cloth) {
-		entity->mesh->dl = (rspq_block_t **)malloc(sizeof(rspq_block_t *));
-		assert(entity->mesh->dl);
-		rspq_block_begin();
-		t3d_model_draw(entity->mesh->model);
-		entity->mesh->dl[0]    = rspq_block_end();
-		entity->mesh->dl_count = 1;
-		entity->mesh->visible  = 1;
-	} else if (def->part_count) {
-		/* The model is static, so its parts record with no skeleton segment,
-		   and every one of them starts on screen: a prop shows whole until the
-		   game decides to hide something. */
-		mesh_recordParts(entity->mesh, def->part, def->part_count, NULL);
-		entity->mesh->visible = (uint8_t)((1u << entity->mesh->dl_count) - 1);
+		/* character3d_create records the model with its skeleton segment. */
+	} else {
+		/* The model is static, so it records with no skeleton segment, and
+		   every part starts on screen: a prop shows whole until the game
+		   decides to hide something. */
+		mesh_record(entity->mesh, def->part, def->part_count, NULL);
+		entity->mesh->visible = (uint8_t)((2u << entity->mesh->part_count) - 1);
 
 		/* A part declared away from where it was modelled gets its offset here,
 		   so it is already in place the first time it is drawn. */
@@ -94,8 +84,6 @@ Entity3D *create(const Def *def)
 			RenderTransform offset = { .position = *position, .scale = { 1.0f, 1.0f, 1.0f } };
 			mesh_setPartOffset(entity->mesh, 1 + i, &offset);
 		}
-	} else {
-		mesh_recordObjects(entity->mesh);
 	}
 
 	return entity;
@@ -124,22 +112,11 @@ void setPartOffset(Entity3D *entity, const char *name, const RenderTransform *of
 void destroy(Entity3D *entity)
 {
 	if (entity->mesh) {
-		for (int i = 0; i < entity->mesh->dl_count; i++)
-			rspq_block_free(entity->mesh->dl[i]);
-		free(entity->mesh->dl);
-		for (int i = 0; i < entity->mesh->material_count; i++)
-			if (entity->mesh->material_block[i]) rspq_block_free(entity->mesh->material_block[i]);
-		free(entity->mesh->material_block);
-		free(entity->mesh->object_order);
-		free(entity->mesh->object_material);
+		mesh_release(entity->mesh);
 		if (entity->mesh->deform) {
 			meshDeform_delete(entity->mesh->deform);
 			free(entity->mesh->deform);
 		}
-		free(entity->mesh->part_name);
-		free(entity->mesh->part_object);
-		free(entity->mesh->part_offset);
-		if (entity->mesh->part_matrix) free_uncached(entity->mesh->part_matrix);
 		free_uncached(entity->mesh->matrix_buffer);
 		resource_unload(entity->mesh->model);
 		free(entity->mesh);

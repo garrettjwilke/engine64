@@ -89,16 +89,17 @@ Character3D *create(const Def *def, Entity3D *entity)
 
 	/* Part 0 = body, parts 1..N = one per weapon object, def order.
 	   Only the body starts visible; equipping turns weapon bits on.
-	   No weapons: the whole model is the single skinned part. No skeleton
-	   either: per-object blocks, exactly what a prop gets. */
+	   No weapons: the whole model is part 0. A skinned model records
+	   against the skeleton segment; without a skeleton it records like a
+	   prop. */
+	const T3DMat4FP *bones = def->animation_def
+	                       ? (const T3DMat4FP *)t3d_segment_placeholder(T3D_SEGMENT_SKELETON)
+	                       : NULL;
+
 	if (def->weapons_def)
-		mesh_recordParts(entity->mesh, def->weapons_def->mesh, def->weapons_def->mesh_count,
-			(const T3DMat4FP *)t3d_segment_placeholder(T3D_SEGMENT_SKELETON));
-	else if (def->animation_def)
-		mesh_recordParts(entity->mesh, NULL, 0,
-			(const T3DMat4FP *)t3d_segment_placeholder(T3D_SEGMENT_SKELETON));
+		mesh_record(entity->mesh, def->weapons_def->mesh, def->weapons_def->mesh_count, bones);
 	else
-		mesh_recordObjects(entity->mesh);
+		mesh_record(entity->mesh, NULL, 0, bones);
 
 	return character;
 }

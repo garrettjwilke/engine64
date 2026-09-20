@@ -43,7 +43,7 @@ void render_initContext(RenderContext *ctx)
 	   and zeroing the whole struct wipes the entire 8 KB dcache. */
 	ctx->element_count = 0;
 	ctx->section_count = 0;
-	ctx->object_count  = 0;
+	ctx->piece_count   = 0;
 }
 
 
@@ -123,6 +123,69 @@ static void render_scrollTexture(const T3DMaterial *material, const Vector2 *scr
 	}
 }
 
+/* The counting sort bucket of a material id: the ids in order, and the
+   objects without material last. */
+static inline int render_materialBucket(uint8_t material)
+{
+	return material == MESH_MATERIAL_NONE ? MESH_MAX_MATERIALS : material;
+}
+
+/* Runs pieces in the given order: each material once, ahead of the run of
+   pieces that use it; skeleton and matrix only when they change, popping
+   only when another matrix takes over. bound and pushed carry that state
+   across calls. Returns whether any material ran with a vertex FX. */
+static bool render_runPieces(const RenderContext *ctx, const uint16_t *order, uint16_t count,
+                             const T3DSkeleton **bound, const T3DMat4FP **pushed)
+{
+	static const Vector2 no_scroll[2] = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
+
+	int         current   = -1;    /* the material the RDP is set for */
+	const Mesh *scrolled  = NULL;  /* the mesh whose scroll the tiles carry */
+	bool        vertex_fx = false;
+
+	for (uint16_t i = 0; i < count; i++) {
+		const RenderPiece *piece = &ctx->piece[order[i]];
+
+		if (piece->material != current) {
+			rspq_block_t *block = mesh_materialBlock(piece->material);
+			if (block) rspq_block_run(block);
+			if (mesh_materialHasVertexFx(piece->material)) vertex_fx = true;
+			current  = piece->material;
+			scrolled = NULL;   /* the block wrote the file's own tile translate */
+		}
+
+		/* The scroll rides on top of the shared material: reissued when a
+		   scrolling mesh takes the tiles over, put back to the file's when a
+		   mesh without one follows under the same material. */
+		if (piece->object->material) {
+			if (piece->mesh->texture_scroll) {
+				if (piece->mesh != scrolled) {
+					render_scrollTexture(piece->object->material, piece->mesh->texture_scroll);
+					scrolled = piece->mesh;
+				}
+			} else if (scrolled) {
+				render_scrollTexture(piece->object->material, no_scroll);
+				scrolled = NULL;
+			}
+		}
+
+		if (piece->skeleton && piece->skeleton != *bound) {
+			t3d_skeleton_use(piece->skeleton);
+			*bound = piece->skeleton;
+		}
+
+		if (piece->matrix != *pushed) {
+			if (*pushed) t3d_matrix_pop(1);
+			if (piece->matrix) t3d_matrix_push(piece->matrix);
+			*pushed = piece->matrix;
+		}
+
+		rspq_block_run(piece->object->userBlock);
+	}
+
+	return vertex_fx;
+}
+
 void render(void)
 {
 	RenderContext *ctx = &render_context;
@@ -134,61 +197,45 @@ void render(void)
 
 	render_start(&viewport->fb_index);
 
-	if (ctx->object_count > 0) {
+	if (ctx->piece_count > 0) {
 		light_set(light_get());
 		fog_set(fog_get());
 
-		/* A mesh contributes one element per visible part, and every part of
-		   the same mesh shares its skeleton and its matrix: a character with
-		   three weapons is four elements with identical state. Binding and
-		   pushing once per run of equal state, and popping only when it
-		   changes, cuts that setup without altering a single draw. */
-		const T3DSkeleton *bound  = NULL;
-		const T3DMat4FP   *pushed = NULL;
+		/* The pieces grouped by material: a counting sort over the table
+		   ids, stable, so the pieces of one entity stay together inside a
+		   material and the matrix changes as little as it can. A material
+		   that reads what is already drawn (blending, decal) keeps its scene
+		   order instead, after everything opaque. */
+		uint16_t start[MESH_MAX_MATERIALS + 2] = {0};
+		uint16_t order[RENDER_MAX_3D_PIECES];
+		uint16_t deferred[RENDER_MAX_3D_PIECES];
+		uint16_t sorted_count = 0, deferred_count = 0;
 
-		for (int i = 0; i < ctx->object_count; i++) {
-			Element3D *obj = &ctx->object[i];
-
-			if (obj->skeleton && obj->skeleton != bound) {
-				t3d_skeleton_use(obj->skeleton);
-				bound = obj->skeleton;
-			}
-
-			if (obj->matrix != pushed) {
-				if (pushed) t3d_matrix_pop(1);
-				if (obj->matrix) t3d_matrix_push(obj->matrix);
-				pushed = obj->matrix;
-			}
-
-			if (obj->dl) {
-				rspq_block_run(obj->dl);
-				continue;
-			}
-
-			/* Object path: the objects come sorted by material, so each
-			   material block runs once, ahead of its visible objects. All of
-			   it is recorded; the CPU only picks which blocks run. */
-			const Mesh *mesh = obj->mesh;
-			int current = -1;
-			for (uint16_t i = 0; i < mesh->object_count; i++) {
-				const T3DObject *object = mesh->object_order[i];
-				if (!object->isVisible) continue;
-
-				uint8_t m = mesh->object_material[i];
-				if (m != current) {
-					if (mesh->material_block[m]) rspq_block_run(mesh->material_block[m]);
-					if (mesh->texture_scroll) render_scrollTexture(object->material, mesh->texture_scroll);
-					current = m;
-				}
-				rspq_block_run(object->userBlock);
-			}
-
-			/* A recorded material leaves its vertex FX set; whatever draws
-			   next starts from a fresh state and would inherit it. */
-			if (mesh->material_vertex_fx) t3d_state_set_vertex_fx(T3D_VERTEX_FX_NONE, 0, 0);
+		for (uint16_t i = 0; i < ctx->piece_count; i++) {
+			uint8_t m = ctx->piece[i].material;
+			if (mesh_materialIsDeferred(m)) deferred[deferred_count++] = i;
+			else                            start[render_materialBucket(m) + 1]++;
+		}
+		for (int b = 1; b <= MESH_MAX_MATERIALS + 1; b++) start[b] += start[b - 1];
+		for (uint16_t i = 0; i < ctx->piece_count; i++) {
+			uint8_t m = ctx->piece[i].material;
+			if (mesh_materialIsDeferred(m)) continue;
+			order[start[render_materialBucket(m)]++] = i;
+			sorted_count++;
 		}
 
+		const T3DSkeleton *bound     = NULL;
+		const T3DMat4FP   *pushed    = NULL;
+		bool               vertex_fx = false;
+
+		vertex_fx |= render_runPieces(ctx, order,    sorted_count,   &bound, &pushed);
+		vertex_fx |= render_runPieces(ctx, deferred, deferred_count, &bound, &pushed);
+
 		if (pushed) t3d_matrix_pop(1);
+
+		/* A recorded material leaves its vertex FX set; whatever draws next
+		   starts from a fresh state and would inherit it. */
+		if (vertex_fx) t3d_state_set_vertex_fx(T3D_VERTEX_FX_NONE, 0, 0);
 	}
 
 	particles_draw();
