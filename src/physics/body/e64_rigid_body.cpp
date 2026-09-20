@@ -30,6 +30,7 @@
 #include "physics/body/e64_rigid_body.h"
 #include "physics/shapes/e64_physics_shape.h"
 
+namespace e64 {
 
 /* Forward declarations — resolved by physics_world.c (shims). */
 struct ContactConstraint;
@@ -533,4 +534,6 @@ void rigidBody_synchronizeProxies(RigidBody *b)
 		broadPhase_updateShape(b->world, shape->broadphase_index, aabb);
 		shape = shape->next;
 	}
+}
+
 }

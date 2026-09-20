@@ -31,6 +31,7 @@
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 struct MassData;
 
@@ -62,5 +63,7 @@ void  boxDef_setRestitution(BoxDef *d, float r);
 void  boxDef_setDensity(BoxDef *d, float rho);
 void  boxDef_setSensor(BoxDef *d, int s);
 
+
+}
 
 #endif

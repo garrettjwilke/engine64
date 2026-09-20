@@ -1,5 +1,6 @@
 #include "physics/math/e64_math_functions.h"
 
+namespace e64 {
 
 #define EPSILON 1e-6f
 
@@ -155,4 +156,6 @@ Vector3 triangle_closestToPoint(
 		a->y + ab.y*v + ac.y*w,
 		a->z + ab.z*v + ac.z*w,
 	};
+}
+
 }

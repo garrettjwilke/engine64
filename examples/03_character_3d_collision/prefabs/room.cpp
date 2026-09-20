@@ -5,6 +5,8 @@
 */
 #include "prefab/e64_prefab3d.h"
 
+using namespace e64;
+
 
 static const PhysicsShapeDef room_shapes[] = {
 	{ .type = SHAPE_MESH, .mesh = {
@@ -14,7 +16,7 @@ static const PhysicsShapeDef room_shapes[] = {
 	}},
 };
 
-static const Entity3DColliderDef room_collider = { room_shapes, 1 };
+static const entity3d::ColliderDef room_collider = { room_shapes, 1 };
 
 /* No body: a prop without one is static, which is what a room is. */
 extern const Prefab3D room = {

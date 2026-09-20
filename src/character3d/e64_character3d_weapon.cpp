@@ -11,12 +11,16 @@
 #include "entity/e64_entity3d.h"
 #include "character3d/e64_character3d.h"
 
+namespace e64 {
 
-void character3d_equipWeapon(Character3D *character, uint8_t slot_id, const WeaponDef *weapon)
+namespace character3d {
+namespace weapon {
+
+void equip(Character3D *character, uint8_t slot_id, const WeaponDef *weapon)
 {
 	assert(slot_id < WEAPON_SLOT_COUNT);
 
-	Character3DWeapons *weapons = &character->weapons;
+	Weapons *weapons = &character->weapons;
 	T3DSkeleton *skeleton = &character->animation.main;
 
 	uint8_t part = mesh_findPart(character->entity->mesh, weapon->mesh);
@@ -35,7 +39,7 @@ void character3d_equipWeapon(Character3D *character, uint8_t slot_id, const Weap
 	mesh_setPartVisible(character->entity->mesh, part, true);
 }
 
-void character3d_unequipWeapon(Character3D *character, uint8_t slot_id)
+void unequip(Character3D *character, uint8_t slot_id)
 {
 	assert(slot_id < WEAPON_SLOT_COUNT);
 
@@ -49,9 +53,9 @@ void character3d_unequipWeapon(Character3D *character, uint8_t slot_id)
 	*slot = (WeaponSlot){};
 }
 
-const WeaponDef *character3d_drawnWeapon(const Character3D *character)
+const WeaponDef *drawn(const Character3D *character)
 {
-	const Character3DWeapons *weapons = &character->weapons;
+	const Weapons *weapons = &character->weapons;
 	if (weapons->drawn == CHARACTER3D_WEAPON_DRAWN_NONE) return NULL;
 	return weapons->slot[weapons->drawn].weapon;
 }
@@ -59,9 +63,9 @@ const WeaponDef *character3d_drawnWeapon(const Character3D *character)
 /* The ring is: unarmed, then every occupied slot in order. Empty slots are
    stepped over, so with one weapon carried both directions just toggle it
    in and out of the hand. */
-void character3d_cycleWeapon(Character3D *character, int8_t dir)
+void cycle(Character3D *character, int8_t dir)
 {
-	Character3DWeapons *weapons = &character->weapons;
+	Weapons *weapons = &character->weapons;
 
 	int8_t pos = (weapons->drawn == CHARACTER3D_WEAPON_DRAWN_NONE) ? -1 : (int8_t)weapons->drawn;
 
@@ -76,9 +80,9 @@ void character3d_cycleWeapon(Character3D *character, int8_t dir)
 	weapons->drawn = (pos < 0) ? CHARACTER3D_WEAPON_DRAWN_NONE : (uint8_t)pos;
 }
 
-void character3dWeapon_setBones(Character3D *character)
+void setBones(Character3D *character)
 {
-	Character3DWeapons *weapons = &character->weapons;
+	Weapons *weapons = &character->weapons;
 	T3DSkeleton *skeleton = &character->animation.main;
 
 	for (int s = 0; s < WEAPON_SLOT_COUNT; s++) {
@@ -93,7 +97,7 @@ void character3dWeapon_setBones(Character3D *character)
 
 		T3DVec3 ref_pos;
 		T3DQuat ref_rot;
-		character3d_getBonePose(skeleton, reference, &ref_pos, &ref_rot);
+		getBonePose(skeleton, reference, &ref_pos, &ref_rot);
 
 		/* T3DQuat and T3DVec3 are laid out like the math module's types. */
 		Vector3 step = quaternion_rotateVector((const Quaternion *)&ref_rot, (const Vector3 *)offset_pos);
@@ -107,4 +111,9 @@ void character3dWeapon_setBones(Character3D *character)
 		t3d_quat_mul(&bone->rotation, &ref_rot, (T3DQuat *)offset_rot);
 		bone->hasChanged = 1;
 	}
+}
+
+}
+}
+
 }

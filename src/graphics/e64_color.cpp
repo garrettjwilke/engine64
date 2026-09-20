@@ -3,6 +3,7 @@
 
 #include "graphics/e64_color.h"
 
+namespace e64 {
 
 color_hsv rgb_to_hsv(color_t c)
 {
@@ -130,3 +131,5 @@ void change_lamp_colors()
 	}
 }
 */
+
+}

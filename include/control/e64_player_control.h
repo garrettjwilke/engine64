@@ -8,6 +8,8 @@
 #include "scene3d/e64_scene3d.h"
 #include "scene2d/e64_scene2d.h"
 
+namespace e64 {
+
 typedef struct Viewport Viewport;
 typedef struct Player   Player;
 
@@ -16,30 +18,42 @@ typedef struct Player   Player;
    the way the state table itself is. Each binding names what it moves, so
    from here on the engine seats the players, points the camera and puts the
    menu up by itself, every time a scene is loaded. */
-typedef struct ControlsDef {
+namespace controls {
 
-	const CameraControlBinding      *camera;
-	const Character3DControlBinding *character3d;
-	const Character2DControlBinding *character2d;
-	const MenuControlBinding        *menu;
+typedef struct Def {
 
-} ControlsDef;
+	const camera::ControlBinding      *camera;
+	const character3d::ControlBinding *character3d;
+	const character2d::ControlBinding *character2d;
+	const menu::ControlBinding        *menu;
+
+} Def;
+
 
 /* Wires what the bindings name against what this scene declared: the seat goes
    to the character built from the prefab they point at, and the camera answers
    if it is the one they point at. Called by the engine when a state is loaded,
    with the controls that state declared. */
-void controls_bind(const ControlsDef *controls, const Scene3DDef *scene);
+void bind(const Def *controls, const Scene3DDef *scene);
 
 /* The same for the 2D scene, whose characters are spread across its layers. */
-void controls_bind2D(const ControlsDef *controls, const Scene2DDef *scene);
+void bind2D(const Def *controls, const Scene2DDef *scene);
+
+}
+
+
+namespace player {
 
 /* Reads the buttons this player was seated with and turns them into its
    command for this frame, aimed by the camera. */
-void player_setCharacter3DControl(PlayerID id, Viewport *viewport);
+void setCharacter3DControl(PlayerID id, Viewport *viewport);
 
 /* The same, for a seat driving a 2D body: the screen's own axis needs no
    camera to aim by. */
-void player_setCharacter2DControl(PlayerID id);
+void setCharacter2DControl(PlayerID id);
+
+}
+
+}
 
 #endif

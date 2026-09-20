@@ -28,6 +28,7 @@
 
 #include "physics/collision/e64_collision.h"
 
+namespace e64 {
 
 void contactManifold_setPair(ContactManifold *m, PhysicsShape *a, PhysicsShape *b)
 {
@@ -57,4 +58,6 @@ void contactConstraint_solveCollision(ContactConstraint *c)
 			c->flags &= ~CONSTRAINT_WAS_COLLIDING;
 		}
 	}
+}
+
 }

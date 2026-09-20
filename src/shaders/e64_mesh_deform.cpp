@@ -8,6 +8,7 @@
 
 #include "shaders/e64_mesh_deform.h"
 
+namespace e64 {
 
 /* Positions live in the vertex buffer as int16, so quantising the source the
    same way turns the match into an exact integer compare: no tolerance to
@@ -258,4 +259,6 @@ void meshDeform_delete(MeshDeform *deform)
 		free(deform->vertex_buffer[i]);
 
 	*deform = (MeshDeform){};
+}
+
 }

@@ -12,27 +12,7 @@
 
 #include "physics/math/e64_vector2.h"
 
-
-typedef enum {
-
-	CAMERA2D_TYPE_NONE,
-	CAMERA2D_TYPE_FOLLOW,
-	CAMERA2D_TYPE_COUNT,
-
-} Camera2DType;
-
-
-/* Where the camera's position sits on the screen: at its middle, or at the
-   top left corner. */
-typedef enum {
-
-	CAMERA2D_ANCHOR_CENTER,
-	CAMERA2D_ANCHOR_TOP_LEFT,
-
-} Camera2DAnchor;
-
-
-typedef enum { CAMERA2D_SIDE_LEFT, CAMERA2D_SIDE_TOP, CAMERA2D_SIDE_RIGHT, CAMERA2D_SIDE_BOTTOM } Camera2DSide;
+namespace e64 {
 
 #define CAMERA2D_SIDE_COUNT 4
 
@@ -44,7 +24,31 @@ typedef enum { CAMERA2D_SIDE_LEFT, CAMERA2D_SIDE_TOP, CAMERA2D_SIDE_RIGHT, CAMER
 #define CAMERA2D_ZOOM_MAX 4.0f
 
 
-typedef struct Camera2DFollowSettings {
+namespace camera2d {
+
+typedef enum {
+
+	CAMERA2D_TYPE_NONE,
+	CAMERA2D_TYPE_FOLLOW,
+	CAMERA2D_TYPE_COUNT,
+
+} Type;
+
+
+/* Where the camera's position sits on the screen: at its middle, or at the
+   top left corner. */
+typedef enum {
+
+	CAMERA2D_ANCHOR_CENTER,
+	CAMERA2D_ANCHOR_TOP_LEFT,
+
+} Anchor;
+
+
+typedef enum { CAMERA2D_SIDE_LEFT, CAMERA2D_SIDE_TOP, CAMERA2D_SIDE_RIGHT, CAMERA2D_SIDE_BOTTOM } Side;
+
+
+typedef struct FollowSettings {
 
 	/* The box the target moves inside without the camera answering, per side,
 	   as a fraction of half the screen. Each axis is enabled on its own: with
@@ -69,17 +73,31 @@ typedef struct Camera2DFollowSettings {
 	/* How fast the view turns toward the rotation it is given. Zero snaps. */
 	float rotation_smoothing_speed;
 
-} Camera2DFollowSettings;
+} FollowSettings;
 
 
-typedef struct Camera2DDef {
+typedef struct FollowData {
 
-	Camera2DType type;
+	/* Where the view was asked to be, and where the smoothing has it. The
+	   first frame plants both on the target: easing in from wherever the
+	   camera was declared would sweep the whole world once. */
+	Vector2 target_position;
+	bool    settled;
+
+	float rotation;
+	float target_rotation;
+
+} FollowData;
+
+
+typedef struct Def {
+
+	Type type;
 
 	/* World pixels: where it starts looking, and what the anchor above says
 	   that point is on the screen. */
-	Vector2        position;
-	Camera2DAnchor anchor;
+	Vector2 position;
+	Anchor  anchor;
 
 	/* World pixels to a screen pixel: above 1 the view closes in and shows
 	   less. Zero means 1. */
@@ -98,29 +116,17 @@ typedef struct Camera2DDef {
 	/* Turning the view costs a rotated blit, so it stays off unless asked. */
 	bool rotate;
 
-	Camera2DFollowSettings follow;
+	FollowSettings follow;
 
-} Camera2DDef;
+} Def;
 
-
-typedef struct Camera2DFollowData {
-
-	/* Where the view was asked to be, and where the smoothing has it. The
-	   first frame plants both on the target: easing in from wherever the
-	   camera was declared would sweep the whole world once. */
-	Vector2 target_position;
-	bool    settled;
-
-	float rotation;
-	float target_rotation;
-
-} Camera2DFollowData;
+}
 
 
 typedef struct Camera2D {
 
-	Camera2DType   type;
-	Camera2DAnchor anchor;
+	camera2d::Type   type;
+	camera2d::Anchor anchor;
 
 	/* World pixels, at the anchor. */
 	Vector2 position;
@@ -138,25 +144,31 @@ typedef struct Camera2D {
 	   divides. */
 	Vector2 extent;
 
-	Camera2DFollowSettings settings;
-	Camera2DFollowData     data;
+	camera2d::FollowSettings settings;
+	camera2d::FollowData     data;
 
 } Camera2D;
 
 
-void camera2d_init(Camera2D *camera, const Camera2DDef *def);
-void camera2d_setZoom(Camera2D *camera, float zoom);
+namespace camera2d {
+
+void init(Camera2D *camera, const Def *def);
+void setZoom(Camera2D *camera, float zoom);
 
 /* Chases the target, which is where the body stands in the world. Facing is
    which way it looks, -1 or +1, and is what the look ahead reads. */
-void camera2d_update(Camera2D *camera, Vector2 target, float facing, float dt);
+void update(Camera2D *camera, Vector2 target, float facing, float dt);
 
 /* Where a world point lands on the screen for something that takes this much
    of the camera's movement: 1 sits in the world, 0 ignores it. */
-Vector2 camera2d_toScreen(const Camera2D *camera, Vector2 position, float parallax);
+Vector2 toScreen(const Camera2D *camera, Vector2 position, float parallax);
 
 /* The other way around, for whoever asks what part of the world a corner of
    the screen reaches: the terrain walks its grid off this. */
-Vector2 camera2d_toWorld(const Camera2D *camera, Vector2 screen);
+Vector2 toWorld(const Camera2D *camera, Vector2 screen);
+
+}
+
+}
 
 #endif

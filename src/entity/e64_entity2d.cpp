@@ -4,8 +4,11 @@
 #include "entity/e64_entity2d.h"
 #include "resource/e64_resource.h"
 
+namespace e64 {
 
-Entity2D *entity2d_create(const Entity2DDef *def)
+namespace entity2d {
+
+Entity2D *create(const Def *def)
 {
 	assert(def && def->graphic);
 
@@ -49,7 +52,7 @@ Entity2D *entity2d_create(const Entity2DDef *def)
 	return entity;
 }
 
-void entity2d_delete(Entity2D *entity)
+void destroy(Entity2D *entity)
 {
 	if (!entity) return;
 
@@ -62,4 +65,8 @@ void entity2d_delete(Entity2D *entity)
 
 	free(entity->graphic);
 	free(entity);
+}
+
+}
+
 }

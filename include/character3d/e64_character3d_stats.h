@@ -12,9 +12,12 @@
 
 #include "character3d/e64_character3d_movement.h"
 
+namespace e64 {
 
-typedef struct Character3D Character3D;
+class Character3D;
 
+
+namespace character3d {
 
 /* Per asset tuning. Stamina is normalized 0..1 and the rates are per
    second; tired caps the reachable speed at this fraction of the top
@@ -25,22 +28,30 @@ typedef struct {
 	float stamina_regen_rate;
 	float tired_speed_scale;
 
-} Character3DStatsSettings;
+} StatsSettings;
 
 typedef struct {
 
-	const Character3DStatsSettings *settings;
+	const StatsSettings *settings;
 
 	float hp;
 	float stamina;
 	bool  tired;
 
-} Character3DStats;
+} Stats;
 
+
+namespace stats {
 
 /* Runs before the movement update: the tired flag it leaves on the body is
    what the movement caps the speed with on the same frame. The command is
    only read, for the stroke the stick is asking for. */
-void character3dStats_update(Character3D *character, const MovementCommand *cmd, float dt);
+void update(Character3D *character, const MovementCommand *cmd, float dt);
+
+}
+
+}
+
+}
 
 #endif

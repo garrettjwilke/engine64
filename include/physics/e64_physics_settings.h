@@ -24,6 +24,8 @@
 
 #include "physics/math/e64_math_common.h"
 
+namespace e64 {
+
 #define PHYSICS_SLEEP_LINEAR      0.01f
 #define PHYSICS_SLEEP_ANGULAR     ((3.0f / 180.0f) * PI)
 #define PHYSICS_SLEEP_TIME        0.4f
@@ -46,5 +48,7 @@
    look is tuned to its step size. Cap on cloth steps one frame may run;
    below 60/cap FPS the cloth slows down instead of piling up debt. */
 #define PHYSICS_CLOTH_MAX_SUBSTEPS 3
+
+}
 
 #endif

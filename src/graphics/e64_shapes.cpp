@@ -1,5 +1,6 @@
 #include "graphics/e64_shapes.h"
 
+namespace e64 {
 
 #define COLOR_NORM 0.003922f
 
@@ -37,3 +38,5 @@ void shape_drawRectangle(const Rectangle *rect, Vector2 position, Vector2 scale)
 }
 
 #undef COLOR_NORM
+
+}

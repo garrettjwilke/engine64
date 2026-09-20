@@ -6,14 +6,17 @@
 #include <t3d/t3dskeleton.h>
 #include <t3d/t3danim.h>
 
-
-typedef struct Character3D Character3D;
-typedef struct Character3DAnimation Character3DAnimation;
+namespace e64 {
 
 #define ANIMATION_MAX_LAYERS 24
 
 #define ANIMATION_SLOT_MAIN          0xFF
 #define ANIMATION_TURN_AVG_COUNT  5
+
+#define ANIMATION_CLIPS(...) ((const uint8_t[]){ __VA_ARGS__ })
+
+
+namespace character3d {
 
 typedef enum {
 
@@ -47,7 +50,7 @@ typedef enum {
 	ANIMATION_PARAM_CHARGING_SHOOT_DIR,
 	ANIMATION_PARAM_COUNT
 
-} Character3DAnimationParam;
+} AnimationParam;
 
 typedef enum {
 
@@ -58,15 +61,16 @@ typedef enum {
 	ANIMATION_NODE_BLEND_2D,
 	ANIMATION_NODE_LAYER,
 
-} Character3DAnimationNodeType;
+} AnimationNodeType;
+
 
 typedef struct {
 
 	const char *name;
 	uint8_t buffer;
 	bool is_looping;
-	
-} Character3DAnimationClipDef;
+
+} AnimationClipDef;
 
 /* One node of the graph. The def's node table is walked in index order every
    frame, and that order IS the blend order: each active node pushes its
@@ -92,7 +96,7 @@ typedef struct {
    mean. */
 typedef struct {
 
-	Character3DAnimationNodeType type;
+	AnimationNodeType type;
 	const uint8_t *animation;
 	uint8_t cols;
 	uint8_t rows;
@@ -101,9 +105,7 @@ typedef struct {
 	uint8_t param_rows;
 	uint8_t param_weight;   /* BLEND_2D: weight the composed grid enters the main with */
 
-} Character3DAnimationNode;
-
-#define ANIMATION_CLIPS(...) ((const uint8_t[]){ __VA_ARGS__ })
+} AnimationNode;
 
 typedef struct {
 
@@ -146,14 +148,14 @@ typedef struct {
 	float swim_blend_rate;
 	float climb_blend_rate;
 
-} Character3DAnimationSettings;
+} AnimationSettings;
 
 
 typedef struct {
 
-	const Character3DAnimationClipDef *clip;
-	const Character3DAnimationNode *node;
-	const Character3DAnimationSettings *settings;
+	const AnimationClipDef *clip;
+	const AnimationNode *node;
+	const AnimationSettings *settings;
 
 	uint8_t clip_count;
 	uint8_t node_count;
@@ -181,20 +183,28 @@ typedef struct {
 	uint8_t swim_node;
 	uint8_t climb_node;
 
-} Character3DAnimationDef;
+} AnimationDef;
 
 
-typedef struct {
+/* The layer stack one frame of the graph builds, applied onto the main in
+   push order. */
+struct AnimationBuffer {
 
 	const T3DSkeleton *layer[ANIMATION_MAX_LAYERS];
 	float weight[ANIMATION_MAX_LAYERS];
 	uint8_t count;
 
-} Character3DAnimationBuffer;
+	void addLayer(const T3DSkeleton *skel, float layer_weight);
+	void blendLayers(const T3DSkeleton *main) const;
+};
 
-typedef struct Character3DAnimation {
+/* An aggregate on purpose: no constructor, public data. Character3D builds it
+   with a designated initializer, and sound, weapon and aim read its fields
+   as they are. The helpers are private, which keeps it an aggregate. */
+class Animation {
+public:
 
-	const Character3DAnimationDef *def;
+	const AnimationDef *def;
 	const T3DModel *model;
 	T3DSkeleton  main;
 	T3DSkeleton *buffer;
@@ -204,7 +214,6 @@ typedef struct Character3DAnimation {
 	uint8_t     *node_state;
 	bool        *node_active;
 	float        param[ANIMATION_PARAM_COUNT];
-
 
 	float        locomotion_cycle;
 	float        footing;
@@ -221,15 +230,77 @@ typedef struct Character3DAnimation {
 	float        climb_blend;
 	float        climb_dir;   /* last non-zero direction, held while stopped */
 
-} Character3DAnimation;
+	void initGraph(Character3D &character);
+	void setParams(Character3D &character, float delta);
+	void evaluateGraph(float delta);
+	void closeIdleClips();
+
+private:
+
+	/* pure helpers */
+	static uint8_t blendSegment(float weight, uint8_t count, float *t);
+	static float   getGaitParam(float speed, const MovementSettings *movement);
+	static float   getWalkWeight(float speed, const MovementSettings *movement);
+	static bool    isAerial(const Character3D &character);
+	static uint8_t getGridClips(const AnimationNode *node, float cols_value, float rows_value, uint8_t clip[4]);
+	static float   getLocomotionPhase(const AnimationSettings *settings, float clip_time, float clip_length);
+	static float   rollExitRate(const AnimationSettings *settings);
+
+	/* clips */
+	T3DSkeleton *clipBuffer(uint8_t clip);
+	void         closeClip(uint8_t index);
+	void         openClip(uint8_t index);
+	T3DAnim     *getClip(uint8_t index);
+
+	/* grids */
+	void  syncGridClips(const AnimationNode *node, float cols_value, float rows_value);
+	void  snapGridFromClip(uint8_t src_clip, uint8_t dst_node_idx);
+	void  snapLocomotionFromGrid(uint8_t src_node_idx, float src_dir);
+	void  setGridRowSpeeds(const AnimationNode *node);
+	void  snapGridFromGrid(uint8_t src_node_idx, float src_dir, uint8_t dst_node_idx);
+	float getLockedDirectionWeight(const Character3D &character, uint8_t dir_param);
+
+	/* locomotion */
+	void  setIdleRightParam();
+	float getTurningAvg(const AnimationSettings *settings, float current_yaw, float previous_yaw);
+	float getGaitAxis(const Character3D &character, float delta);
+	void  setFooting(Character3D &character);
+	void  setJumpFootingSpeed(Character3D &character);
+	void  setLocomotionSpeed(Character3D &character, float gait);
+	void  setLocomotionParam(Character3D &character, float gait);
+
+	/* strafe */
+	float getStrafeDirectionWeight(const Character3D &character, float delta);
+	void  snapStrafeEntry();
+	void  snapStrafeExit();
+	void  setStrafeParams(Character3D &character, float delta);
+	void  setStrafeLockedParams(Character3D &character, float delta);
+
+	/* jump */
+	void  syncLandToJump();
+	void  snapToJump();
+	void  snapToLand();
+	void  snapToFall();
+	void  setJumpParams(Character3D &character, float delta);
+
+	/* roll */
+	void  snapRollToLocomotion(bool left);
+	void  setRollParam(Character3D &character, float delta);
+
+	/* swim, climb, aiming */
+	void  setSwimSpeed(const AnimationNode *node, float gait);
+	void  setSwimParams(Character3D &character, float delta);
+	void  setClimbParams(Character3D &character, float delta);
+	void  setAimingParams(Character3D &character, float delta);
+
+	/* graph */
+	void  setActiveNodes();
+	void  updateClip(bool *updated, uint8_t clip, float delta);
+};
+
+}
 
 
-void character3dAnimation_addLayer(Character3DAnimationBuffer *buffer, const T3DSkeleton *skel, float weight);
-void character3dAnimation_blendLayers(const T3DSkeleton *main, const Character3DAnimationBuffer *buffer);
-void character3dAnimation_initGraph(Character3D *character, const Character3DAnimationDef *def);
-void character3dAnimation_setParams(Character3D *character, float delta);
-void character3dAnimation_evaluateGraph(const Character3DAnimationDef *def, Character3DAnimation *animation, float delta);
-
-void character3d_setAnimation(Character3D *character);
+}
 
 #endif

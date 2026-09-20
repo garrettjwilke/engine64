@@ -6,6 +6,7 @@
 
 #include "physics/math/e64_vector2.h"
 
+namespace e64 {
 
 /* A sprite is its file. A definition names the path; whoever loads the
    scene (a UI element, a prop) or the character (its frames) writes the
@@ -41,5 +42,7 @@ bool sprite_isLoadable(const Sprite *element, float rotation);
 /* The two halves of a draw, for a run that shares one texture. */
 void sprite_loadTexture(const Sprite *element);
 void sprite_drawLoaded(const Sprite *element, Vector2 position, Vector2 scale);
+
+}
 
 #endif

@@ -4,6 +4,8 @@
 #include <libdragon.h>
 #include <t3d/t3dmath.h>
 
+namespace e64 {
+
 /* t3d hands out seven slots and a light takes one whatever its kind, so the
    split between directional and point is the scene's to make. */
 #define LIGHT_COUNT 7
@@ -54,5 +56,7 @@ void light_init(const LightDef *def);
 
 /* Hands the lights to t3d, stopping at the first empty slot. */
 void light_set(const Light *light);
+
+}
 
 #endif

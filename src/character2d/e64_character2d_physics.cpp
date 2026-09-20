@@ -1,5 +1,5 @@
 /*
-	Port of character3d_physics to the plane, which is itself Godot's
+	Port of character3d::physics to the plane, which is itself Godot's
 	test_body_motion recovery and CharacterBody3D::_set_collision_direction.
 	Everything runs in Vector3 with z at zero, so the capsule against a cell
 	is aabb_closestToSegment and the floor probe is aabb_closestToPoint, the
@@ -14,6 +14,7 @@
 #include "physics/math/e64_math_functions.h"
 #include "physics/geometry/e64_aabb.h"
 
+namespace e64 {
 
 #define CHARACTER2D_MAX_CONTACTS           16      /* contacts kept per recovery pass */
 #define CHARACTER2D_RECOVERY_ATTEMPTS      4       /* Godot: recover_attempts */
@@ -28,27 +29,30 @@
 #define CHARACTER2D_FLOOR_MAX_SLOPE_COS    cosf(PI / 180 * 50.0f + 0.01f)
 
 
-typedef struct Character2DContact {
+namespace character2d {
+namespace physics {
+
+typedef struct Contact {
 	Vector3 normal;   /* from the cell toward the body */
 	float   depth;
-} Character2DContact;
+} Contact;
 
-typedef struct Character2DCollisionState {
+typedef struct CollisionState {
 	bool    floor;
 	bool    wall;
 	bool    ceiling;
 	Vector3 wall_normal;
 	float   wall_depth;
-} Character2DCollisionState;
+} CollisionState;
 
 
 /* --- the capsule ------------------------------------------------------------ */
 
 /* The inner segment of the capsule, feet at position: from the bottom
    sphere's centre up to the top sphere's centre. */
-static void character2dPhysics_getSegment(const Character2D *character, Vector3 *a, Vector3 *b)
+static void getSegment(const Character2D *character, Vector3 *a, Vector3 *b)
 {
-	const Character2DColliderSettings *collider = character->def->collider_settings;
+	const ColliderSettings *collider = character->def->collider_settings;
 	float r = collider->radius;
 
 	*a = (Vector3){ character->position.x, character->position.y - r, 0.0f };
@@ -57,7 +61,7 @@ static void character2dPhysics_getSegment(const Character2D *character, Vector3 
 
 /* The box of a cell of the stage, a slab through z so the 3D distance code
    never leaves the plane. */
-static AABB character2dPhysics_cellBox(const Stage2D *stage, int32_t x, int32_t y)
+static AABB cellBox(const Stage2D *stage, int32_t x, int32_t y)
 {
 	Vector2 origin = stage->entity->position;
 	float   x0 = origin.x + x * stage->cell_width;
@@ -70,8 +74,8 @@ static AABB character2dPhysics_cellBox(const Stage2D *stage, int32_t x, int32_t 
 
 /* The cells a world box reaches, clamped to nothing: isSolid answers open
    outside the map. */
-static void character2dPhysics_cellRange(const Stage2D *stage, float min_x, float min_y, float max_x, float max_y,
-                                        int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
+static void cellRange(const Stage2D *stage, float min_x, float min_y, float max_x, float max_y,
+                      int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
 {
 	Vector2 origin = stage->entity->position;
 	*x0 = (int32_t)floorf((min_x - origin.x) / stage->cell_width);
@@ -87,24 +91,24 @@ static void character2dPhysics_cellRange(const Stage2D *stage, float min_x, floa
    the cell to the segment, the normal from it toward the segment, the depth
    under the radius. A segment run through by the cell has no direction to
    give, and is pushed up. */
-static int character2dPhysics_collectContacts(const Character2D *character, Character2DContact *contacts)
+static int collectContacts(const Character2D *character, Contact *contacts)
 {
 	const Stage2D *stage = character->stage;
 	float radius = character->def->collider_settings->radius;
 
 	Vector3 a, b;
-	character2dPhysics_getSegment(character, &a, &b);
+	getSegment(character, &a, &b);
 
 	float reach = radius + CHARACTER2D_RECOVERY_MARGIN;
 	int32_t x0, y0, x1, y1;
-	character2dPhysics_cellRange(stage, a.x - reach, b.y - reach, a.x + reach, a.y + reach, &x0, &y0, &x1, &y1);
+	cellRange(stage, a.x - reach, b.y - reach, a.x + reach, a.y + reach, &x0, &y0, &x1, &y1);
 
 	int count = 0;
 	for (int32_t y = y0; y <= y1 && count < CHARACTER2D_MAX_CONTACTS; y++) {
 		for (int32_t x = x0; x <= x1 && count < CHARACTER2D_MAX_CONTACTS; x++) {
 			if (!stage2d_isSolid(stage, x, y)) continue;
 
-			AABB    box     = character2dPhysics_cellBox(stage, x, y);
+			AABB    box     = cellBox(stage, x, y);
 			Vector3 on_box  = aabb_closestToSegment(&box, &a, &b);
 			Vector3 on_seg  = segment_closestToPoint(&a, &b, &on_box);
 			Vector3 d       = vector3_difference(&on_seg, &on_box);
@@ -123,7 +127,7 @@ static int character2dPhysics_collectContacts(const Character2D *character, Char
 /* Port of CharacterBody3D::_set_collision_direction: every contact of the
    pass is classified by its angle against the up axis, floor, ceiling or
    wall, and the frame state accumulates them. Up is -y here. */
-static void character2dPhysics_classifyContacts(const Character2DContact *contacts, int count, Character2DCollisionState *state)
+static void classifyContacts(const Contact *contacts, int count, CollisionState *state)
 {
 	bool was_wall   = state->wall;
 	bool pass_floor = false;
@@ -134,7 +138,7 @@ static void character2dPhysics_classifyContacts(const Character2DContact *contac
 	Vector3 tmp_wall_col         = { 0.0f, 0.0f, 0.0f };
 
 	for (int i = count - 1; i >= 0; i--) {
-		const Character2DContact *c = &contacts[i];
+		const Contact *c = &contacts[i];
 
 		/* dot(normal, up) == -normal.y; angle <= limit is cosine >= its cosine */
 		if (-c->normal.y >= CHARACTER2D_FLOOR_MAX_SLOPE_COS) {
@@ -177,16 +181,16 @@ static void character2dPhysics_classifyContacts(const Character2DContact *contac
 
 /* Port of test_body_motion STEP 1 (free body if stuck): one recovery vector
    accumulated over every contact and applied whole, up to four attempts. */
-static void character2dPhysics_recover(Character2D *character, Character2DCollisionState *state)
+static void recover(Character2D *character, CollisionState *state)
 {
 	int recover_attempts = CHARACTER2D_RECOVERY_ATTEMPTS;
 
 	do {
-		Character2DContact contacts[CHARACTER2D_MAX_CONTACTS] __attribute__((uninitialized));
-		int count = character2dPhysics_collectContacts(character, contacts);
+		Contact contacts[CHARACTER2D_MAX_CONTACTS] __attribute__((uninitialized));
+		int count = collectContacts(character, contacts);
 		if (!count) break;
 
-		character2dPhysics_classifyContacts(contacts, count, state);
+		classifyContacts(contacts, count, state);
 
 		Vector3 recover_motion = { 0.0f, 0.0f, 0.0f };
 		for (int i = 0; i < count; i++) {
@@ -205,9 +209,9 @@ static void character2dPhysics_recover(Character2D *character, Character2DCollis
 
 /* --- responses --------------------------------------------------------------- */
 
-static void character2dCollision_setGroundResponse(Character2D *character)
+static void setGroundResponse(Character2D *character)
 {
-	Character2DMovementData *data = &character->movement.data;
+	MovementData *data = &character->movement.data;
 
 	/* Moving up (jump takeoff): touching the ground must not cancel it. */
 	if (data->velocity.y < 0.0f) return;
@@ -218,21 +222,21 @@ static void character2dCollision_setGroundResponse(Character2D *character)
 	/* The floor is back: the next ledge gets its own coyote window. */
 	data->coyote_timer = 0.0f;
 	if (character->movement.current == MOVEMENT2D_STATE_FALLING)
-		character2dMovement_setMode(&character->movement, character->movement.locomotion);
+		movement::setMode(&character->movement, character->movement.locomotion);
 }
 
-static void character2dCollision_setCeilingResponse(Character2D *character)
+static void setCeilingResponse(Character2D *character)
 {
-	Character2DMovementData *data = &character->movement.data;
+	MovementData *data = &character->movement.data;
 	if (data->velocity.y < 0.0f) data->velocity.y = 0.0f;
 }
 
 /* Slide: remove the velocity component pushing into the wall, keep the
    rest. On the floor only the horizontal part of the wall normal is used,
    so a corner does not inject upward velocity that kills the floor. */
-static void character2dCollision_setWallResponse(Character2D *character, const Character2DCollisionState *state, bool was_on_floor)
+static void setWallResponse(Character2D *character, const CollisionState *state, bool was_on_floor)
 {
-	Character2DMovementData *data = &character->movement.data;
+	MovementData *data = &character->movement.data;
 
 	if (was_on_floor || data->is_grounded) {
 		float nx = state->wall_normal.x;
@@ -251,11 +255,11 @@ static void character2dCollision_setWallResponse(Character2D *character, const C
 	}
 }
 
-static void character2dCollision_respond(Character2D *character, const Character2DCollisionState *state, bool was_on_floor)
+static void respond(Character2D *character, const CollisionState *state, bool was_on_floor)
 {
-	if (state->floor)   character2dCollision_setGroundResponse(character);
-	if (state->ceiling) character2dCollision_setCeilingResponse(character);
-	if (state->wall)    character2dCollision_setWallResponse(character, state, was_on_floor);
+	if (state->floor)   setGroundResponse(character);
+	if (state->ceiling) setCeilingResponse(character);
+	if (state->wall)    setWallResponse(character, state, was_on_floor);
 }
 
 
@@ -292,7 +296,7 @@ static void floorProbe_consider(FloorProbe *probe, const Vector3 *center, float 
 	}
 }
 
-static void character2dPhysics_findFloor(const Character2D *character, FloorProbe *probe)
+static void findFloor(const Character2D *character, FloorProbe *probe)
 {
 	const Stage2D *stage = character->stage;
 	float radius = character->def->collider_settings->radius;
@@ -307,12 +311,12 @@ static void character2dPhysics_findFloor(const Character2D *character, FloorProb
 	probe->normal      = vector3_create(0.0f, -1.0f, 0.0f);
 
 	int32_t x0, y0, x1, y1;
-	character2dPhysics_cellRange(stage, center.x - radius, center.y - radius, center.x + radius, center.y + radius, &x0, &y0, &x1, &y1);
+	cellRange(stage, center.x - radius, center.y - radius, center.x + radius, center.y + radius, &x0, &y0, &x1, &y1);
 
 	for (int32_t y = y0; y <= y1; y++)
 		for (int32_t x = x0; x <= x1; x++) {
 			if (!stage2d_isSolid(stage, x, y)) continue;
-			AABB    box     = character2dPhysics_cellBox(stage, x, y);
+			AABB    box     = cellBox(stage, x, y);
 			Vector3 closest = aabb_closestToPoint(&box, &center);
 			floorProbe_consider(probe, &center, radius, &closest);
 		}
@@ -321,7 +325,7 @@ static void character2dPhysics_findFloor(const Character2D *character, FloorProb
 /* How far the floor is straight below the feet, so the animation can start
    the landing exactly one clip-to-contact away from it. Negative with
    nothing within reach. */
-static float character2dPhysics_floorDistance(const Character2D *character)
+static float floorDistance(const Character2D *character)
 {
 	const Stage2D *stage = character->stage;
 	Vector2 origin = stage->entity->position;
@@ -340,7 +344,7 @@ static float character2dPhysics_floorDistance(const Character2D *character)
 
 /* Godot's _snap_on_floor conditions: only when the body was on the floor,
    is not on it now, and is not moving up. Vertical-only correction. */
-static void character2dPhysics_snapToFloor(Character2D *character, const FloorProbe *floor, bool was_on_floor, bool velocity_facing_up)
+static void snapToFloor(Character2D *character, const FloorProbe *floor, bool was_on_floor, bool velocity_facing_up)
 {
 	if (character->movement.data.is_grounded || !was_on_floor || velocity_facing_up) return;
 	if (!floor->found) return;
@@ -348,13 +352,13 @@ static void character2dPhysics_snapToFloor(Character2D *character, const FloorPr
 	float drop = CHARACTER2D_FLOOR_SNAP_LENGTH - floor->penetration / -floor->normal.y;
 	if (drop > 0.0f) character->position.y += drop;
 
-	character2dCollision_setGroundResponse(character);
+	setGroundResponse(character);
 }
 
 
-void character2dPhysics_collide(Character2D *character)
+void collide(Character2D *character)
 {
-	Character2DMovementData *data = &character->movement.data;
+	MovementData *data = &character->movement.data;
 
 	/* No stage, nothing to stand on or walk into. */
 	if (!character->stage) return;
@@ -363,28 +367,33 @@ void character2dPhysics_collide(Character2D *character)
 	bool velocity_facing_up = data->velocity.y < 0.0f;
 	data->is_grounded = false;
 
-	Character2DCollisionState state = { .wall_depth = -1.0f };
-	character2dPhysics_recover(character, &state);
-	character2dCollision_respond(character, &state, was_on_floor);
+	CollisionState state = { .wall_depth = -1.0f };
+	recover(character, &state);
+	respond(character, &state, was_on_floor);
 
 	FloorProbe floor __attribute__((uninitialized));
-	character2dPhysics_findFloor(character, &floor);
+	findFloor(character, &floor);
 
-	character2dPhysics_snapToFloor(character, &floor, was_on_floor, velocity_facing_up);
+	snapToFloor(character, &floor, was_on_floor, velocity_facing_up);
 
 	/* Nothing walkable under the probe and no contact resolved as floor: a
 	   fall. Only locomotion falls: a roll runs to the end of its own clip,
 	   and a crouch under way holds the body until it launches. */
 	if (!floor.found && !data->is_grounded
-	 && character2dMovement_isLocomotion(character->movement.current)
-	 && !character2dMovement_isChargingJump(character))
-		character2dMovement_setMode(&character->movement, MOVEMENT2D_STATE_FALLING);
+	 && movement::isLocomotion(character->movement.current)
+	 && !movement::isChargingJump(character))
+		movement::setMode(&character->movement, MOVEMENT2D_STATE_FALLING);
 
 	if (data->is_grounded) data->grounding_height = character->position.y;
 
 	/* Only worth measuring off the ground, and only on the way down: it
 	   feeds the landing, and a rising body has nothing to time yet. */
 	data->floor_distance = (!data->is_grounded && data->velocity.y > 0.0f)
-		? character2dPhysics_floorDistance(character)
+		? floorDistance(character)
 		: -1.0f;
+}
+
+}
+}
+
 }

@@ -8,6 +8,8 @@
 */
 #include "scene3d/e64_lighting.h"
 
+using namespace e64;
+
 
 extern const LightDef light = {
 

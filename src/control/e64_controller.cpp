@@ -4,13 +4,16 @@
 #include "control/e64_controller.h"
 #include "physics/math/e64_math_functions.h"
 
+namespace e64 {
+
+namespace controller {
 
 static Controller controller[CONTROLLER_COUNT];
 
-Controller *controller_get(void) { return controller; }
+Controller *get(void) { return controller; }
 
 
-static void controller_getInputs(Controller *controller, joypad_port_t port)
+static void getInputs(Controller *controller, joypad_port_t port)
 {
 	controller->connected = joypad_is_connected(port);
 
@@ -27,7 +30,7 @@ static void controller_getInputs(Controller *controller, joypad_port_t port)
 /* The pad keeps three sets of buttons every frame: the ones that went down,
    the ones staying down, and the ones that came up. This reads a button out of
    whichever set it is handed. */
-static bool button_read(const joypad_buttons_t *button, ButtonID id)
+static bool readButton(const joypad_buttons_t *button, ButtonID id)
 {
 	switch (id) {
 		case BTN_A:       return button->a;
@@ -49,33 +52,33 @@ static bool button_read(const joypad_buttons_t *button, ButtonID id)
 }
 
 /* The frame a button goes down. Held, it answers once and stops. */
-bool button_isPressed(const Controller *pad, ButtonID id)
+bool isPressed(const Controller *pad, ButtonID id)
 {
-	return button_read(&pad->pressed, id);
+	return readButton(&pad->pressed, id);
 }
 
 /* Every frame a button stays down, the first one included. */
-bool button_isHeld(const Controller *pad, ButtonID id)
+bool isHeld(const Controller *pad, ButtonID id)
 {
-	return button_read(&pad->held, id);
+	return readButton(&pad->held, id);
 }
 
 /* The frame a button comes back up. */
-bool button_isReleased(const Controller *pad, ButtonID id)
+bool isReleased(const Controller *pad, ButtonID id)
 {
-	return button_read(&pad->released, id);
+	return readButton(&pad->released, id);
 }
 
 /* The analog stick as the hardware reports it: each axis from -127 to 127,
    whatever the controller's own travel happens to be. */
-Vector2 controller_getStick(const Controller *controller)
+Vector2 getStick(const Controller *controller)
 {
 	return (Vector2){ (float)controller->input.stick_x, (float)controller->input.stick_y };
 }
 
 /* The C stick, same thing. An N64 controller has no C stick and reads zero
    here; its C buttons are read as buttons. */
-Vector2 controller_getCStick(const Controller *controller)
+Vector2 getCStick(const Controller *controller)
 {
 	return (Vector2){ (float)controller->input.cstick_x, (float)controller->input.cstick_y };
 }
@@ -83,7 +86,7 @@ Vector2 controller_getCStick(const Controller *controller)
 /* Brings a raw reading to -1 to 1. Under the deadzone the stick reads as
    centred, since it never rests at exactly zero, and past its own travel it
    stops at the end instead of going over. */
-static Vector2 stick_normalize(Vector2 stick, float range)
+static Vector2 normalizeStick(Vector2 stick, float range)
 {
 	if (fabsf(stick.x) < STICK_DEADZONE) stick.x = 0.0f;
 	if (fabsf(stick.y) < STICK_DEADZONE) stick.y = 0.0f;
@@ -96,7 +99,7 @@ static Vector2 stick_normalize(Vector2 stick, float range)
 
 /* Which way a normalised reading points, one axis at a time: -1, 0 or 1. How
    far it went is dropped, which is what a menu wants. */
-static Vector2 stick_direction(Vector2 stick)
+static Vector2 stickDirection(Vector2 stick)
 {
 	return (Vector2){
 		stick.x == 0.0f ? 0.0f : (stick.x < 0.0f ? -1.0f : 1.0f),
@@ -104,35 +107,39 @@ static Vector2 stick_direction(Vector2 stick)
 	};
 }
 
-Vector2 controller_getStickNormalized(const Controller *controller)
+Vector2 getStickNormalized(const Controller *controller)
 {
-	return stick_normalize(controller_getStick(controller), STICK_RANGE);
+	return normalizeStick(getStick(controller), STICK_RANGE);
 }
 
-Vector2 controller_getCStickNormalized(const Controller *controller)
+Vector2 getCStickNormalized(const Controller *controller)
 {
-	return stick_normalize(controller_getCStick(controller), CSTICK_RANGE);
+	return normalizeStick(getCStick(controller), CSTICK_RANGE);
 }
 
-Vector2 controller_getStickDirection(const Controller *controller)
+Vector2 getStickDirection(const Controller *controller)
 {
-	return stick_direction(controller_getStickNormalized(controller));
+	return stickDirection(getStickNormalized(controller));
 }
 
-Vector2 controller_getCStickDirection(const Controller *controller)
+Vector2 getCStickDirection(const Controller *controller)
 {
-	return stick_direction(controller_getCStickNormalized(controller));
+	return stickDirection(getCStickNormalized(controller));
 }
 
-void controller_start(void)
+void start(void)
 {
 	for (int i = 0; i < CONTROLLER_COUNT; i++)
 		controller[i] = (Controller){};
 }
 
-void controller_poll(void)
+void poll(void)
 {
 	joypad_poll();
 	for (int i = 0; i < CONTROLLER_COUNT; i++)
-		controller_getInputs(&controller[i], (joypad_port_t)i);
+		getInputs(&controller[i], (joypad_port_t)i);
+}
+
+}
+
 }

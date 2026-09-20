@@ -10,6 +10,7 @@
 #include "physics/math/e64_matrix3.h"
 #include "physics/geometry/e64_half_space.h"
 
+namespace e64 {
 
 typedef struct Transform {
 	Vector3 position;
@@ -37,5 +38,7 @@ HalfSpace transform_mulHalfSpace(const Transform *t, const HalfSpace *p);
 HalfSpace transform_mulHalfSpaceScaled(const Transform *t, const Vector3 *scale, const HalfSpace *p);
 HalfSpace transform_mulHalfSpaceTransposed(const Transform *t, const HalfSpace *p);
 
+
+}
 
 #endif

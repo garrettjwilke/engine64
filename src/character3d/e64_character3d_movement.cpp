@@ -5,8 +5,12 @@
 #include "character3d/e64_character3d.h"
 #include "physics/math/e64_math_common.h"
 
+namespace e64 {
 
-static const bool movement_updates_locomotion[MOVEMENT_STATE_COUNT] = {
+namespace character3d {
+namespace movement {
+
+static const bool updates_locomotion[MOVEMENT_STATE_COUNT] = {
 	[MOVEMENT_STATE_IDLE]     = true,
 	[MOVEMENT_STATE_WALKING]  = true,
 	[MOVEMENT_STATE_ROLLING]  = false,
@@ -15,30 +19,30 @@ static const bool movement_updates_locomotion[MOVEMENT_STATE_COUNT] = {
 	[MOVEMENT_STATE_CLIMBING] = false,
 };
 
-void character3dMovement_setMode(Character3DMovement *movement, uint8_t new_mode)
+void setMode(Movement *movement, uint8_t new_mode)
 {
 	if (movement->current == new_mode) return;
 	movement->current = new_mode;
-	if (movement_updates_locomotion[new_mode]) movement->locomotion = new_mode;
+	if (updates_locomotion[new_mode]) movement->locomotion = new_mode;
 }
 
-bool character3dMovement_isLocomotion(uint8_t mode)
+bool isLocomotion(uint8_t mode)
 {
-	return movement_updates_locomotion[mode];
+	return updates_locomotion[mode];
 }
 
-static void character3dMovement_evaluateTransitions(Character3D *character)
+static void evaluateTransitions(Character3D *character)
 {
-	Character3DMovement *movement = &character->movement;
+	Movement *movement = &character->movement;
 	if (movement->next == MOVEMENT_STATE_NONE) return;
-	character3dMovement_setMode(movement, movement->next);
+	setMode(movement, movement->next);
 	movement->next = MOVEMENT_STATE_NONE;
 }
 
 
-static const Character3DGaitSettings *character3dMovement_getGait(const Character3D *character)
+static const GaitSettings *getGait(const Character3D *character)
 {
-	const Character3DMovementSettings *settings = character->movement.settings;
+	const MovementSettings *settings = character->movement.settings;
 	uint8_t gait = (uint8_t)character->movement.data.gait;
 	if (gait >= settings->gait_count) gait = settings->gait_count - 1;
 	return &settings->gait[gait];
@@ -46,17 +50,17 @@ static const Character3DGaitSettings *character3dMovement_getGait(const Characte
 
 /* Tired caps the body at a share of what it asks for. The stats belong to the
    character, so the movement reads them where they live. */
-static float character3dMovement_getSpeedScale(const Character3D *character)
+static float getSpeedScale(const Character3D *character)
 {
 	return character->stats.tired ? character->stats.settings->tired_speed_scale : 1.0f;
 }
 
-static float character3dMovement_getTargetSpeed(const Character3D *character, uint8_t state)
+static float getTargetSpeed(const Character3D *character, uint8_t state)
 {
 	/* Anything but walking is asking to stand still. */
 	if (state != MOVEMENT_STATE_WALKING) return 0.0f;
 
-	float speed = character3dMovement_getGait(character)->target_speed;
+	float speed = getGait(character)->target_speed;
 
 	/* A single gait has none above it to step to: the fraction it carries is
 	   the share of that one speed the stick is asking for. */
@@ -64,19 +68,19 @@ static float character3dMovement_getTargetSpeed(const Character3D *character, ui
 	return speed;
 }
 
-static float character3dMovement_getAccelerationRate(const Character3D *character, uint8_t state)
+static float getAccelerationRate(const Character3D *character, uint8_t state)
 {
-	if (state == MOVEMENT_STATE_WALKING) return character3dMovement_getGait(character)->response_rate;
+	if (state == MOVEMENT_STATE_WALKING) return getGait(character)->response_rate;
 	return character->movement.settings->idle_response_rate;
 }
 
-static float character3dMovement_getRotationAccelerationRate(const Character3D *character, uint8_t state)
+static float getRotationAccelerationRate(const Character3D *character, uint8_t state)
 {
-	if (state == MOVEMENT_STATE_WALKING) return character3dMovement_getGait(character)->rotation_response_rate;
+	if (state == MOVEMENT_STATE_WALKING) return getGait(character)->rotation_response_rate;
 	return character->movement.settings->idle_rotation_response_rate;
 }
 
-static void character3dMovement_setHorizontalVelocity(Character3D *character, float yaw, float target_speed, float response_rate, float dt)
+static void setHorizontalVelocity(Character3D *character, float yaw, float target_speed, float response_rate, float dt)
 {
 	KinematicBody *body = &character->body;
 
@@ -91,7 +95,7 @@ static void character3dMovement_setHorizontalVelocity(Character3D *character, fl
 }
 
 /*
-static void character3dMovement_setHorizontalVelocity(Character3D *character, float yaw, float target_speed, float response_rate, float dt)
+static void setHorizontalVelocity(Character3D *character, float yaw, float target_speed, float response_rate, float dt)
 {
 	KinematicBody *body = &character->body;
 
@@ -106,10 +110,10 @@ static void character3dMovement_setHorizontalVelocity(Character3D *character, fl
 }
 */
 
-static void character3dMovement_setRotation(Character3D *character, float dt)
+static void setRotation(Character3D *character, float dt)
 {
 	KinematicBody *body = &character->body;
-	Character3DMovementData *data = &character->movement.data;
+	MovementData *data = &character->movement.data;
 
 	/* Climbing already set the facing from the ladder, and its velocity is
 	   the pull onto the anchor: read as a heading it would spin the body. */
@@ -149,22 +153,22 @@ static void character3dMovement_setRotation(Character3D *character, float dt)
 	uint8_t state = character->movement.current;
 	if (state == MOVEMENT_STATE_ROLLING || state == MOVEMENT_STATE_FALLING)
 		state = character->movement.locomotion;
-	float response_rate = character3dMovement_getRotationAccelerationRate(character, state);
+	float response_rate = getRotationAccelerationRate(character, state);
 	float factor = fm_expf(-response_rate * dt);
 	body->rotation.z = angle_wrap(current_yaw * factor + target_yaw * (1.0f - factor));
 }
 
-static void character3dMovement_updateBody(Character3D *character, float dt)
+static void updateBody(Character3D *character, float dt)
 {
 	KinematicBody *body = &character->body;
-	Character3DMovementData *data = &character->movement.data;
+	MovementData *data = &character->movement.data;
 
 	data->previous_yaw = body->rotation.z;
 
 	/* A ladder standing in water is still a ladder: the climb owns the
 	   vertical, so the buoyancy must not bob the body off its rungs. */
 	if (data->in_water && character->movement.current != MOVEMENT_STATE_CLIMBING) {
-		const Character3DMovementSettings *settings = character->movement.settings;
+		const MovementSettings *settings = character->movement.settings;
 
 		/* Stroking raises the equilibrium so the swim pose meets the surface. */
 		float stroke = (settings->swim_slow_speed > 0.0f)
@@ -202,18 +206,18 @@ static void character3dMovement_updateBody(Character3D *character, float dt)
 	if (body->velocity.x != 0 || body->velocity.y != 0 || body->velocity.z != 0)
 		vector3_addScaledVector(&body->position, &body->velocity, dt);
 
-	character3dMovement_setRotation(character, dt);
+	setRotation(character, dt);
 }
 
 /* The crouch that starts a jump runs here, on the ground, over walk or idle:
    the stick still drives the body and holding the button only brakes it. The
    impulse and the switch to the air come together when the crouch ends, so a
    jump is never a state of its own — the air is always a fall. */
-static void character3dMovement_setChargingJump(Character3D *character, MovementCommand *cmd, float dt)
+static void setChargingJump(Character3D *character, MovementCommand *cmd, float dt)
 {
 	KinematicBody *body = &character->body;
-	Character3DMovementData *data = &character->movement.data;
-	const Character3DMovementSettings *settings = character->movement.settings;
+	MovementData *data = &character->movement.data;
+	const MovementSettings *settings = character->movement.settings;
 
 	if (cmd->jump_triggered) {
 		data->jump_initial_velocity = body->velocity;
@@ -258,17 +262,17 @@ static void character3dMovement_setChargingJump(Character3D *character, Movement
 /* Coyote time for the snap: the body falls the way it always did, but for a
    moment after the edge the button still launches. The charge needs none of
    this — its crouch holds it in locomotion until it lets go. */
-bool character3dMovement_isCoyoteOpen(const Character3D *character)
+bool isCoyoteOpen(const Character3D *character)
 {
 	return !character->movement.data.is_grounded
 	    && character->movement.data.coyote_timer < character->movement.settings->jump_coyote_time;
 }
 
-static void character3dMovement_setSnappingJump(Character3D *character, MovementCommand *cmd, float dt)
+static void setSnappingJump(Character3D *character, MovementCommand *cmd, float dt)
 {
 	KinematicBody *body = &character->body;
-	Character3DMovementData *data = &character->movement.data;
-	const Character3DMovementSettings *settings = character->movement.settings;
+	MovementData *data = &character->movement.data;
+	const MovementSettings *settings = character->movement.settings;
 
 	data->coyote_timer += dt;
 
@@ -291,34 +295,34 @@ static void character3dMovement_setSnappingJump(Character3D *character, Movement
    not lost for it: the body stays in locomotion and coasts, keeping the speed
    it had and taking no gravity, until the crouch finishes and launches it as
    if it had never left the ledge. */
-bool character3dMovement_isChargingJump(const Character3D *character)
+bool isChargingJump(const Character3D *character)
 {
 	return character->movement.settings->jump_mode == JUMP_CHARGE
 	    && character->movement.data.jump_timer > 0.0f;
 }
 
-static void character3dMovement_setLocomotion(Character3D *character, MovementCommand *cmd, float dt)
+static void setLocomotion(Character3D *character, MovementCommand *cmd, float dt)
 {
 	uint8_t state = character->movement.current;
-	float target = character3dMovement_getTargetSpeed(character, state) * character3dMovement_getSpeedScale(character);
+	float target = getTargetSpeed(character, state) * getSpeedScale(character);
 
-	character3dMovement_setHorizontalVelocity(character, cmd->target_yaw, target, character3dMovement_getAccelerationRate(character, state), dt);
-	character3dMovement_setChargingJump(character, cmd, dt);
+	setHorizontalVelocity(character, cmd->target_yaw, target, getAccelerationRate(character, state), dt);
+	setChargingJump(character, cmd, dt);
 }
 
 /* Gravity and the terminal speed that goes with it, for anything with no floor
    under it. The collision pass clears the acceleration again on landing. */
-static void character3dMovement_setGravity(KinematicBody *body, float gravity_scale)
+static void setGravity(KinematicBody *body, float gravity_scale)
 {
 	body->acceleration.z = CHARACTER3D_GRAVITY * gravity_scale;
 	if (body->velocity.z < CHARACTER3D_FALL_MAX_SPEED)
 		body->velocity.z = CHARACTER3D_FALL_MAX_SPEED;
 }
 
-static void character3dMovement_setRolling(Character3D *character, MovementCommand *cmd, float dt)
+static void setRolling(Character3D *character, MovementCommand *cmd, float dt)
 {
-	Character3DMovementData *data = &character->movement.data;
-	const Character3DMovementSettings *settings = character->movement.settings;
+	MovementData *data = &character->movement.data;
+	const MovementSettings *settings = character->movement.settings;
 
 	/* The trigger is the entry mark and is consumed here: the stick yaw is
 	   taken once and held until grip, and the timer starts from zero however
@@ -331,7 +335,7 @@ static void character3dMovement_setRolling(Character3D *character, MovementComma
 
 	/* Rolling off a ledge drops: the state is what holds to the end of the
 	   clip, not the ground. */
-	if (!data->is_grounded) character3dMovement_setGravity(&character->body, 1.0f);
+	if (!data->is_grounded) setGravity(&character->body, 1.0f);
 
 	/* Out to idle, not to the locomotion state held from before the roll: the
 	   control runs first next frame and the stick raises it to walk if it is
@@ -360,19 +364,19 @@ static void character3dMovement_setRolling(Character3D *character, MovementComma
 		response_rate = settings->roll_spin_response_rate;
 	}
 
-	character3dMovement_setHorizontalVelocity(character, yaw, target_speed, response_rate, dt);
+	setHorizontalVelocity(character, yaw, target_speed, response_rate, dt);
 	data->roll_timer += dt;
 }
 
-static void character3dMovement_setFalling(Character3D *character, MovementCommand *cmd, float dt)
+static void setFalling(Character3D *character, MovementCommand *cmd, float dt)
 {
 	KinematicBody *body = &character->body;
-	Character3DMovementData *data = &character->movement.data;
-	const Character3DMovementSettings *settings = character->movement.settings;
+	MovementData *data = &character->movement.data;
+	const MovementSettings *settings = character->movement.settings;
 
 	data->is_grounded = 0;
 
-	character3dMovement_setSnappingJump(character, cmd, dt);
+	setSnappingJump(character, cmd, dt);
 
 	/* Air control decides both halves at once: how far the heading can be
 	   pulled toward the stick, and how much the speed can move toward what
@@ -381,13 +385,13 @@ static void character3dMovement_setFalling(Character3D *character, MovementComma
 	float target_speed = data->horizontal_speed;
 	if (settings->air_control > 0.0f) {
 		float ground = character->movement.locomotion == MOVEMENT_STATE_WALKING
-		             ? character3dMovement_getTargetSpeed(character, MOVEMENT_STATE_WALKING) * character3dMovement_getSpeedScale(character)
+		             ? getTargetSpeed(character, MOVEMENT_STATE_WALKING) * getSpeedScale(character)
 		             : 0.0f;
 		target_speed += (ground - target_speed) * settings->air_control;
 	}
 
-	character3dMovement_setHorizontalVelocity(character, cmd->target_yaw, target_speed,
-	                                        settings->jump_response_rate * settings->air_control, dt);
+	setHorizontalVelocity(character, cmd->target_yaw, target_speed,
+	                      settings->jump_response_rate * settings->air_control, dt);
 
 	/* Snap: holding the button makes the rise cost less gravity, so how long
 	   it is held is how high it goes. Only on the way up — past the top the
@@ -396,14 +400,14 @@ static void character3dMovement_setFalling(Character3D *character, MovementComma
 	if (settings->jump_mode == JUMP_SNAP && cmd->jump_held && body->velocity.z > 0.0f)
 		gravity_scale = settings->jump_hold_gravity_scale;
 
-	character3dMovement_setGravity(body, gravity_scale);
+	setGravity(body, gravity_scale);
 }
 
 /* The vertical is not touched here: the fake buoyancy in updateBody floats,
    bobs and damps the capsule on its own. The stick only swims horizontally. */
-static void character3dMovement_setSwimming(Character3D *character, MovementCommand *cmd, float dt)
+static void setSwimming(Character3D *character, MovementCommand *cmd, float dt)
 {
-	const Character3DMovementSettings *settings = character->movement.settings;
+	const MovementSettings *settings = character->movement.settings;
 	KinematicBody *body = &character->body;
 
 	/* Tired locks the fast stroke away, same as the top gait on land. */
@@ -415,7 +419,7 @@ static void character3dMovement_setSwimming(Character3D *character, MovementComm
 	if (swim_gait == CHARACTER3D_SWIM_GAIT_SLOW) target = settings->swim_slow_speed;
 	if (swim_gait == CHARACTER3D_SWIM_GAIT_FAST) target = settings->swim_fast_speed;
 
-	character3dMovement_setHorizontalVelocity(character, cmd->target_yaw, target * character3dMovement_getSpeedScale(character), settings->swim_response_rate, dt);
+	setHorizontalVelocity(character, cmd->target_yaw, target * getSpeedScale(character), settings->swim_response_rate, dt);
 	body->acceleration.z = 0.0f;
 }
 
@@ -423,15 +427,15 @@ static void character3dMovement_setSwimming(Character3D *character, MovementComm
    drives the vertical instead of a run. The horizontal is spent entirely on
    pulling the body onto the anchor the probe wrote, so an approach from the
    side slides into the ladder's centre line rather than climbing thin air. */
-static void character3dMovement_setClimbing(Character3D *character, MovementCommand *cmd, float dt)
+static void setClimbing(Character3D *character, MovementCommand *cmd, float dt)
 {
 	KinematicBody *body = &character->body;
-	Character3DMovementData *data = &character->movement.data;
-	const Character3DMovementSettings *settings = character->movement.settings;
+	MovementData *data = &character->movement.data;
+	const MovementSettings *settings = character->movement.settings;
 
 	body->acceleration.z = 0.0f;
 
-	float target = cmd->climb * settings->climb_speed * character3dMovement_getSpeedScale(character);
+	float target = cmd->climb * settings->climb_speed * getSpeedScale(character);
 	float factor = fm_expf(-settings->climb_response_rate * dt);
 	body->velocity.z = body->velocity.z * factor + target * (1.0f - factor);
 
@@ -458,10 +462,10 @@ static void character3dMovement_setClimbing(Character3D *character, MovementComm
    where climbing is possible, and running off its top while still climbing
    is the body cresting the ladder. That exit gets a push toward the rungs so
    it lands on the ledge instead of peeling back off the face. */
-static void character3dMovement_evaluateLadder(Character3D *character, MovementCommand *cmd)
+static void evaluateLadder(Character3D *character, MovementCommand *cmd)
 {
-	Character3DMovement *movement = &character->movement;
-	Character3DMovementData *data = &movement->data;
+	Movement *movement = &character->movement;
+	MovementData *data = &movement->data;
 	KinematicBody *body = &character->body;
 
 	if (movement->current != MOVEMENT_STATE_CLIMBING) {
@@ -469,7 +473,7 @@ static void character3dMovement_evaluateLadder(Character3D *character, MovementC
 		if (movement->next != MOVEMENT_STATE_NONE) return;
 
 		/* Swimming counts: a ladder in a pool is how the body gets out. */
-		if (!character3dMovement_isLocomotion(movement->current)
+		if (!isLocomotion(movement->current)
 		 && movement->current != MOVEMENT_STATE_FALLING
 		 && movement->current != MOVEMENT_STATE_SWIMMING) return;
 
@@ -538,14 +542,14 @@ static void character3dMovement_evaluateLadder(Character3D *character, MovementC
    buoyancy, which moves with the speed, and a state read off it changes when
    the stick does: standing still in a shallow pool would drop the swim, and
    pushing the stick would take it back, over and over. */
-static void character3dMovement_evaluateWater(Character3D *character)
+static void evaluateWater(Character3D *character)
 {
-	Character3DMovement *movement = &character->movement;
-	const Character3DMovementData *data = &movement->data;
+	Movement *movement = &character->movement;
+	const MovementData *data = &movement->data;
 	uint8_t current = movement->current;
 
 	if (current != MOVEMENT_STATE_SWIMMING) {
-		bool can_enter = character3dMovement_isLocomotion(current)
+		bool can_enter = isLocomotion(current)
 		              || current == MOVEMENT_STATE_FALLING
 		              || current == MOVEMENT_STATE_ROLLING;
 
@@ -560,47 +564,49 @@ static void character3dMovement_evaluateWater(Character3D *character)
 		movement->next = movement->locomotion;
 }
 
-static void (*character3dMovement_handler[MOVEMENT_STATE_COUNT])(Character3D *, MovementCommand *, float) = {
-	[MOVEMENT_STATE_IDLE]     = character3dMovement_setLocomotion,
-	[MOVEMENT_STATE_WALKING]  = character3dMovement_setLocomotion,
-	[MOVEMENT_STATE_ROLLING]  = character3dMovement_setRolling,
-	[MOVEMENT_STATE_FALLING]  = character3dMovement_setFalling,
-	[MOVEMENT_STATE_SWIMMING] = character3dMovement_setSwimming,
-	[MOVEMENT_STATE_CLIMBING] = character3dMovement_setClimbing,
+static void (*handler[MOVEMENT_STATE_COUNT])(Character3D *, MovementCommand *, float) = {
+	[MOVEMENT_STATE_IDLE]     = setLocomotion,
+	[MOVEMENT_STATE_WALKING]  = setLocomotion,
+	[MOVEMENT_STATE_ROLLING]  = setRolling,
+	[MOVEMENT_STATE_FALLING]  = setFalling,
+	[MOVEMENT_STATE_SWIMMING] = setSwimming,
+	[MOVEMENT_STATE_CLIMBING] = setClimbing,
 };
 
-_Static_assert(sizeof(character3dMovement_handler) / sizeof(character3dMovement_handler[0]) == MOVEMENT_STATE_COUNT, "character3dMovement_handler must have one entry per character state");
+_Static_assert(sizeof(handler) / sizeof(handler[0]) == MOVEMENT_STATE_COUNT, "movement::handler must have one entry per character state");
 
-void character3d_updateMovement(Character3D *character, MovementCommand *cmd, float dt)
+}
+}
+
+void Character3D::updateMovement(character3d::MovementCommand *cmd, float dt)
 {
-	assert(character);
-	assert(character);
 	assert(cmd);
 
+	assert(movement.current < character3d::MOVEMENT_STATE_COUNT);
+	assert(character3d::movement::handler[movement.current] != NULL);
 
-	assert(character->movement.current < MOVEMENT_STATE_COUNT);
-	assert(character3dMovement_handler[character->movement.current] != NULL);
-
-	character->movement.data.rotation_mode = CHARACTER3D_ROTATION_MODE_LERP;
-	character->movement.data.strafe        = cmd->strafe;
-	character->movement.data.strafe_locked = cmd->strafe_locked;
-	character->movement.data.strafe_yaw    = cmd->strafe_yaw;
-	character->movement.data.aiming         = cmd->aiming;
-	character->movement.data.charging_shoot = cmd->charging_shoot;
-	character->movement.data.shooting       = cmd->shooting;
+	movement.data.rotation_mode = CHARACTER3D_ROTATION_MODE_LERP;
+	movement.data.strafe        = cmd->strafe;
+	movement.data.strafe_locked = cmd->strafe_locked;
+	movement.data.strafe_yaw    = cmd->strafe_yaw;
+	movement.data.aiming         = cmd->aiming;
+	movement.data.charging_shoot = cmd->charging_shoot;
+	movement.data.shooting       = cmd->shooting;
 
 	/* Tired locks the top gait away: the character stays on the previous one
 	   until the stamina is back. */
 	float   gait = cmd->gait;
-	uint8_t last = character->movement.settings->gait_count - 1;
-	if (character->stats.tired && last > 0 && gait > (float)(last - 1))
+	uint8_t last = movement.settings->gait_count - 1;
+	if (stats.tired && last > 0 && gait > (float)(last - 1))
 		gait = (float)(last - 1);
-	character->movement.data.gait = gait;
-	character->movement.next = MOVEMENT_STATE_NONE;
+	movement.data.gait = gait;
+	movement.next = character3d::MOVEMENT_STATE_NONE;
 
-	character3dMovement_handler[character->movement.current](character, cmd, dt);
-	character3dMovement_updateBody(character, dt);
-	character3dMovement_evaluateWater(character);
-	character3dMovement_evaluateLadder(character, cmd);
-	character3dMovement_evaluateTransitions(character);
+	character3d::movement::handler[movement.current](this, cmd, dt);
+	character3d::movement::updateBody(this, dt);
+	character3d::movement::evaluateWater(this);
+	character3d::movement::evaluateLadder(this, cmd);
+	character3d::movement::evaluateTransitions(this);
+}
+
 }

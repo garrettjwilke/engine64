@@ -5,6 +5,7 @@
 #include "physics/math/e64_math_common.h"        /* PI */
 #include "physics/math/e64_math_functions.h"     /* segment_closestToPoint */
 
+namespace e64 {
 
 void capsule_getSegment(const Capsule *c, const Transform *world, Vector3 *a, Vector3 *b)
 {
@@ -124,3 +125,5 @@ void capsuleDef_setFriction(CapsuleDef *d, float f)     { d->friction = f; }
 void capsuleDef_setRestitution(CapsuleDef *d, float r)  { d->restitution = r; }
 void capsuleDef_setDensity(CapsuleDef *d, float rho)    { d->density = rho; }
 void capsuleDef_setSensor(CapsuleDef *d, int s)         { d->sensor = s; }
+
+}

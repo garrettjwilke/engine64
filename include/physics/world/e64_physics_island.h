@@ -30,6 +30,7 @@
 #include "physics/math/e64_vector3.h"
 #include "physics/e64_physics_settings.h"
 
+namespace e64 {
 
 struct RigidBody;
 struct ContactConstraint;
@@ -67,5 +68,7 @@ void physicsIsland_addBody    (PhysicsIsland *island, struct RigidBody *body);
 void physicsIsland_addContact (PhysicsIsland *island, struct ContactConstraint *contact);
 void physicsIsland_initialize (PhysicsIsland *island);
 
+
+}
 
 #endif

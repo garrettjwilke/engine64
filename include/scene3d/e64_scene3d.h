@@ -12,6 +12,8 @@
 #include "physics/collision/e64_collision_mesh.h"
 #include "sound/e64_sound.h"
 
+namespace e64 {
+
 #define SCENE_MAX_CHARACTERS 6
 
 #define SCENE_MAX_ENTITIES 64
@@ -33,7 +35,7 @@ typedef struct Scene3DDef {
 
 	const LightDef *light;
 	const FogDef *fog;
-	const CameraDef *camera;
+	const camera::Def *camera;
 	Vector3 wind;
 
 	const Scene3DPrefab *prefab;
@@ -81,5 +83,7 @@ Character3D *scene3d_getCharacter3D(uint8_t index);
 /* Pushes one Element3D per visible mesh part into the frame's context. The
    culling runs here, against the frame's frustum, before each mesh is read. */
 void scene3d_setRenderContext(const Scene3D *scene, RenderContext *ctx, const Viewport *viewport);
+
+}
 
 #endif

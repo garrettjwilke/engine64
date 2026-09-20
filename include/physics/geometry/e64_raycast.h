@@ -27,6 +27,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 typedef struct RaycastData {
 	Vector3 start;
@@ -39,5 +40,7 @@ typedef struct RaycastData {
 
 void    raycast_set(RaycastData *r, const Vector3 *start, const Vector3 *dir, float endTime);
 Vector3 raycast_getImpactPoint(const RaycastData *r);
+
+}
 
 #endif

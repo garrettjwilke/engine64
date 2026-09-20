@@ -9,6 +9,7 @@
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 struct MassData;
 
@@ -41,5 +42,7 @@ void  sphereDef_setRestitution(SphereDef *d, float r);
 void  sphereDef_setDensity(SphereDef *d, float rho);
 void  sphereDef_setSensor(SphereDef *d, int s);
 
+
+}
 
 #endif

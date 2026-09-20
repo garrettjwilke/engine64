@@ -15,6 +15,8 @@
 */
 #include "prefab/e64_prefab3d.h"
 
+using namespace e64;
+
 
 /* A prop is the simplest kind there is: it gets drawn and nothing else. This
    one declares no collider, so nothing can bump into it, and no body, so it

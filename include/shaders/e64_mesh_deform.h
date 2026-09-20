@@ -21,6 +21,7 @@
 #include "viewport/e64_viewport.h"      /* FB_COUNT */
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 #define MESH_DEFORM_UNBOUND 0xFFFF
 
@@ -80,5 +81,7 @@ void meshDeform_bindFrame(const MeshDeform *deform, uint8_t fb_index);
 
 void meshDeform_delete(MeshDeform *deform);
 
+
+}
 
 #endif

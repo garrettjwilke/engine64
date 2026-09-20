@@ -11,6 +11,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 /* x += (x - oldx) * retain + a * dt2. The position pair is the state: the
    difference is the implied velocity, and retain bleeds it (1 = none; the
@@ -59,6 +60,8 @@ static inline void verlet_projectDistance(Vector3 *a, Vector3 *b, float rest_len
 		b->y += delta.y * scale;
 		b->z += delta.z * scale;
 	}
+}
+
 }
 
 #endif

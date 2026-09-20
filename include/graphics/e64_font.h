@@ -4,6 +4,7 @@
 #include <libdragon.h>
 #include "physics/math/e64_vector2.h"
 
+namespace e64 {
 
 typedef struct {
 
@@ -40,5 +41,7 @@ void font_init(const FontDef *fonts, uint8_t count);
 void font_loadAsset(uint8_t id);
 void font_unloadAsset(uint8_t id);
 void text_draw(const Text *element, Vector2 position);
+
+}
 
 #endif

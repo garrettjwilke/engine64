@@ -3,6 +3,7 @@
 #include "physics/spring/e64_spring.h"
 #include "physics/math/e64_verlet.h"
 
+namespace e64 {
 
 void spring_reset(Spring *spring)
 {
@@ -36,4 +37,6 @@ Vector3 spring_update(Spring *spring, const SpringSettings *settings, Vector3 an
 	}
 
 	return offset;
+}
+
 }

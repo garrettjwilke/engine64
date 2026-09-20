@@ -6,6 +6,8 @@
 #include "physics/world/e64_physics_world.h"
 #include "physics/math/e64_math_common.h"
 
+namespace e64 {
+
 /* The measure of a hit is the impulse the solver spent stopping it, over the
    body's mass: the speed it killed, in m/s — one scale for every weight.
    Below the floor it is resting jitter and stays silent. */
@@ -35,7 +37,7 @@ static void propSound_collision(const RigidBody *body, float impulse)
 	float volume = PROP_SOUND_COLLISION_VOLUME_MIN
 	             + t * (PROP_SOUND_COLLISION_VOLUME_MAX - PROP_SOUND_COLLISION_VOLUME_MIN);
 
-	entity3d_playSound((const Entity3D *)body->owner, PROP_SOUND_COLLISION, NULL, volume);
+	entity3d::playSound((const Entity3D *)body->owner, PROP_SOUND_COLLISION, NULL, volume);
 }
 
 /* The sound is the surface's, the place and the volume are the body's that
@@ -52,7 +54,7 @@ static void propSound_waterEntry(const RigidBody *body, const Water *water)
 	float volume = PROP_SOUND_PLUNGE_VOLUME_MIN
 	             + t * (PROP_SOUND_PLUNGE_VOLUME_MAX - PROP_SOUND_PLUNGE_VOLUME_MIN);
 
-	entity3d_playSound((const Entity3D *)water->volume.body->owner, PROP_SOUND_WATER_ENTRY, &body->tx.position, volume);
+	entity3d::playSound((const Entity3D *)water->volume.body->owner, PROP_SOUND_WATER_ENTRY, &body->tx.position, volume);
 }
 
 void propSound_update(struct PhysicsWorld *world)
@@ -90,4 +92,6 @@ void propSound_update(struct PhysicsWorld *world)
 		if (a_hits) propSound_collision(c->body_a, impulse);
 		if (b_hits) propSound_collision(c->body_b, impulse);
 	}
+}
+
 }

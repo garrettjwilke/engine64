@@ -22,6 +22,7 @@
 #include "physics/shapes/e64_capsule.h"
 #include "physics/collision/e64_collision_mesh.h"
 
+namespace e64 {
 
 struct RigidBody;
 struct CollisionMesh;
@@ -113,5 +114,7 @@ int   physicsShape_raycast    (const PhysicsShape *shape, RaycastData *raycast);
 void  physicsShape_computeAABB(const PhysicsShape *shape, AABB *aabb);
 void  physicsShape_computeMass(const PhysicsShape *shape, MassData *md);
 
+
+}
 
 #endif

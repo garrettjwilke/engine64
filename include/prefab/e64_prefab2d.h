@@ -12,6 +12,7 @@
 #include "character2d/e64_character2d.h"
 #include "stage2d/e64_stage2d.h"
 
+namespace e64 {
 
 typedef enum {
 
@@ -38,7 +39,7 @@ typedef struct Prefab2D {
 
 	/* What the kind needs. Collision comes with the 2D physics. A stage
 	   draws its own tiles and leaves the graphic above unused. */
-	const Character2DDef *character;
+	const character2d::Def *character;
 	const Stage2DDef     *stage;
 
 	/* PROP only: how much of the camera's scroll it takes. 1 sits in the
@@ -49,5 +50,7 @@ typedef struct Prefab2D {
 
 } Prefab2D;
 
+
+}
 
 #endif

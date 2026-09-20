@@ -4,6 +4,8 @@
 #include <libdragon.h>
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
+
 #define SOUND_MAX_EMITTERS 12
 
 /* Mixer channels the emitters draw from. A stereo sample takes two of them. */
@@ -114,5 +116,7 @@ void sound_stopAll(void);
 
 /* For emitters that follow something that moves. */
 void sound_setEmitterPosition(SoundEmitter emitter, const Vector3 *position);
+
+}
 
 #endif

@@ -11,15 +11,18 @@
 
 #include "character2d/e64_character2d.h"
 
+namespace e64 {
+
+namespace character2d {
 
 /* Hands the scene entity the current frame: its sprite, the flip, and the
    feet position carried to the top-left corner the blit draws from. */
-static void character2d_setEntity(Character2D *character)
+static void setEntity(Character2D *character)
 {
 	Entity2D *entity = character->entity;
 	Sprite   *sprite = &entity->graphic->sprite;
 
-	sprite->asset  = character2dAnimation_getSprite(character);
+	sprite->asset  = animation::getSprite(character);
 	sprite->cols   = 0;
 	sprite->rows   = 0;
 	sprite->frame  = 0;
@@ -42,7 +45,7 @@ static void character2d_setEntity(Character2D *character)
 }
 
 
-Character2D *character2d_create(const Character2DDef *def, Entity2D *entity)
+Character2D *create(const Def *def, Entity2D *entity)
 {
 	assert(def && entity && entity->graphic->type == GRAPHIC_SPRITE);
 
@@ -55,27 +58,31 @@ Character2D *character2d_create(const Character2DDef *def, Entity2D *entity)
 		.entity        = entity,
 		.entity_sprite = entity->graphic->sprite.asset,
 		.position      = entity->position,
-		.movement      = (Character2DMovement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT2D_STATE_IDLE },
+		.movement      = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT2D_STATE_IDLE },
 	};
 
-	character2dAnimation_init(character, def->animation_def);
-	character2d_setEntity(character);
+	animation::init(character, def->animation_def);
+	setEntity(character);
 	return character;
 }
 
-void character2d_delete(Character2D *character)
+void destroy(Character2D *character)
 {
 	if (!character) return;
 
 	/* The entity closes its own sprite when it goes; it gets it back. */
 	character->entity->graphic->sprite.asset = character->entity_sprite;
 
-	character2dAnimation_free(character);
-	free(character);
+	animation::free(character);
+	::free(character);
 }
 
-void character2d_update(Character2D *character, float dt)
+void update(Character2D *character, float dt)
 {
-	character2dAnimation_update(character, dt);
-	character2d_setEntity(character);
+	animation::update(character, dt);
+	setEntity(character);
+}
+
+}
+
 }

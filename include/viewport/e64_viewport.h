@@ -6,6 +6,8 @@
 #include "camera/e64_camera.h"
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
+
 #define FB_COUNT 3
 
 
@@ -112,5 +114,7 @@ void viewport_updateCamera(Vector3 *center, const struct Scene3D *scene);
 /* The projection is the game's call, so it picks one and keeps it fed. */
 void viewport_setPerspectiveCamera(void);
 void viewport_setIsometricCamera(void);
+
+}
 
 #endif

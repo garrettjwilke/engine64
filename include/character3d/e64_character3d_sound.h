@@ -6,7 +6,9 @@
 
 #include "sound/e64_sound.h"
 
-typedef struct Character3D Character3D;
+namespace e64 {
+
+class Character3D;
 
 #define CHARACTER3D_SOUND_MAX_VARIATIONS 8
 #define CHARACTER3D_SOUND_MAX_FOOTINGS   4
@@ -15,11 +17,14 @@ typedef struct Character3D Character3D;
 /* Indices into the entity's sound list, the way ANIMATION_CLIPS names clips. */
 #define SOUND_CLIPS(...) ((const uint8_t[]){ __VA_ARGS__ })
 
+
+namespace character3d {
+
 /* What a character sounds like. Sits in its def next to the animation and
    movement settings: two bodies can walk the same graph and step on different
    samples. The samples themselves are the prefab's list, open in the
    entity; every event below names them by index into it. */
-typedef struct Character3DSoundDef {
+typedef struct SoundDef {
 
 	/* One is picked at random per step, so the same noise does not repeat. */
 	const uint8_t *footstep;
@@ -89,13 +94,13 @@ typedef struct Character3DSoundDef {
 	float splash_volume_max;
 	float splash_speed_max;
 
-} Character3DSoundDef;
+} SoundDef;
 
 
 /* Edge detection state. Nothing here is worth saving. */
-typedef struct Character3DSound {
+typedef struct Sound {
 
-	const Character3DSoundDef *def;
+	const SoundDef *def;
 
 	/* Negative until the first update: with no frame behind it, every mark
 	   of the cycle would read as just crossed. */
@@ -117,9 +122,17 @@ typedef struct Character3DSound {
 	   from one. */
 	float last_footstep;
 
-} Character3DSound;
+} Sound;
 
 
-void character3dSound_update(Character3D *character);
+namespace sound {
+
+void update(Character3D *character);
+
+}
+
+}
+
+}
 
 #endif

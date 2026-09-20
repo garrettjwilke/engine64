@@ -8,8 +8,10 @@
 */
 #include "prefab/e64_prefab3d.h"
 
+using namespace e64;
 
-static const Character3DColliderSettings collider = {
+
+static const character3d::ColliderSettings collider = {
 
 	.radius = 0.35f,
 	.height = 1.80f,
@@ -18,14 +20,14 @@ static const Character3DColliderSettings collider = {
 /* Gaits run slowest to fastest. Three of them: the stick alone picks the
    middle one and sprint reaches the top, which is the one that tires the
    body out. */
-static const Character3DGaitSettings gait[] = {
+static const character3d::GaitSettings gait[] = {
 
 	{ .target_speed = 4.0f, .response_rate =  8.0f, .rotation_response_rate = 12.0f },
 	{ .target_speed = 6.5f, .response_rate =  9.0f, .rotation_response_rate = 10.0f },
 	{ .target_speed = 8.5f, .response_rate = 10.0f, .rotation_response_rate =  8.0f },
 };
 
-static const Character3DMovementSettings movement = {
+static const character3d::MovementSettings movement = {
 
 	.idle_response_rate          = 12.0f,
 	.idle_rotation_response_rate = 10.0f,
@@ -36,7 +38,7 @@ static const Character3DMovementSettings movement = {
 	/* Snap: the body leaves the floor on the press and, while A stays down,
 	   the rise pays less gravity. A tap reaches a metre, holding all the way
 	   up reaches two and a half, and the rise ends itself either way. */
-	.jump_mode               = JUMP_SNAP,
+	.jump_mode               = character3d::JUMP_SNAP,
 	.jump_response_rate      = 10.0f,
 	.jump_base_speed         = 9.0f,
 
@@ -73,7 +75,7 @@ static const Character3DMovementSettings movement = {
 /* Stamina is read on every update, so it needs settings even where nothing
    spends it. A drain of zero never empties: the body sprints forever, which
    is what an example with no gauge on screen wants. */
-static const Character3DStatsSettings stats = {
+static const character3d::StatsSettings stats = {
 
 	.stamina_drain_rate = 0.0f,
 	.stamina_regen_rate = 0.35f,
@@ -81,7 +83,7 @@ static const Character3DStatsSettings stats = {
 };
 
 
-static const Character3DDef character3d_def = {
+static const character3d::Def character3d_def = {
 
 	.movement_settings = &movement,
 	.collider_settings = &collider,

@@ -5,6 +5,7 @@
 
 #include "resource/e64_resource.h"
 
+namespace e64 {
 
 typedef struct {
 
@@ -94,4 +95,6 @@ void resource_unload(void *data)
 
 	/* A pointer nobody handed out. */
 	assert(false);
+}
+
 }

@@ -3,6 +3,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 typedef struct Matrix3 {
 	Vector3 ex;
@@ -74,5 +75,7 @@ static inline float matrix3_get(const Matrix3 *m, int i, int j)
 	return (j == 0) ? col->x : (j == 1) ? col->y : col->z;
 }
 
+
+}
 
 #endif

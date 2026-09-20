@@ -25,6 +25,7 @@
 #include "physics/shapes/e64_box.h"
 #include "physics/shapes/e64_physics_shape.h"   /* MassData */
 
+namespace e64 {
 
 int box_testPoint(const Box *b, const Transform *world, const Vector3 *p)
 {
@@ -172,3 +173,5 @@ void boxDef_setFriction(BoxDef *d, float f)     { d->friction = f; }
 void boxDef_setRestitution(BoxDef *d, float r)  { d->restitution = r; }
 void boxDef_setDensity(BoxDef *d, float rho)    { d->density = rho; }
 void boxDef_setSensor(BoxDef *d, int s)         { d->sensor = s; }
+
+}

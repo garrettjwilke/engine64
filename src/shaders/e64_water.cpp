@@ -9,6 +9,7 @@
 #include "physics/collision/e64_collision_mesh.h"
 #include "physics/world/e64_physics_world.h"
 
+namespace e64 {
 
 /* Fresh water, and a drag that settles a bobbing crate in a few swings. */
 #define WATER_DEFAULT_DENSITY       1000.0f
@@ -19,21 +20,6 @@
 static Water  water_pool[WATER_MAX_SURFACES];
 static uint8_t water_count;
 
-
-/* The material setup already wrote the tile's own translate (its low bits),
-   so the scroll adds on top instead of replacing it. */
-static void water_tileCb(void *user, rdpq_texparms_t *tile, rdpq_tile_t id)
-{
-	const Water *water = (const Water *)user;
-
-	if (id == TILE0) {
-		tile->s.translate += water->offset_a[0];
-		tile->t.translate += water->offset_a[1];
-	} else {
-		tile->s.translate += water->offset_b[0];
-		tile->t.translate += water->offset_b[1];
-	}
-}
 
 Water *water_create(const WaterDef *def)
 {
@@ -91,27 +77,22 @@ Water *water_create(const WaterDef *def)
 		water->amplitude_sum += water->def.wave[w].amplitude;
 	}
 
-	water->conf = (T3DModelDrawConf){
-		.userData = water,
-		.tileCb   = water_tileCb,
-	};
-
 	water_count++;
 	return water;
 }
 
-static void water_scroll(float offset[2], const float speed[2], float wrap, float delta)
+static void water_scroll(Vector2 *offset, const float speed[2], float wrap, float delta)
 {
-	offset[0] += speed[0] * delta;
-	offset[1] += speed[1] * delta;
+	offset->x += speed[0] * delta;
+	offset->y += speed[1] * delta;
 
 	/* Folded into [0, wrap): a negative translate overflows the fixed-point
 	   tile coordinates, and fm_fmodf keeps the sign of its operand. */
 	if (wrap > 0.0f) {
-		for (int i = 0; i < 2; i++) {
-			offset[i] = fm_fmodf(offset[i], wrap);
-			if (offset[i] < 0.0f) offset[i] += wrap;
-		}
+		offset->x = fm_fmodf(offset->x, wrap);
+		offset->y = fm_fmodf(offset->y, wrap);
+		if (offset->x < 0.0f) offset->x += wrap;
+		if (offset->y < 0.0f) offset->y += wrap;
 	}
 }
 
@@ -163,8 +144,8 @@ void water_update(float delta)
 		Water *water = &water_pool[i];
 
 		water->time += delta;
-		water_scroll(water->offset_a, water->def.scroll_a, water->def.wrap_a, delta);
-		water_scroll(water->offset_b, water->def.scroll_b, water->def.wrap_b, delta);
+		water_scroll(&water->offset[0], water->def.scroll_a, water->def.wrap_a, delta);
+		water_scroll(&water->offset[1], water->def.scroll_b, water->def.wrap_b, delta);
 
 		if (water->culled && *water->culled) continue;
 
@@ -231,4 +212,6 @@ void water_clear(void)
 		water_pool[i] = (Water){};
 	}
 	water_count = 0;
+}
+
 }

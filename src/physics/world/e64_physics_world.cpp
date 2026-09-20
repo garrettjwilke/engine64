@@ -35,6 +35,7 @@
 #include "physics/collision/e64_collision_mesh.h"
 #include "physics/broadphase/e64_broad_phase.h"
 
+namespace e64 {
 
 /* Shims exposed to rigid_body.c and broad_phase.c. */
 
@@ -510,4 +511,6 @@ void physicsWorld_rayCast(const PhysicsWorld *s, void *cb_user_data, PhysicsWorl
 	ctx.cb_user_data = cb_user_data;
 	ctx.raycast      = raycast;
 	dynamicAABBTree_queryRay(&s->contact_manager.broadphase.tree, &ctx, queryRaycast_cb, raycast);
+}
+
 }

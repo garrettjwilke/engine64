@@ -8,6 +8,7 @@
 #include "physics/shapes/e64_physics_shape.h"
 #include "physics/collision/e64_collision_mesh.h"
 
+namespace e64 {
 
 Transform shapeDef_localTransform(const Transform *tx)
 {
@@ -171,4 +172,6 @@ void physicsShape_computeMass(const PhysicsShape *shape, MassData *md)
 		case SHAPE_CAPSULE: capsule_computeMass(&shape->capsule, &shape->local, shape->density, md); break;
 		case SHAPE_MESH:    break;   /* static-only, never on a rigid body */
 	}
+}
+
 }

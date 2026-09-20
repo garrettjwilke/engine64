@@ -41,6 +41,15 @@ endif
 # console and both cost binary size and unwind tables.
 N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -fno-rtti -I$(ENGINE_DIR)/include -I$(ENGINE_DIR)/src
 
+# Profile-guided code layout (MipsFit). Given the absolute path of a generated
+# layout-NN.ld, it stands in for libdragon's n64.ld for this link only; a plain
+# make keeps linking as always. The .ld names this ELF's .text.* sections, so
+# it goes stale as the code moves: recapture the trace and regenerate it.
+ifneq ($(strip $(MIPSFIT_LAYOUT_SCRIPT)),)
+N64_LDFLAGS := $(filter-out -Tn64.ld,$(N64_LDFLAGS)) -T$(MIPSFIT_LAYOUT_SCRIPT)
+$(BUILD_DIR)/$(PROJECT_NAME).elf: $(MIPSFIT_LAYOUT_SCRIPT)
+endif
+
 # --- sources -----------------------------------------------------------------
 # The order matters, and not for tidiness: the VR4300 icache is 16 KB direct
 # mapped, so where each function lands in RAM decides who it evicts. Hot path
@@ -109,7 +118,7 @@ filesystem/sprites/%.sprite: assets/sprites/%.png
 filesystem/models/%.t3dm: assets/models/%.glb
 	@mkdir -p $(dir $@)
 	@echo "    [T3D-MODEL] $@"
-	$(T3D_GLTF_TO_3D) $(GLTF_FLAGS) "$<" $@
+	$(T3D_GLTF_TO_3D) --bvh $(GLTF_FLAGS) "$<" $@
 	$(N64_BINDIR)/mkasset -c 2 -o $(dir $@) $@
 
 filesystem/fonts/%.font64: assets/fonts/%.ttf

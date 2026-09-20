@@ -4,11 +4,14 @@
 #include <stdint.h>
 #include <t3d/t3dmath.h>
 
+namespace e64 {
 
-typedef struct Character3D Character3D;
+class Character3D;
 
 #define CHARACTER3D_WEAPON_DRAWN_NONE 0xFF
 
+
+namespace character3d {
 
 typedef enum {
 
@@ -69,8 +72,9 @@ typedef struct WeaponSlot {
 
 } WeaponSlot;
 
+
 /* Which model objects are weapons, in mesh part order. */
-typedef struct Character3DWeaponsDef {
+typedef struct WeaponsDef {
 
 	const char *const *mesh;
 	uint8_t mesh_count;
@@ -79,29 +83,37 @@ typedef struct Character3DWeaponsDef {
 	   unequipping afterwards is runtime state on the Character3D. */
 	const WeaponDef *weapon[WEAPON_SLOT_COUNT];
 
-} Character3DWeaponsDef;
+} WeaponsDef;
 
-typedef struct Character3DWeapons {
+typedef struct Weapons {
 
-	const Character3DWeaponsDef *def;
+	const WeaponsDef *def;
 	WeaponSlot slot[WEAPON_SLOT_COUNT];
 	uint8_t    drawn;            /* slot in hand, CHARACTER3D_WEAPON_DRAWN_NONE = all holstered */
 
-} Character3DWeapons;
+} Weapons;
 
 
-void character3d_equipWeapon  (Character3D *character, uint8_t slot, const WeaponDef *weapon);
-void character3d_unequipWeapon(Character3D *character, uint8_t slot);
+namespace weapon {
+
+void equip  (Character3D *character, uint8_t slot, const WeaponDef *weapon);
+void unequip(Character3D *character, uint8_t slot);
 
 /* Steps the drawn weapon through the occupied slots, unarmed included as a
    stop of its own. dir +1 / -1. */
-void character3d_cycleWeapon(Character3D *character, int8_t dir);
+void cycle(Character3D *character, int8_t dir);
 
 /* What the hand carries right now; NULL when everything is holstered. */
-const WeaponDef *character3d_drawnWeapon(const Character3D *character);
+const WeaponDef *drawn(const Character3D *character);
 
 /* Poses the weapon bones (holster or hand). Runs before the skeleton update. */
-void character3dWeapon_setBones(Character3D *character);
+void setBones(Character3D *character);
 
+}
+
+}
+
+
+}
 
 #endif

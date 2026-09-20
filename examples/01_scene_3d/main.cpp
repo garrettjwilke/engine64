@@ -32,6 +32,8 @@
 #include "time/e64_time.h"               /* frame delta                      */
 #include "debug/e64_debug.h"             /* on-screen debug lines            */
 
+using namespace e64;
+
 
 /* --- prefabs ---------------------------------------------------------------
 	A Prefab3D declares one kind of content: a model, the type tag that says
@@ -107,9 +109,9 @@ static Scene3DPrefab scene_prefabs[] = {
    once per frame; everything else happens inside the engine.
 
    There are no defaults: any field left out is zero. */
-static const CameraDef camera = {
+static const camera::Def camera = {
 
-	.type    = CAMERA_TYPE_SPRING_ARM,
+	.type    = camera::CAMERA_TYPE_SPRING_ARM,
 
 	.field_of_view = 60.0f,   /* vertical lens angle, between 10 and 120  */
 	.near_clipping =  1.0f,   /* closer than this is not drawn            */
@@ -142,10 +144,13 @@ static const CameraDef camera = {
 /* One button per camera action, and the camera they move. The engine reads
    this binding every frame and applies the motion itself, so the game never
    moves the camera. Any action left unset is BTN_NONE and never triggers. */
-static const CameraControlBinding camera_binding = {
+static const camera::ControlBinding camera_binding = {
 
 	.player = PLAYER_1,
-	.camera = &camera,
+
+	/* The engine has a namespace of this name (camera::), so with `using
+	   namespace e64` the variable is reached through the global scope. */
+	.camera = &::camera,
 
 	.pan_left  = BTN_C_LEFT,
 	.pan_right = BTN_C_RIGHT,
@@ -162,7 +167,7 @@ static const CameraControlBinding camera_binding = {
 /* What this state drives with, named in its declaration further down. Each
    binding names the piece it moves, so entering the state is all it takes for
    the engine to wire them: there is nothing to bind by hand. */
-static const ControlsDef controls = {
+static const controls::Def controls = {
 
 	.camera = &camera_binding,
 };
@@ -218,7 +223,7 @@ static Scene3DDef scene = {
 
 	.light  = &light,
 	.fog    = &fog,
-	.camera = &camera,
+	.camera = &::camera,
 
 	.prefab       = scene_prefabs,
 	.prefab_count = sizeof(scene_prefabs) / sizeof(scene_prefabs[0]),
@@ -260,7 +265,7 @@ static void gameplay3d_update(void)
 
 	/* The controller, already polled by the engine this frame, and how long
 	   the previous frame took, in seconds. */
-	const Controller *pad = controller_get();
+	const Controller *pad = controller::get();
 	float delta = time_get()->delta;
 
 	/* Buttons are read directly here, unlike the camera above.
@@ -271,20 +276,20 @@ static void gameplay3d_update(void)
 	   module, so there is nothing to bind it to and the game reads the button
 	   itself.
 
-	   button_isPressed is true only on the frame the button goes down, which
-	   is what a toggle needs; button_isHeld would fire every frame.
+	   controller::isPressed is true only on the frame the button goes down,
+	   which is what a toggle needs; controller::isHeld would fire every frame.
 
 	   entity[1] is the lamp post because it is the second row of the placement
 	   table. Parts are addressed by the name the prefab declared, and setting
 	   a name the entity does not have does nothing. */
-	if (button_isPressed(pad, BTN_A)) {
+	if (controller::isPressed(pad, BTN_A)) {
 		draw_lamp = !draw_lamp;
-		entity3d_setPartVisible(scene3d->entity[1], "lamp", draw_lamp);
+		entity3d::setPartVisible(scene3d->entity[1], "lamp", draw_lamp);
 	}
 
-	if (button_isPressed(pad, BTN_B)) {
+	if (controller::isPressed(pad, BTN_B)) {
 		draw_post = !draw_post;
-		entity3d_setPartVisible(scene3d->entity[1], "post", draw_post);
+		entity3d::setPartVisible(scene3d->entity[1], "post", draw_post);
 	}
 
 	/* Raw stick values run from -127 to 127 and never rest at exactly zero, so
@@ -297,7 +302,7 @@ static void gameplay3d_update(void)
 	float y = fabsf(pad->input.stick_y) >= STICK_DEADZONE ? pad->input.stick_y : 0.0f;
 
 	if (x != 0.0f || y != 0.0f) {
-		float angle = deg_to_rad(camera_getAngleAround(&viewport_get()->camera, &camera_target));
+		float angle = deg_to_rad(camera::getAngleAround(&viewport_get()->camera, &camera_target));
 		float sin_a, cos_a;
 		fm_sincosf(angle, &sin_a, &cos_a);
 
@@ -322,7 +327,7 @@ static void gameplay3d_update(void)
 	debugUI_set(6, "DPAD fov");
 
 	debugUI_showFPS();
-	debugUI_setRight(0, "arm %.1f", cameraSpringArm_getLength(&viewport_get()->camera));
+	debugUI_setRight(0, "arm %.1f", camera::springArm::getLength(&viewport_get()->camera));
 	debugUI_setRight(1, "fov %.1f", viewport_get()->camera.field_of_view);
 }
 
@@ -331,7 +336,7 @@ static const GameStateDef states[STATE_COUNT] = {
 	[GAMEPLAY3D] = {
 		.update     = gameplay3d_update,
 		.scene3d    = &scene,
-		.controls   = &controls,
+		.controls   = &::controls,
 
 		/* The engine opens no screen by itself, so every state that draws has
 		   to name a mode. Entering a state that names the current mode leaves

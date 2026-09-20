@@ -2,6 +2,7 @@
 
 #include "physics/geometry/e64_triangle.h"
 
+namespace e64 {
 
 /* Möller–Trumbore. A back face is a miss: a surface only counts from the side
    its normal points to, so a floor is floor from above and nothing from below.
@@ -32,4 +33,6 @@ int triangle_raycast(const Triangle *t, RaycastData *ray)
 	ray->toi    = toi;
 	ray->normal = t->normal;
 	return 1;
+}
+
 }

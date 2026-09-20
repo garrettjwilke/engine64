@@ -14,8 +14,10 @@
 #include "graphics/e64_graphic.h"
 #include "sound/e64_sound.h"
 
+namespace e64 {
 
-typedef struct Entity2D {
+class Entity2D {
+public:
 
 	/* Pixels, kept as floats so movement stays smooth; whoever writes it
 	   snaps to whole pixels when it matters. */
@@ -31,13 +33,15 @@ typedef struct Entity2D {
 	Sound   *sound;
 	uint8_t  sound_count;
 
-} Entity2D;
+};
 
+
+namespace entity2d {
 
 /* Filled by the scene from the prefab and its placement, gone after the
    load. The graphic is copied in; a sprite gets its file loaded. A zero
    scale means identity. */
-typedef struct Entity2DDef {
+typedef struct Def {
 
 	const Graphic *graphic;
 	const SoundDef *const *sound;
@@ -47,10 +51,14 @@ typedef struct Entity2DDef {
 	Vector2 scale;
 	float   rotation;
 
-} Entity2DDef;
+} Def;
 
 
-Entity2D *entity2d_create(const Entity2DDef *def);
-void      entity2d_delete(Entity2D *entity);
+Entity2D *create(const Def *def);
+void      destroy(Entity2D *entity);
+
+}
+
+}
 
 #endif

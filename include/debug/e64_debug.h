@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+namespace e64 {
 
 /* Registers the builtin mono font and turns the overlay on. Once, after
    game_init. Never called, the overlay stays off and draws nothing. */
@@ -35,5 +36,7 @@ void debugUI_showFPS(void);
 
 /* Drawn by the render at the tail of the frame, over everything. */
 void debugUI_draw(void);
+
+}
 
 #endif

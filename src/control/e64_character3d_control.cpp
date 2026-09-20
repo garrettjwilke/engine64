@@ -4,10 +4,14 @@
 #include "entity/e64_entity3d.h"
 #include "control/e64_character3d_control.h"
 
+namespace e64 {
 
-static void character3dControl_setJump(Character3D *character, MovementCommand *cmd, const Character3DControls *actions)
+namespace character3d {
+namespace control {
+
+static void setJump(Character3D *character, MovementCommand *cmd, const Controls *actions)
 {
-	Character3DMovement *movement = &character->movement;
+	Movement *movement = &character->movement;
 
 	/* The button never changes the state: it only asks for a jump. The crouch
 	   runs on the ground and the movement switches to the air on the impulse.
@@ -17,8 +21,8 @@ static void character3dControl_setJump(Character3D *character, MovementCommand *
 	   for the whole climb. There the button means let go, never jump. */
 	if (actions->jump
 	    && movement->current != MOVEMENT_STATE_CLIMBING
-	    && (character3dMovement_isLocomotion(movement->current)
-	        || character3dMovement_isCoyoteOpen(character))
+	    && (character3d::movement::isLocomotion(movement->current)
+	        || character3d::movement::isCoyoteOpen(character))
 	    && movement->data.jump_timer == 0.0f) {
 		cmd->jump_held      = true;
 		cmd->jump_triggered = true;
@@ -29,36 +33,36 @@ static void character3dControl_setJump(Character3D *character, MovementCommand *
 	}
 }
 
-static void character3dControl_setRoll(Character3D *character, MovementCommand *cmd, const Character3DControls *actions)
+static void setRoll(Character3D *character, MovementCommand *cmd, const Controls *actions)
 {
-	Character3DMovement *movement = &character->movement;
+	Movement *movement = &character->movement;
 
 	/* Not while a jump is being charged: the crouch owns the body until it
 	   takes off. */
-	if (actions->roll && character3dMovement_isLocomotion(movement->current)
+	if (actions->roll && character3d::movement::isLocomotion(movement->current)
 	    && movement->current != MOVEMENT_STATE_IDLE
 	    && movement->data.jump_timer == 0.0f) {
 		cmd->roll_triggered = true;
-		character3dMovement_setMode(movement, MOVEMENT_STATE_ROLLING);
+		character3d::movement::setMode(movement, MOVEMENT_STATE_ROLLING);
 	}
 }
 
 /* Only with both feet in ordinary locomotion: never mid-air, mid-roll, in
    the water or on a ladder, and not while a jump crouch owns the body. */
-static void character3dControl_setWeaponSwitch(Character3D *character, const Character3DControls *actions)
+static void setWeaponSwitch(Character3D *character, const Controls *actions)
 {
-	Character3DMovement *movement = &character->movement;
+	Movement *movement = &character->movement;
 
-	if (!character3dMovement_isLocomotion(movement->current)
+	if (!character3d::movement::isLocomotion(movement->current)
 	    || movement->data.jump_timer != 0.0f) return;
 
-	if (actions->weapon_next) character3d_cycleWeapon(character, +1);
-	if (actions->weapon_prev) character3d_cycleWeapon(character, -1);
+	if (actions->weapon_next) weapon::cycle(character, +1);
+	if (actions->weapon_prev) weapon::cycle(character, -1);
 }
 
-static void character3dControl_setLocomotionWithStick(Character3D *character, MovementCommand *cmd, const Character3DControls *actions, float camera_angle_around)
+static void setLocomotionWithStick(Character3D *character, MovementCommand *cmd, const Controls *actions, float camera_angle_around)
 {
-	Character3DMovement *movement = &character->movement;
+	Movement *movement = &character->movement;
 	float stick_magnitude = 0;
 
 	/* The deadzone was already taken out: centred, the stick reads zero. */
@@ -80,15 +84,15 @@ static void character3dControl_setLocomotionWithStick(Character3D *character, Mo
 
 	/* An action owns the current state and its gait until it ends: the stick
 	   only picks the state it goes back to. */
-	if (!character3dMovement_isLocomotion(movement->current)) {
+	if (!character3d::movement::isLocomotion(movement->current)) {
 		movement->locomotion = mode;
 		return;
 	}
 
-	character3dMovement_setMode(movement, mode);
+	character3d::movement::setMode(movement, mode);
 	if (mode == MOVEMENT_STATE_IDLE) return;
 
-	const Character3DMovementSettings *settings = movement->settings;
+	const MovementSettings *settings = movement->settings;
 	uint8_t last_gait = settings->gait_count - 1;
 
 	/* A single gait has none above it to step to: how far the stick is held is
@@ -117,23 +121,23 @@ static void character3dControl_setLocomotionWithStick(Character3D *character, Mo
 /* The aim button holds the drawn weapon at the ready; the shoot button on top
    charges the shot. The release edge already travels in the actions, left for
    the shot itself. */
-static void character3dControl_setAiming(Character3D *character, MovementCommand *cmd, const Character3DControls *actions)
+static void setAiming(Character3D *character, MovementCommand *cmd, const Controls *actions)
 {
-	const WeaponDef *drawn = character3d_drawnWeapon(character);
+	const WeaponDef *drawn = weapon::drawn(character);
 	bool charges = drawn && drawn->shoot_mode == SHOOT_CHARGE;
 
 	cmd->aiming = drawn && actions->aim
-		&& character3dMovement_isLocomotion(character->movement.current);
+		&& character3d::movement::isLocomotion(character->movement.current);
 	cmd->charging_shoot = cmd->aiming && charges && actions->shoot;
 }
 
-static void character3dControl_setStrafe(Character3D *character, MovementCommand *cmd, const Character3DControls *actions, float camera_angle_around)
+static void setStrafe(Character3D *character, MovementCommand *cmd, const Controls *actions, float camera_angle_around)
 {
 	/* The air keeps the strafe: a jump out of it must not turn the body
 	   toward its run, it faces the camera until it lands. */
 	uint8_t current = character->movement.current;
 	cmd->strafe     = actions->aim
-	               && (character3dMovement_isLocomotion(current) || current == MOVEMENT_STATE_FALLING);
+	               && (character3d::movement::isLocomotion(current) || current == MOVEMENT_STATE_FALLING);
 	cmd->strafe_yaw = angle_wrap(camera_angle_around + 180.0f + CHARACTER3D_STRAFE_YAW_OFFSET);
 }
 
@@ -142,9 +146,9 @@ static void character3dControl_setStrafe(Character3D *character, MovementCommand
    ladder's own facing, so which one the stick means never depends on where
    the camera happens to be. Only the release is a button, and it is the one
    that jumps everywhere else. */
-static void character3dControl_setClimb(Character3D *character, MovementCommand *cmd, const Character3DControls *actions)
+static void setClimb(Character3D *character, MovementCommand *cmd, const Controls *actions)
 {
-	Character3DMovement *movement = &character->movement;
+	Movement *movement = &character->movement;
 
 	cmd->climb         = 0.0f;
 	cmd->climb_release = false;
@@ -181,36 +185,41 @@ static void character3dControl_setClimb(Character3D *character, MovementCommand 
 	if (alignment >= fm_cosf(deg_to_rad(CHARACTER3D_LADDER_ENTER_ANGLE))) cmd->climb = 1.0f;
 }
 
-void character3dControls_read(Character3DControls *controls, const Character3DControlBinding *binding)
+void read(Controls *controls, const ControlBinding *binding)
 {
-	const Controller *controller = &controller_get()[binding->player];
+	const Controller *controller = &controller::get()[binding->player];
 
-	*controls = (Character3DControls){
-		.jump       = button_isPressed(controller, binding->jump),
-		.jump_held  = button_isHeld(controller, binding->jump),
-		.roll       = button_isPressed(controller, binding->roll),
-		.sprint     = button_isHeld(controller, binding->sprint),
-		.aim        = button_isHeld(controller, binding->aim),
-		.shoot          = button_isHeld(controller, binding->shoot),
-		.shoot_released = button_isReleased(controller, binding->shoot),
-		.weapon_next    = button_isPressed(controller, binding->weapon_next),
-		.weapon_prev    = button_isPressed(controller, binding->weapon_prev),
+	*controls = (Controls){
+		.jump       = controller::isPressed(controller, binding->jump),
+		.jump_held  = controller::isHeld(controller, binding->jump),
+		.roll       = controller::isPressed(controller, binding->roll),
+		.sprint     = controller::isHeld(controller, binding->sprint),
+		.aim        = controller::isHeld(controller, binding->aim),
+		.shoot          = controller::isHeld(controller, binding->shoot),
+		.shoot_released = controller::isReleased(controller, binding->shoot),
+		.weapon_next    = controller::isPressed(controller, binding->weapon_next),
+		.weapon_prev    = controller::isPressed(controller, binding->weapon_prev),
 		/* Normalised here so everything downstream works in -1 to 1 and the
 		   deadzone is taken out once, in the one place that reads the pad. */
-		.stick_x = controller_getStickNormalized(controller).x,
-		.stick_y = controller_getStickNormalized(controller).y,
+		.stick_x = controller::getStickNormalized(controller).x,
+		.stick_y = controller::getStickNormalized(controller).y,
 	};
 }
 
-void character3dControl_update(Character3D *character, MovementCommand *cmd, const Character3DControls *actions, float camera_angle_around)
+void update(Character3D *character, MovementCommand *cmd, const Controls *actions, float camera_angle_around)
 {
-	character3dControl_setWeaponSwitch(character, actions);
-	character3dControl_setRoll(character, cmd, actions);
-	character3dControl_setJump(character, cmd, actions);
-	character3dControl_setStrafe(character, cmd, actions, camera_angle_around);
-	character3dControl_setAiming(character, cmd, actions);
-	character3dControl_setLocomotionWithStick(character, cmd, actions, camera_angle_around);
+	setWeaponSwitch(character, actions);
+	setRoll(character, cmd, actions);
+	setJump(character, cmd, actions);
+	setStrafe(character, cmd, actions, camera_angle_around);
+	setAiming(character, cmd, actions);
+	setLocomotionWithStick(character, cmd, actions, camera_angle_around);
 
 	/* After the stick: the climb is read off the heading it just wrote. */
-	character3dControl_setClimb(character, cmd, actions);
+	setClimb(character, cmd, actions);
+}
+
+}
+}
+
 }

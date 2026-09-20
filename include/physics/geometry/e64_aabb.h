@@ -27,6 +27,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 typedef struct AABB {
 	Vector3 min;
@@ -43,5 +44,7 @@ AABB  aabb_combine(const AABB *a, const AABB *b);
 Vector3 aabb_closestToPoint  (const AABB *a, const Vector3 *p);
 Vector3 aabb_closestToSegment(const AABB *a, const Vector3 *p, const Vector3 *q);
 
+
+}
 
 #endif

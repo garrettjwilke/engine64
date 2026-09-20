@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <t3d/t3dskeleton.h>
 
+namespace e64 {
+
 #define SKELETON_MODIFIER_MAX 8
 
 typedef void (*SkeletonModifierFn)(T3DSkeleton *skeleton, void *context);
@@ -36,5 +38,7 @@ void skeletonModifiers_apply(SkeletonModifiers *modifiers, T3DSkeleton *skeleton
 /* Model-space pose of a bone, composed from the local TRS chain: current
    frame, unlike bone->matrix which lags one skeleton update behind. */
 void skeleton_getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation);
+
+}
 
 #endif

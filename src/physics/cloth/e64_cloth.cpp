@@ -4,6 +4,7 @@
 
 #include "physics/cloth/e64_cloth.h"
 
+namespace e64 {
 
 /*
 	Edge extraction: one constraint per unique mesh edge. On a triangulated
@@ -386,4 +387,6 @@ void cloth_delete(Cloth *cloth)
 	free(cloth->constraint);
 
 	*cloth = (Cloth){};
+}
+
 }

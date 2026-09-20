@@ -27,6 +27,7 @@
 #include "resource/e64_resource.h"
 #include "viewport/e64_viewport.h"
 
+namespace e64 {
 
 static uint16_t stage2d_readU16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static uint32_t stage2d_readU32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
@@ -210,7 +211,7 @@ void stage2d_setRenderContext(const Stage2D *stage, const Camera2D *camera, Rend
 			const Element2D *element = &stage->element[layer->element_start + i];
 
 			Vector2 world  = { origin.x + element->position.x, origin.y + element->position.y };
-			Vector2 screen = camera2d_toScreen(camera, world, layer->parallax);
+			Vector2 screen = camera2d::toScreen(camera, world, layer->parallax);
 
 			if (screen.x < -margin || screen.x > screen_width ||
 			    screen.y < -margin || screen.y > screen_height) continue;
@@ -254,4 +255,6 @@ bool stage2d_isSolid(const Stage2D *stage, int32_t x, int32_t y)
 		if (tile && (stage->solid[tile >> 3] >> (tile & 7)) & 1) return true;
 	}
 	return false;
+}
+
 }

@@ -30,6 +30,7 @@
 #include "physics/collision/e64_contact.h"
 #include "physics/collision/e64_contact_solver.h"
 
+namespace e64 {
 
 void physicsIsland_addBody(PhysicsIsland *island, RigidBody *body)
 {
@@ -183,4 +184,6 @@ void physicsIsland_solve(PhysicsIsland *island)
 			}
 		}
 	}
+}
+
 }

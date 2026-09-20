@@ -24,6 +24,7 @@
 #include "physics/math/e64_vector3.h"
 #include "physics/collision/e64_collision_mesh.h"
 
+namespace e64 {
 
 /* Authoring-side description. The particles are seeded from a welded
    collision mesh of the same model, so the topology comes from the asset
@@ -102,5 +103,7 @@ void cloth_blendRenderState(Cloth *cloth, float t);
 
 void cloth_delete(Cloth *cloth);
 
+
+}
 
 #endif

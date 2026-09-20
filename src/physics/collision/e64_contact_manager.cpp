@@ -31,6 +31,7 @@
 #include "physics/shapes/e64_physics_shape.h"
 #include "physics/geometry/e64_half_space.h"   /* vector3_computeBasis */
 
+namespace e64 {
 
 void contactManager_init(ContactManager *m, struct PhysicsStack *stack)
 {
@@ -265,4 +266,6 @@ void contactManager_testCollisions(ContactManager *m)
 
 		constraint = constraint->next;
 	}
+}
+
 }

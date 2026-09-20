@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <libdragon.h>
 
+namespace e64 {
+
 /* Distance fog: computed per vertex on the RSP and blended by the RDP.
    Range is in metres along the view axis, and only reaches what the camera
    planes already let through. */
@@ -31,5 +33,7 @@ Fog* fog_get(void);
 
 void fog_init(const FogDef* def);
 void fog_set(Fog* fog);
+
+}
 
 #endif

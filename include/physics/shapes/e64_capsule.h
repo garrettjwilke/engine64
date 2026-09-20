@@ -10,6 +10,7 @@
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 struct MassData;
 
@@ -47,5 +48,7 @@ void  capsuleDef_setRestitution(CapsuleDef *d, float r);
 void  capsuleDef_setDensity(CapsuleDef *d, float rho);
 void  capsuleDef_setSensor(CapsuleDef *d, int s);
 
+
+}
 
 #endif

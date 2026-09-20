@@ -32,6 +32,7 @@
 #include "physics/body/e64_rigid_body.h"
 #include "physics/math/e64_math_functions.h"    /* segment_closestToPoint */
 
+namespace e64 {
 
 static inline int trackFaceAxis(int32_t *axis, int32_t n, float s, float *s_max,
                                  Vector3 normal, Vector3 *axis_normal)
@@ -1288,4 +1289,6 @@ void collision(ContactManifold *m, PhysicsShape *a, PhysicsShape *b)
 		   reading whatever the manifold happened to hold. */
 		if (m->contact_count) m->normal = vector3_inverted(&m->normal);
 	}
+}
+
 }

@@ -30,6 +30,7 @@
 #include "physics/shapes/e64_physics_shape.h"
 #include "physics/memory/e64_physics_memory.h"
 
+namespace e64 {
 
 /* Forward declaration — defined in contact_manager.c. */
 void contactManager_addContact(ContactManager *m, PhysicsShape *A, PhysicsShape *B);
@@ -173,4 +174,6 @@ int broadPhase_testOverlap(const BroadPhase *bp, int32_t A, int32_t B)
 	AABB a = dynamicAABBTree_getFatAABB(&bp->tree, A);
 	AABB b = dynamicAABBTree_getFatAABB(&bp->tree, B);
 	return aabb_overlaps(&a, &b);
+}
+
 }

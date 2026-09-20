@@ -9,10 +9,13 @@
 #include "viewport/e64_viewport.h"
 #include "game/e64_game.h"
 
+namespace e64 {
+
+namespace controls {
 
 /* Whether the binding names that prefab. A layout can name several bodies,
    and which of them is there is the scene's to decide. */
-static bool binding3d_namesPrefab(const Character3DControlBinding *binding, const Prefab3D *prefab)
+static bool namesPrefab(const character3d::ControlBinding *binding, const Prefab3D *prefab)
 {
 	for (uint8_t i = 0; i < binding->character_count; i++)
 		if (binding->character[i] == prefab) return true;
@@ -20,7 +23,7 @@ static bool binding3d_namesPrefab(const Character3DControlBinding *binding, cons
 	return false;
 }
 
-static bool binding2d_namesPrefab(const Character2DControlBinding *binding, const Prefab2D *prefab)
+static bool namesPrefab(const character2d::ControlBinding *binding, const Prefab2D *prefab)
 {
 	for (uint8_t i = 0; i < binding->character_count; i++)
 		if (binding->character[i] == prefab) return true;
@@ -29,7 +32,7 @@ static bool binding2d_namesPrefab(const Character2DControlBinding *binding, cons
 }
 
 
-void controls_bind(const ControlsDef *controls, const Scene3DDef *scene)
+void bind(const Def *controls, const Scene3DDef *scene)
 {
 	if (controls == NULL || scene == NULL) return;
 
@@ -50,8 +53,8 @@ void controls_bind(const ControlsDef *controls, const Scene3DDef *scene)
 		const Prefab3D *prefab = scene->prefab[i].prefab;
 		if (prefab == NULL || prefab->type != PREFAB3D_CHARACTER) continue;
 
-		if (binding3d_namesPrefab(controls->character3d, prefab)) {
-			player_setCharacter3D(scene3d_getCharacter3D(index), controls->character3d);
+		if (namesPrefab(controls->character3d, prefab)) {
+			player::setCharacter3D(scene3d_getCharacter3D(index), controls->character3d);
 			return;
 		}
 		index++;
@@ -60,7 +63,7 @@ void controls_bind(const ControlsDef *controls, const Scene3DDef *scene)
 
 /* The same on the 2D side, where the prefabs are spread across the layers and
    the characters come out in the order those are walked. */
-void controls_bind2D(const ControlsDef *controls, const Scene2DDef *scene)
+void bind2D(const Def *controls, const Scene2DDef *scene)
 {
 	if (controls == NULL || scene == NULL) return;
 	if (controls->character2d == NULL || controls->character2d->character_count == 0) return;
@@ -75,8 +78,8 @@ void controls_bind2D(const ControlsDef *controls, const Scene2DDef *scene)
 			const Prefab2D *prefab = layer->prefab[p].prefab;
 			if (prefab == NULL || prefab->type != PREFAB2D_CHARACTER) continue;
 
-			if (binding2d_namesPrefab(controls->character2d, prefab)) {
-				player_setCharacter2D(scene2d_getCharacter2D(index), controls->character2d);
+			if (namesPrefab(controls->character2d, prefab)) {
+				player::setCharacter2D(scene2d_getCharacter2D(index), controls->character2d);
 				return;
 			}
 			index++;
@@ -84,40 +87,48 @@ void controls_bind2D(const ControlsDef *controls, const Scene2DDef *scene)
 	}
 }
 
+}
 
-void player_setCharacter3DControl(PlayerID id, Viewport *viewport)
+
+namespace player {
+
+void setCharacter3DControl(PlayerID id, Viewport *viewport)
 {
-	Player *player = &player_get()[id];
-	if (player->type != PLAYER_CHARACTER_3D) return;
+	Player *player = &get()[id];
+	if (player->type != CHARACTER_3D) return;
 	if (player->character3d.character == NULL || player->character3d.control == NULL) return;
 
 	/* Read where it is used: what the controller is doing this frame is worth
 	   nothing on the next one. */
-	Character3DControls controls;
-	character3dControls_read(&controls, player->character3d.control);
+	character3d::Controls controls;
+	character3d::control::read(&controls, player->character3d.control);
 
-	character3dControl_update(
+	character3d::control::update(
 		player->character3d.character,
 		&player->character3d.cmd,
 		&controls,
-		camera_getAngleAround(&viewport->camera, &player->character3d.character->entity->transform.position)
+		camera::getAngleAround(&viewport->camera, &player->character3d.character->entity->transform.position)
 	);
 }
 
 /* No camera to measure against: the 2D body's axis is the screen's, and left
    is left however the scene scrolls. */
-void player_setCharacter2DControl(PlayerID id)
+void setCharacter2DControl(PlayerID id)
 {
-	Player *player = &player_get()[id];
-	if (player->type != PLAYER_CHARACTER_2D) return;
+	Player *player = &get()[id];
+	if (player->type != CHARACTER_2D) return;
 	if (player->character2d.character == NULL || player->character2d.control == NULL) return;
 
-	Character2DControls controls;
-	character2dControls_read(&controls, player->character2d.control);
+	character2d::Controls controls;
+	character2d::control::read(&controls, player->character2d.control);
 
-	character2dControl_update(
+	character2d::control::update(
 		player->character2d.character,
 		&player->character2d.cmd,
 		&controls
 	);
+}
+
+}
+
 }

@@ -4,14 +4,17 @@
 #include "camera/e64_camera.h"
 #include "camera/e64_spring_arm.h"
 
+namespace e64 {
 
-static void (*camera_handler[CAMERA_TYPE_COUNT])(Camera *, Vector3 *, float) = {
-	[CAMERA_TYPE_SPRING_ARM] = cameraSpringArm_update,
+namespace camera {
+
+static void (*handler[CAMERA_TYPE_COUNT])(Camera *, Vector3 *, float) = {
+	[CAMERA_TYPE_SPRING_ARM] = springArm::update,
 };
 
-void camera_init(Camera *camera)
+void init(Camera *camera)
 {
-	/* Lens and placement come from the scene's CameraDef; position and target
+	/* Lens and placement come from the scene's camera::Def; position and target
 	   are one unit apart so the view matrix is not degenerate before the first
 	   update places them. */
 	*camera = (Camera){
@@ -21,15 +24,15 @@ void camera_init(Camera *camera)
 	};
 }
 
-void camera_reset(Camera *camera)
+void reset(Camera *camera)
 {
-	camera_init(camera);
+	init(camera);
 }
 
 /* horizontal yaw of the view direction, in the yaw convention of the engine;
    measured from the view (position -> target) so lateral offsets like the
    shoulder cancel out instead of skewing the angle */
-float camera_getAngleAround(const Camera *camera, const Vector3 *point)
+float getAngleAround(const Camera *camera, const Vector3 *point)
 {
 	(void)point;
 
@@ -42,7 +45,7 @@ float camera_getAngleAround(const Camera *camera, const Vector3 *point)
 }
 
 /* The camera's right hand side on the ground plane. */
-Vector3 camera_getRight(const Camera *camera)
+Vector3 getRight(const Camera *camera)
 {
 	float dx = camera->target.x - camera->position.x;
 	float dy = camera->target.y - camera->position.y;
@@ -57,7 +60,7 @@ Vector3 camera_getRight(const Camera *camera)
 
 /* Starts a transition to whatever center the camera is fed next, gliding out of
    the given point. Passing a duration of zero cuts straight to the new target. */
-void camera_setViewTarget(Camera *camera, const Vector3 *from, float duration)
+void setViewTarget(Camera *camera, const Vector3 *from, float duration)
 {
 	camera->blend_from     = *from;
 	camera->blend_elapsed  = 0.0f;
@@ -68,7 +71,7 @@ void camera_setViewTarget(Camera *camera, const Vector3 *from, float duration)
    in centimetres): the cut zone ends at 20% of the way to the pivot, so it
    never reaches the pieces in view. The far rides the arm whole, so the
    back plane keeps its authored distance past the pivot at any zoom. */
-void camera_fitClipping(Camera *camera, const struct Scene3D *scene)
+void fitClipping(Camera *camera, const struct Scene3D *scene)
 {
 	if (!camera->auto_clipping) return;
 	if (camera->type != CAMERA_TYPE_SPRING_ARM) return;
@@ -81,7 +84,7 @@ void camera_fitClipping(Camera *camera, const struct Scene3D *scene)
 	camera->far_clipping  = arm + camera->base_far_clipping;
 }
 
-void camera_update(Camera *camera, Vector3 *center, const struct Scene3D *scene, float dt)
+void update(Camera *camera, Vector3 *center, const struct Scene3D *scene, float dt)
 {
 	if (camera->type == CAMERA_TYPE_NONE) return;
 
@@ -102,9 +105,13 @@ void camera_update(Camera *camera, Vector3 *center, const struct Scene3D *scene,
 		center = &blended;
 	}
 
-	camera_handler[camera->type](camera, center, dt);
+	handler[camera->type](camera, center, dt);
 
 	/* The flags read here are the previous frame's cull: the planes trail
 	   the visibility by one frame. */
-	camera_fitClipping(camera, scene);
+	fitClipping(camera, scene);
+}
+
+}
+
 }

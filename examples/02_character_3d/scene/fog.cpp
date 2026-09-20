@@ -11,6 +11,8 @@
 */
 #include "scene3d/e64_fog.h"
 
+using namespace e64;
+
 
 extern const FogDef fog = {
 

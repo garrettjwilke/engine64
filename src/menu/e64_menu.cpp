@@ -1,6 +1,7 @@
 #include "menu/e64_menu.h"
 #include "control/e64_controller.h"
 
+namespace e64 {
 
 static MenuStack menuStack;
 
@@ -72,13 +73,13 @@ const MenuDef *menu_get(void)
 	return menuStack.frame[menuStack.top - 1].def;
 }
 
-void menu_update(const MenuControlBinding *binding)
+void menu_update(const menu::ControlBinding *binding)
 {
 	const MenuDef *def = menu_get();
 	if (def == NULL || binding == NULL) return;
 
-	MenuControls controls;
-	menuControls_map(&controls, &controller_get()[binding->player], binding);
+	menu::Controls controls;
+	menu::control::read(&controls, &controller::get()[binding->player], binding);
 
 	if (def->item_count > 0) {
 		if (controls.up)   menuStack_moveIndex(-1, (int8_t)def->item_count - 1);
@@ -102,4 +103,6 @@ void menu_update(const MenuControlBinding *binding)
 		if (menuStack.top > 1)   menu_back();
 		else if (def->cancel)    def->cancel();
 	}
+}
+
 }

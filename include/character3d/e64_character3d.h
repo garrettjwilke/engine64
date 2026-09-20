@@ -20,43 +20,58 @@
 #include "character3d/e64_character3d_spring_bone.h"
 #include "character3d/e64_character3d_sound.h"
 
+namespace e64 {
+
 typedef struct Entity3D Entity3D;
 
-typedef struct Character3DDef {
+/* An aggregate on purpose: no constructor, public data. character3d::create
+   builds it with a designated initializer over one allocation that also
+   carries the spring bones behind it. */
+class Character3D {
+public:
 
-	const Character3DMovementSettings *movement_settings;
-	const Character3DAnimationDef *animation_def;
-	const Character3DColliderSettings *collider_settings;
-	const Character3DWeaponsDef *weapons_def;
+	Entity3D                   *entity;
+	character3d::KinematicBody  body;
+	character3d::Collider       collider;
+	character3d::Movement       movement;
+	character3d::Animation      animation;
+	character3d::Weapons        weapons;
+	character3d::Aiming         aiming;
+	character3d::Sound          sound;
+	SkeletonModifiers           skeleton_modifiers;
+	character3d::Stats          stats;
+
+	void updateMovement(character3d::MovementCommand *cmd, float dt);
+	void setAnimation();
+};
+
+
+namespace character3d {
+
+typedef struct Def {
+
+	const MovementSettings *movement_settings;
+	const AnimationDef *animation_def;
+	const ColliderSettings *collider_settings;
+	const WeaponsDef *weapons_def;
 	const SpringBonesDef *spring_bones;   /* optional: array of sets, one tuning each, count 0 terminates */
-	const Character3DAimingSettings *aiming_settings;   /* optional: spine chain for the camera-pitch bend */
-	const Character3DSoundDef *sound_def;
-	const Character3DStatsSettings *stats_settings;
+	const AimingSettings *aiming_settings;   /* optional: spine chain for the camera-pitch bend */
+	const SoundDef *sound_def;
+	const StatsSettings *stats_settings;
 
-} Character3DDef;
-
-typedef struct Character3D {
-
-	Entity3D             *entity;
-	KinematicBody         body;
-	Character3DCollider   collider;
-	Character3DMovement   movement;
-	Character3DAnimation  animation;
-	Character3DWeapons    weapons;
-	Character3DAiming     aiming;
-	Character3DSound      sound;
-	SkeletonModifiers     skeleton_modifiers;
-	Character3DStats      stats;
-
-} Character3D;
+} Def;
 
 
-Character3D *character3d_create(const Character3DDef *def, Entity3D *entity);
-void character3d_delete(Character3D *character);
+Character3D *create(const Def *def, Entity3D *entity);
+void destroy(Character3D *character);
 
 /* Model-space pose of a bone, composed from the local TRS chain so it is
    current-frame (bone->matrix would lag one skeleton update behind). */
-void character3d_getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation);
+void getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation);
 
+}
+
+
+}
 
 #endif

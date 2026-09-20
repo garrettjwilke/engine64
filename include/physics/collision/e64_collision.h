@@ -33,6 +33,7 @@
 #include "physics/collision/e64_contact.h"
 #include "physics/geometry/e64_triangle.h"
 
+namespace e64 {
 
 void collision(ContactManifold *m, PhysicsShape *a, PhysicsShape *b);
 
@@ -64,5 +65,7 @@ void capsuleToStaticSphere(ContactManifold *m, const Capsule *capsule, const Tra
 void capsuleToStaticCapsule(ContactManifold *m, const Capsule *capsule, const Transform *capsule_world,
                             const Capsule *other, const Transform *other_world);
 
+
+}
 
 #endif

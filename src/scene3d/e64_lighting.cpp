@@ -9,6 +9,7 @@
 #include "engine/e64_common.h"               /* RENDER_SCALE */
 #include "scene3d/e64_lighting.h"
 
+namespace e64 {
 
 static Light light;
 
@@ -61,4 +62,6 @@ void light_set(const Light *light)
 	}
 done:
 	t3d_light_set_count(count);
+}
+
 }

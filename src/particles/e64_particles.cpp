@@ -12,6 +12,7 @@
 #include "viewport/e64_viewport.h"
 #include "particles/e64_particles.h"
 
+namespace e64 {
 
 #define PARTICLES_MAX 8
 
@@ -110,4 +111,6 @@ void particleBuffer_draw(const ParticleBuffer *buffer, const T3DMat4FP *matrix)
 void particleBuffer_drawTextured(const ParticleBuffer *buffer, const T3DMat4FP *matrix)
 {
 	particleBuffer_drawWithMatrix(buffer, matrix, true);
+}
+
 }

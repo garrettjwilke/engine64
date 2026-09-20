@@ -10,15 +10,18 @@
 #include "character3d/e64_character3d.h"
 #include "character3d/e64_character3d_animation.h"
 
+namespace e64 {
+
+namespace character3d {
 
 /* SkeletonModifierFn: the weapon posing; context is the Character3D. */
-static void character3d_weaponModifier(T3DSkeleton *skeleton, void *context)
+static void weaponModifier(T3DSkeleton *skeleton, void *context)
 {
 	(void)skeleton;
-	character3dWeapon_setBones((Character3D *)context);
+	weapon::setBones((Character3D *)context);
 }
 
-Character3D *character3d_create(const Character3DDef *def, Entity3D *entity)
+Character3D *create(const Def *def, Entity3D *entity)
 {
 	/* The spring bone states ride in the same allocation; their only
 	   references are the modifier contexts, freed with the character. */
@@ -33,34 +36,34 @@ Character3D *character3d_create(const Character3DDef *def, Entity3D *entity)
 	*character = (Character3D){
 		.entity    = entity,
 		.body      = (KinematicBody){ .position = entity->transform.position, .rotation = entity->transform.rotation },
-		.movement  = (Character3DMovement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT_STATE_IDLE },
-		.animation = (Character3DAnimation){ .def = def->animation_def },
-		.weapons   = (Character3DWeapons){ .def = def->weapons_def, .drawn = CHARACTER3D_WEAPON_DRAWN_NONE },
+		.movement  = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT_STATE_IDLE },
+		.animation = { .def = def->animation_def },
+		.weapons   = (Weapons){ .def = def->weapons_def, .drawn = CHARACTER3D_WEAPON_DRAWN_NONE },
 		/* No previous frame to compare against yet: a cycle of -1 crosses
 		   nothing, and the body starts standing on the floor. */
-		.sound     = (Character3DSound){ .def = def->sound_def, .previous_cycle = -1.0f, .previous_grounded = true },
-		.stats     = (Character3DStats){ .settings = def->stats_settings, .stamina = 1.0f },
+		.sound     = (Sound){ .def = def->sound_def, .previous_cycle = -1.0f, .previous_grounded = true },
+		.stats     = (Stats){ .settings = def->stats_settings, .stamina = 1.0f },
 	};
 
-	character3dCollider_init(&character->collider,
+	collider::init(&character->collider,
 		def->collider_settings->radius,
 		(def->collider_settings->height - 2.0f * def->collider_settings->radius) * 0.5f);
-	character3dCollider_setVertical(&character->collider, &character->body.position);
+	collider::setVertical(&character->collider, &character->body.position);
 
 	/* A def without animations (a vehicle) skips the whole graph: the mesh
 	   keeps a NULL skeleton and draws through the model object path. */
 	if (def->animation_def) {
-		character3dAnimation_initGraph(character, def->animation_def);
+		character->animation.initGraph(*character);
 		entity->mesh->skeleton = &character->animation.main;
 	}
 
 	/* Aim before the weapons: the bow has to follow a spine already bent. */
 	if (def->aiming_settings) {
-		character3dAim_init(character, def->aiming_settings);
-		skeletonModifiers_add(&character->skeleton_modifiers, character3dAim_apply, character);
+		aim::init(character, def->aiming_settings);
+		skeletonModifiers_add(&character->skeleton_modifiers, aim::apply, character);
 	}
 
-	skeletonModifiers_add(&character->skeleton_modifiers, character3d_weaponModifier, character);
+	skeletonModifiers_add(&character->skeleton_modifiers, weaponModifier, character);
 
 	if (spring_bones > 0) {
 		SpringBone *spring_bone = (SpringBone *)(character + 1);
@@ -100,7 +103,7 @@ Character3D *character3d_create(const Character3DDef *def, Entity3D *entity)
 	return character;
 }
 
-void character3d_getBoneModelSpacePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation)
+void getBoneModelSpacePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation)
 {
 	uint16_t chain[16];
 	int depth = 0;
@@ -131,7 +134,7 @@ void character3d_getBoneModelSpacePose(const T3DSkeleton *skeleton, int16_t bone
 
 /* Model-space pose of a bone, composed from the local TRS chain so it is
    current-frame (bone->matrix would lag one skeleton update behind). */
-void character3d_getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation)
+void getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation)
 {
 	uint16_t chain[16];
 	int depth = 0;
@@ -159,9 +162,9 @@ void character3d_getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 
 	}
 }
 
-void character3d_delete(Character3D *character)
+void destroy(Character3D *character)
 {
-	Character3DAnimation *animation = &character->animation;
+	Animation *animation = &character->animation;
 
 	if (animation->def) {
 		for (int i = 0; i < animation->def->clip_count; i++) {
@@ -180,4 +183,8 @@ void character3d_delete(Character3D *character)
 	free(animation->node_state);
 	free(animation->node_active);
 	free(character);
+}
+
+}
+
 }

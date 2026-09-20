@@ -11,7 +11,7 @@
 
 	What this example adds over example 01:
 
-		a Prefab3D of type PREFAB3D_CHARACTER, carrying a Character3DDef
+		a Prefab3D of type PREFAB3D_CHARACTER, carrying a character3d::Def
 		a collision mesh on the room, so the body has something to stand on
 		a control binding per piece that moves, named by the state
 		an update that reads the seat, moves the body and follows it
@@ -34,12 +34,14 @@
 #include "time/e64_time.h"               /* frame delta                      */
 #include "debug/e64_debug.h"             /* on-screen debug lines            */
 
+using namespace e64;
+
 
 /* Light, fog and camera are declared in scene/, one file each, and referenced
    here to build the scene. The placement table is further down. */
 extern const LightDef  light;
 extern const FogDef    fog;
-extern const CameraDef camera;
+extern const camera::Def camera;
 
 
 /* --- the room --------------------------------------------------------------
@@ -60,7 +62,7 @@ static const PhysicsShapeDef room_shapes[] = {
 	{ .type = SHAPE_MESH, .mesh = { .path = "rom:/collision/room.collision" }},
 };
 
-static const Entity3DColliderDef room_collider = { room_shapes, 1 };
+static const entity3d::ColliderDef room_collider = { room_shapes, 1 };
 
 static const Prefab3D room = {
 
@@ -88,12 +90,12 @@ static const Prefab3D room = {
    speeds, dropping the proportional reading: the stick selects a gait by
    crossing its threshold, and the body accelerates towards that gait's speed at
    its response rate. */
-static const Character3DGaitSettings gait[] = {
+static const character3d::GaitSettings gait[] = {
 
 	{ .target_speed = 7.0f, .response_rate = 8.0f, .rotation_response_rate = 12.0f },
 };
 
-static const Character3DMovementSettings movement = {
+static const character3d::MovementSettings movement = {
 
 	/* How fast the body sheds speed and settles its facing with no input. */
 	.idle_response_rate          = 12.0f,
@@ -106,7 +108,7 @@ static const Character3DMovementSettings movement = {
 	   frame the button goes down and keeps rising while it is held; JUMP_CHARGE
 	   crouches first and launches on release, with the crouch deciding the
 	   height. */
-	.jump_mode               = JUMP_SNAP,
+	.jump_mode               = character3d::JUMP_SNAP,
 	.jump_response_rate      = 10.0f,
 	.jump_base_speed         =  9.0f,
 
@@ -126,7 +128,7 @@ static const Character3DMovementSettings movement = {
 
 /* The capsule the body collides with, standing upright. Radius and height in
    metres, height being the whole capsule end to end. */
-static const Character3DColliderSettings collider = {
+static const character3d::ColliderSettings collider = {
 
 	.radius = 0.35f,
 	.height = 1.80f,
@@ -135,7 +137,7 @@ static const Character3DColliderSettings collider = {
 /* A character is assembled from independent blocks of settings, and only the
    ones it needs. Animation, weapons, aiming, sound, stats and spring bones are
    all optional and left out here: this body walks and jumps, nothing else. */
-static const Character3DDef character3d_def = {
+static const character3d::Def character3d_def = {
 
 	.movement_settings = &movement,
 	.collider_settings = &collider
@@ -164,10 +166,13 @@ static const Prefab3D character = {
 
 /* Naming a player here also decides what the camera follows: it tracks the
    body seated in that slot, with no target passed in from the game. */
-static const CameraControlBinding camera_binding = {
+static const camera::ControlBinding camera_binding = {
 
 	.player = PLAYER_1,
-	.camera = &camera,
+
+	/* The engine has a namespace of this name (camera::), so with `using
+	   namespace e64` the variable is reached through the global scope. */
+	.camera = &::camera,
 
 	.pan_left  = BTN_C_LEFT,
 	.pan_right = BTN_C_RIGHT,
@@ -186,7 +191,7 @@ static const CameraControlBinding camera_binding = {
    here, since this example places one character. */
 static const Prefab3D *const character3d_prefab[] = { &character };
 
-static const Character3DControlBinding character3d_binding = {
+static const character3d::ControlBinding character3d_binding = {
 
 	.player          = PLAYER_1,
 	.character       = character3d_prefab,
@@ -195,7 +200,7 @@ static const Character3DControlBinding character3d_binding = {
 	.jump = BTN_A,
 };
 
-static const ControlsDef controls = {
+static const controls::Def controls = {
 
 	.camera      = &camera_binding,
 	.character3d = &character3d_binding,
@@ -224,7 +229,7 @@ static Scene3DDef scene = {
 
 	.light  = &light,
 	.fog    = &fog,
-	.camera = &camera,
+	.camera = &::camera,
 
 	.prefab       = scene_prefabs,
 	.prefab_count = E64_ARRAY_COUNT(scene_prefabs),
@@ -246,8 +251,8 @@ static void gameplay3d_update(void)
 	   stick and turns them into a movement command, rotated by the camera
 	   angle so pushing up always walks away from the camera. The second runs
 	   that command through the movement settings and produces velocity. */
-	player_setCharacter3DControl(PLAYER_1, viewport);
-	player_update();
+	player::setCharacter3DControl(PLAYER_1, viewport);
+	player::update();
 
 	/* Characters resolve their own collision and write their own matrix for
 	   this frame's buffer. Call it once per frame, after the movement step. */
@@ -257,7 +262,7 @@ static void gameplay3d_update(void)
 	   scene3d_updateCamera. The binding names a player, and the camera follows
 	   that player's body on its own, so there is no target to supply here.
 	   Example 01 does the other thing: no body, so the game supplies a point. */
-	cameraControl_update(&viewport->camera, viewport->camera.binding, scene3d_get(), time_get()->delta);
+	camera::control::update(&viewport->camera, viewport->camera.binding, scene3d_get(), time_get()->delta);
 	viewport_setPerspectiveCamera();
 
 	/* Debug lines have to be rewritten every frame; nothing persists. */
@@ -268,7 +273,7 @@ static void gameplay3d_update(void)
 	debugUI_set(5, "DPAD fov");
 
 	debugUI_showFPS();
-	debugUI_setRight(0, "arm %.1f", cameraSpringArm_getLength(&viewport->camera));
+	debugUI_setRight(0, "arm %.1f", camera::springArm::getLength(&viewport->camera));
 	debugUI_setRight(1, "fov %.1f", viewport->camera.field_of_view);
 }
 
@@ -281,7 +286,7 @@ static const GameStateDef states[STATE_COUNT] = {
 		/* Wired once, after the scene is loaded and before the first update:
 		   the player is seated on the body the binding names, and the camera
 		   answers to the buttons that name it. */
-		.controls      = &controls,
+		.controls      = &::controls,
 
 		/* The engine opens no screen by itself, so every state that draws has
 		   to name a mode. */

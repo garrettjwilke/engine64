@@ -33,6 +33,7 @@
 #include "physics/math/e64_math_common.h"
 #include "physics/shapes/e64_physics_shape.h"
 
+namespace e64 {
 
 struct RigidBody;
 struct ContactConstraint;
@@ -133,5 +134,7 @@ static inline float contact_mixFriction(const PhysicsShape *A, const PhysicsShap
 	return sqrtf(A->friction * B->friction);
 }
 
+
+}
 
 #endif

@@ -32,6 +32,7 @@
 #include "physics/memory/e64_physics_memory.h"
 #include "physics/e64_physics_settings.h"
 
+namespace e64 {
 
 static inline int imax(int a, int b) { return a > b ? a : b; }
 
@@ -446,4 +447,6 @@ void dynamicAABBTree_queryRay(const DynamicAABBTree *t, void *cb, PhysicsQueryCa
 			stack[sp++] = n->right;
 		}
 	}
+}
+
 }

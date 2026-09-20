@@ -25,6 +25,7 @@
 #include "physics/memory/e64_physics_stack.h"
 #include "physics/memory/e64_physics_memory.h"
 
+namespace e64 {
 
 void physicsStack_init(PhysicsStack *s)
 {
@@ -96,4 +97,6 @@ void physicsStack_free(PhysicsStack *s, void *data)
 	s->index      -= (uint32_t)entry->size;
 	s->allocation -= entry->size;
 	--s->entry_count;
+}
+
 }

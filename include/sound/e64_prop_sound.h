@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+namespace e64 {
+
 struct PhysicsWorld;
 
 /* What wakes a sound of a prop. A sound is declared with one of these in its
@@ -22,5 +24,7 @@ typedef enum {
    PROP_SOUND_WATER_ENTRY on its own entity, from where the body entered,
    scaled by the plunge speed. Call after physics_update. */
 void propSound_update(struct PhysicsWorld *world);
+
+}
 
 #endif

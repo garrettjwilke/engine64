@@ -1,15 +1,19 @@
 #include "character3d/e64_character3d.h"
 #include "physics/math/e64_math_functions.h"
 
+namespace e64 {
+
+namespace character3d {
+namespace stats {
 
 /* Running at the top gait or swimming fast drains stamina, anything else
    recovers it. Hitting zero flags the body tired, and the movement caps
    locomotion and swim speed off that flag until stamina is back at full. */
-void character3dStats_update(Character3D *character, const MovementCommand *cmd, float dt)
+void update(Character3D *character, const MovementCommand *cmd, float dt)
 {
-	const Character3DMovement *movement = &character->movement;
-	Character3DStats *stats = &character->stats;
-	const Character3DStatsSettings *settings = stats->settings;
+	const Movement *movement = &character->movement;
+	Stats *stats = &character->stats;
+	const StatsSettings *settings = stats->settings;
 
 	/* A character that declares none spends nothing: there is no stamina to
 	   drain and nothing caps its speed. */
@@ -28,4 +32,9 @@ void character3dStats_update(Character3D *character, const MovementCommand *cmd,
 
 	float rate = running && !stats->tired ? -settings->stamina_drain_rate : settings->stamina_regen_rate;
 	stats->stamina = clampf(stats->stamina + rate * dt, 0.0f, 1.0f);
+}
+
+}
+}
+
 }

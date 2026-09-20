@@ -25,6 +25,7 @@
 #include "physics/memory/e64_physics_paged_allocator.h"
 #include "physics/memory/e64_physics_memory.h"
 
+namespace e64 {
 
 void physicsPagedAllocator_init(PhysicsPagedAllocator *a, int32_t element_size, int32_t elements_per_page)
 {
@@ -96,4 +97,6 @@ void physicsPagedAllocator_clear(PhysicsPagedAllocator *a)
 	a->free_list  = NULL;
 	a->page_count = 0;
 	a->pages      = NULL;
+}
+
 }

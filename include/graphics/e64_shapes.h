@@ -4,6 +4,7 @@
 #include <libdragon.h>
 #include "physics/math/e64_vector2.h"
 
+namespace e64 {
 
 typedef enum {
 
@@ -24,5 +25,7 @@ typedef struct {
 
 
 void shape_drawRectangle(const Rectangle *rect, Vector2 position, Vector2 scale);
+
+}
 
 #endif

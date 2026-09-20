@@ -13,6 +13,8 @@
 
 #include "control/e64_menu_control.h"
 
+namespace e64 {
+
 /* How deep submenus can nest before open is ignored. */
 #define MENU_STACK_MAX 8
 
@@ -84,6 +86,8 @@ const MenuDef *menu_get(void);
 /* One step of the open menu, off the buttons this binding names: the cursor
    moves, a confirmed item runs and opens what it names, and cancel closes the
    level it is on. Call it once per frame from the state that runs the menu. */
-void menu_update(const MenuControlBinding *binding);
+void menu_update(const menu::ControlBinding *binding);
+
+}
 
 #endif

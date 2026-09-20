@@ -2,6 +2,7 @@
 
 #include "physics/math/e64_vector2.h"
 
+namespace e64 {
 
 /* Only the square-root operations live here; the rest of the arithmetic is
    inline in the header. */
@@ -25,4 +26,6 @@ Vector2 vector2_normalized(const Vector2 *v)
 	Vector2 out = *v;
 	vector2_normalize(&out);
 	return out;
+}
+
 }

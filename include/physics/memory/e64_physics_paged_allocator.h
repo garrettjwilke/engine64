@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 
+namespace e64 {
 
 typedef struct PhysicsBlock {
 	struct PhysicsBlock *next;
@@ -55,5 +56,7 @@ void *physicsPagedAllocator_allocate(PhysicsPagedAllocator *a);
 void  physicsPagedAllocator_free(PhysicsPagedAllocator *a, void *data);
 void  physicsPagedAllocator_clear(PhysicsPagedAllocator *a);
 
+
+}
 
 #endif

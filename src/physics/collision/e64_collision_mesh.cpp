@@ -5,6 +5,7 @@
 
 #include "physics/collision/e64_collision_mesh.h"
 
+namespace e64 {
 
 typedef struct RawCollisionHeader {
 	uint32_t tri_count;
@@ -151,4 +152,6 @@ int collisionMesh_raycast(const CollisionMesh *mesh, const Transform *world, Ray
 	raycast->toi    = local.toi;
 	raycast->normal = matrix3_transformVector(&world->rotation, &local.normal);
 	return 1;
+}
+
 }

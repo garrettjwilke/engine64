@@ -24,6 +24,7 @@
 #include "physics/collision/e64_contact.h"
 #include "physics/math/e64_math_common.h"
 
+namespace e64 {
 
 /* Sample columns per box shape: the minimum that tilts on both axes. */
 #define BUOYANCY_BOX_COLUMNS 4
@@ -179,4 +180,6 @@ void buoyancy_apply(struct PhysicsWorld *world, const BuoyancyVolume *volume)
 
 		buoyancy_applyToBody(world, volume, edge->other);
 	}
+}
+
 }

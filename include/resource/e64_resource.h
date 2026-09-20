@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 
+namespace e64 {
 
 /* What kind of file a path is, which picks how it opens and closes. */
 typedef enum {
@@ -43,5 +44,7 @@ void *resource_load(const char *path, ResourceType type, const void *parms);
 /* Lets go of a pointer resource_load handed out. Closes the file when nobody
    else holds it. */
 void resource_unload(void *data);
+
+}
 
 #endif

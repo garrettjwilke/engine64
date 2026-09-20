@@ -10,7 +10,10 @@
 #include "sound/e64_sound.h"
 #include "character3d/e64_character3d.h"
 
-typedef struct Entity3D {
+namespace e64 {
+
+class Entity3D {
+public:
 
 	RenderTransform transform;
 	Mesh *mesh;
@@ -30,21 +33,26 @@ typedef struct Entity3D {
 	Sound   *sound;
 	uint8_t  sound_count;
 
-} Entity3D;
+};
 
+
+struct PhysicsWorld;
+
+
+namespace entity3d {
 
 /* A collider is one or more primitives, each carrying its own offset in its
    .tx. The entity transform and scale apply to all of them, so the group
    stays consistent at any prop size. */
-typedef struct Entity3DColliderDef {
+typedef struct ColliderDef {
 
 	const PhysicsShapeDef *shape;
 	uint8_t                count;
-	
-} Entity3DColliderDef;
+
+} ColliderDef;
 
 
-typedef struct Entity3DDef {
+typedef struct Def {
 
 	const char *model_path;   /* NULL: nothing to draw, a sound placed alone */
 
@@ -61,44 +69,46 @@ typedef struct Entity3DDef {
 	Vector3 position;
 	Vector3 rotation;
 	Vector3 scale;
-	const Character3DDef *character;
+	const character3d::Def *character;
 	const RigidBodyDef      *body;
-	const Entity3DColliderDef *collider;
+	const ColliderDef       *collider;
 	const ClothDef          *cloth;
 	const WaterDef          *water;
 	bool cull;
 
-} Entity3DDef;
+} Def;
 
 
-struct PhysicsWorld;
-
-void entity3d_init(Entity3D *entity, const Entity3DDef *def);
-Entity3D *entity3d_create(const Entity3DDef *def);
-void entity3d_delete(Entity3D *entity);
-void entity3d_setTransform(Entity3D *entity, const KinematicBody *body);
-void entity3d_setMatrix(Entity3D *entity, uint8_t fb_index);
-void entity3d_setMatrixFromBody(Entity3D *entity, uint8_t fb_index);
+void init(Entity3D *entity, const Def *def);
+Entity3D *create(const Def *def);
+void destroy(Entity3D *entity);
+void setTransform(Entity3D *entity, const character3d::KinematicBody *body);
+void setMatrix(Entity3D *entity, uint8_t fb_index);
+void setMatrixFromBody(Entity3D *entity, uint8_t fb_index);
 
 /* Shows or hides one of the objects the prefab declared as a part, by the same
    name. Nothing happens when the entity declared no part by that name. */
-void entity3d_setPartVisible(Entity3D *entity, const char *name, bool visible);
+void setPartVisible(Entity3D *entity, const char *name, bool visible);
 
 /* Draws one of those objects away from where it was modelled, without touching
    the rest of the model. The offset is read in the entity's own space and the
    part keeps following the entity. */
-void entity3d_setPartOffset(Entity3D *entity, const char *name, const RenderTransform *offset);
+void setPartOffset(Entity3D *entity, const char *name, const RenderTransform *offset);
 
 /* Fires a trigger on the entity: one of its sounds declared with that trigger
    plays, picked at random. position NULL plays from where the entity is; a
    given one is in render units. Nothing declared, nothing plays. */
-void entity3d_playSound(const Entity3D *entity, uint8_t trigger, const Vector3 *position, float volume_scale);
+void playSound(const Entity3D *entity, uint8_t trigger, const Vector3 *position, float volume_scale);
 
 /* Def → physics wiring. The caller owns the destinations. */
-Transform entity3d_colliderTransform(const Entity3DDef *def);
+Transform colliderTransform(const Def *def);
 
 /* Builds the entity's body and hangs its collider off it. Without a .body def
    the body comes out static, which is what scenery wants. */
-RigidBody *entity3d_attachPhysics(Entity3D *entity, const Entity3DDef *def, struct PhysicsWorld *world);
+RigidBody *attachPhysics(Entity3D *entity, const Def *def, struct PhysicsWorld *world);
+
+}
+
+}
 
 #endif

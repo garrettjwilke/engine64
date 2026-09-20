@@ -7,11 +7,14 @@
 #include "physics/math/e64_transform.h"
 #include "physics/shapes/e64_physics_shape.h"
 
+namespace e64 {
 
-typedef struct Character3D Character3D;
+class Character3D;
 typedef struct CollisionMesh CollisionMesh;
 typedef struct PhysicsWorld PhysicsWorld;
 
+
+namespace character3d {
 
 typedef struct KinematicBody {
 	Vector3 position;
@@ -26,33 +29,46 @@ typedef struct KinematicBody {
 } KinematicBody;
 
 
-typedef struct Character3DColliderSettings {
+typedef struct ColliderSettings {
 	float radius;
 	float height;
-} Character3DColliderSettings;
+} ColliderSettings;
 
 
-typedef struct Character3DCollider {
+typedef struct Collider {
 	Capsule   shape;
 	Transform world;    /* vertical capsule, position at the capsule center */
-} Character3DCollider;
+} Collider;
 
 
-void character3dCollider_init       (Character3DCollider *collider, float radius, float half_height);
-void character3dCollider_setVertical(Character3DCollider *collider, const Vector3 *position);
+namespace collider {
+
+void init       (Collider *collider, float radius, float half_height);
+void setVertical(Collider *collider, const Vector3 *position);
+
+}
+
+
+namespace physics {
 
 /* Depenetrate against the world's static bodies — every contact classified as
    floor, wall or ceiling, one combined recovery per pass — then snap to the
    floor. Runs after the movement update, before the render sync. The character
    is not simulated by the solver: it reads those shapes and resolves on its
    own. */
-void character3dPhysics_collide(Character3D *character, const PhysicsWorld *world);
+void collide(Character3D *character, const PhysicsWorld *world);
 
 /* The character's standing in the world: created once, written every frame
    after collide, so the solver sees where it ended up and how fast it got
    there. Without this the character passes through every rigid body. */
-void character3dPhysics_createBody(Character3D *character, PhysicsWorld *world);
-void character3dPhysics_syncBody  (Character3D *character);
+void createBody(Character3D *character, PhysicsWorld *world);
+void syncBody  (Character3D *character);
 
+}
+
+}
+
+
+}
 
 #endif

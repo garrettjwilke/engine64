@@ -3,6 +3,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 /* Two compares, inline. */
 static inline float clampf(float v, float lo, float hi)
@@ -28,5 +29,7 @@ Vector3 triangle_closestToPoint(
 	const Vector3 *a, const Vector3 *b, const Vector3 *c,
 	const Vector3 *point);
 
+
+}
 
 #endif

@@ -6,9 +6,8 @@
 	sine waves moves them, and analytic normals from the same sum keep the
 	shading and any generated UVs alive.
 
-	The two texture layers scroll through the material's tile settings, so
-	the mesh must be drawn through the per-frame material path (recorded
-	objects), never a fully recorded display list.
+	The two texture layers scroll through the tile translate, which render
+	reissues after the recorded material from the offsets kept here.
 */
 #ifndef ENGINE64_WATER_H
 #define ENGINE64_WATER_H
@@ -17,9 +16,12 @@
 #include <stdint.h>
 #include <t3d/t3dmodel.h>
 
+#include "physics/math/e64_vector2.h"
 #include "physics/math/e64_vector3.h"
 #include "physics/buoyancy/e64_buoyancy.h"
 #include "sound/e64_sound.h"
+
+namespace e64 {
 
 #define WATER_MAX_WAVES    3
 #define WATER_MAX_SURFACES 2
@@ -90,15 +92,11 @@ typedef struct Water {
 	BuoyancyVolume volume;   /* lent to the physics world by water_bindPhysics */
 
 	float time;
-	float offset_a[2];   /* accumulated scroll, texels */
-	float offset_b[2];
+	Vector2 offset[2];   /* accumulated scroll per texture, texels; the mesh points here */
 
 	const bool *culled;  /* the mesh's flag; waves are skipped out of view */
 
 	WaterDef def;
-
-	/* Handed to the render path so the material setup scrolls the tiles. */
-	T3DModelDrawConf conf;
 } Water;
 
 
@@ -126,5 +124,7 @@ Water *water_getBoundSurface(const struct RigidBody *body);
 
 /* Deletes every registered surface. Runs with scene3d_unload. */
 void water_clear(void);
+
+}
 
 #endif

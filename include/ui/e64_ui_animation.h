@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+namespace e64 {
+
 typedef struct Scene2D Scene2D;
 
 
@@ -123,5 +125,7 @@ void uiAnimation_apply(Scene2D *scene2d, const UIAnimation *animation, float tim
 void uiAnimationPlayer_start(UIAnimationPlayer *player, Scene2D *scene2d, const UIAnimation *animation, UIAnimationPlayMode mode, bool is_reversed);
 void uiAnimationPlayer_stop(UIAnimationPlayer *player);
 void uiAnimationPlayer_update(UIAnimationPlayer *player, Scene2D *scene2d, float dt);
+
+}
 
 #endif

@@ -4,6 +4,7 @@
 #include "scene3d/e64_fog.h"
 #include "engine/e64_common.h"
 
+namespace e64 {
 
 static Fog fog;
 
@@ -32,4 +33,6 @@ void fog_set(Fog* fog)
 	   render units: the same conversion the camera planes get. */
 	t3d_fog_set_range(fog->near * RENDER_SCALE, fog->far * RENDER_SCALE);
 	t3d_fog_set_enabled(true);
+}
+
 }

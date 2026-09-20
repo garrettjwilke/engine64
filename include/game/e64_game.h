@@ -8,6 +8,7 @@
 #include "control/e64_controller.h"
 #include "player/e64_player.h"
 
+namespace e64 {
 
 typedef struct Game {
 
@@ -28,5 +29,7 @@ void game_init(void);
 void game_runStep(void);
 void game_close(void);
 
+
+}
 
 #endif

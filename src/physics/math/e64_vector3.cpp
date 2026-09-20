@@ -2,6 +2,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 /* Only the square-root operations live here; the rest of the arithmetic is
    inline in the header. */
@@ -26,4 +27,6 @@ Vector3 vector3_normalized(const Vector3 *v)
 	Vector3 out = *v;
 	vector3_normalize(&out);
 	return out;
+}
+
 }

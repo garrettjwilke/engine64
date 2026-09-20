@@ -7,6 +7,8 @@
 #include "player/e64_player.h"
 #include "viewport/e64_viewport.h"
 
+namespace e64 {
+
 /* Output rate of the AI. The mixer resamples every voice to it, so its cost is
    paid per output sample: this is the number that sets the RSP budget, not the
    rate of the samples themselves. */
@@ -343,14 +345,14 @@ void sound_setListenerMode(SoundListenerMode mode)
    shows. */
 static void sound_updateListener(void)
 {
-	const Player   *player   = player_get();
+	const Player   *player   = player::get();
 	const Viewport *viewport = viewport_get();
 
 	bool on_player = sound_listener_mode == SOUND_LISTENER_PLAYER && player[0].entity;
 
 	Vector3 ear = on_player ? player[0].entity->transform.position
 	                        : viewport->camera.position;
-	Vector3 right = camera_getRight(&viewport->camera);
+	Vector3 right = camera::getRight(&viewport->camera);
 
 	sound_setListener(&ear, &right);
 }
@@ -412,4 +414,6 @@ void sound_update(void)
 	}
 
 	sound_poll();
+}
+
 }

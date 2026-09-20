@@ -2,6 +2,7 @@
 
 #include "time/e64_time.h"
 
+namespace e64 {
 
 static TimeData timer;
 static float time_scale = 1.0f;
@@ -34,4 +35,6 @@ void time_update()
 
 	timer.counter += timer.delta;
 	timer.rate = display_get_fps();
+}
+
 }

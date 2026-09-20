@@ -30,6 +30,7 @@
 #include "physics/geometry/e64_aabb.h"
 #include "physics/broadphase/e64_dynamic_aabb_tree.h"
 
+namespace e64 {
 
 struct ContactManager;
 struct PhysicsShape;
@@ -68,5 +69,7 @@ int  broadPhase_testOverlap(const BroadPhase *bp, int32_t A, int32_t B);
 
 int  broadPhase_treeCallback(void *bp_void, int32_t index);
 
+
+}
 
 #endif

@@ -15,6 +15,7 @@
 #include "shaders/e64_water.h"
 #include "sound/e64_sound.h"
 
+namespace e64 {
 
 typedef enum {
 
@@ -49,11 +50,11 @@ typedef struct Prefab3D {
 	uint8_t                sound_count;
 
 	/* Solid for a prop, sensor volume for water. NULL: no collision. */
-	const Entity3DColliderDef *collider;
+	const entity3d::ColliderDef *collider;
 
 	/* The kind the tag names. A prop without a body is static. */
 	union {
-		const Character3DDef *character;
+		const character3d::Def *character;
 		const RigidBodyDef *prop;
 		const ClothDef     *cloth;
 		const WaterDef     *water;
@@ -61,5 +62,7 @@ typedef struct Prefab3D {
 
 } Prefab3D;
 
+
+}
 
 #endif

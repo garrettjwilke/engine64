@@ -27,6 +27,7 @@
 
 #include <stdint.h>
 
+namespace e64 {
 
 #define PHYSICS_HEAP_SIZE               (256 * 1024)
 #define PHYSICS_HEAP_INITIAL_CAPACITY   64
@@ -58,5 +59,7 @@ void  physicsHeap_shutdown(PhysicsHeap *h);
 void *physicsHeap_allocate(PhysicsHeap *h, int32_t size);
 void  physicsHeap_free(PhysicsHeap *h, void *memory);
 
+
+}
 
 #endif

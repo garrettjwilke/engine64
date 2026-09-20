@@ -10,6 +10,7 @@
 #include "physics/math/e64_math_common.h"
 #include "menu/e64_menu.h"
 
+namespace e64 {
 
 /* The three kinds a field can be written as; one of them is set. */
 typedef struct {
@@ -272,4 +273,6 @@ void uiAnimationPlayer_update(UIAnimationPlayer *player, Scene2D *scene2d, float
 			uiAnimationPlayer_applyFrame(player, scene2d, player->time);
 			break;
 	}
+}
+
 }

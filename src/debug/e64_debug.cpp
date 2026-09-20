@@ -8,6 +8,7 @@
 #include "camera/e64_camera.h"
 #include "camera/e64_spring_arm.h"
 
+namespace e64 {
 
 #define DEBUG_UI_LINES     8
 #define DEBUG_UI_LINE_MAX 40
@@ -99,4 +100,6 @@ void debugUI_draw(void)
 		rdpq_text_print(&right, DEBUG_FONT, DEBUG_UI_MARGIN, y, debug_right[i]);
 		y += DEBUG_UI_STEP;
 	}
+}
+
 }

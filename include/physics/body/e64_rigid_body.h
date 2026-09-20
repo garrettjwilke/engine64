@@ -37,6 +37,7 @@
 #include "physics/shapes/e64_sphere.h"
 #include "physics/shapes/e64_capsule.h"
 
+namespace e64 {
 
 struct PhysicsWorld;
 struct ContactEdge;
@@ -178,5 +179,7 @@ float   rigidBody_getInvMass(const RigidBody *b);
 void    rigidBody_calculateMassData  (RigidBody *b);
 void    rigidBody_synchronizeProxies (RigidBody *b);
 
+
+}
 
 #endif

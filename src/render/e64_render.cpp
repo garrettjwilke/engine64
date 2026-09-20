@@ -9,6 +9,7 @@
 #include "scene3d/e64_fog.h"
 #include "viewport/e64_viewport.h"
 #include "graphics/e64_font.h"
+#include "graphics/e64_mesh.h"
 #include "graphics/e64_sprites.h"
 #include "graphics/e64_shapes.h"
 #include "particles/e64_particles.h"
@@ -20,6 +21,7 @@
 
 #include "game/e64_game.h"
 
+namespace e64 {
 
 /* The frame's draw list. Filled by the scenes and consumed here, every
    frame; nobody outside sees it. */
@@ -102,6 +104,25 @@ static void render_setSpriteMode(uint8_t transparency)
 	if (transparency) rdpq_set_env_color(RGBA32(0, 0, 0, (uint8_t)(255 - transparency)));
 }
 
+/* The recorded material uploaded the textures with the file's own tile
+   translate; the scroll goes on top by reissuing SET_TILE_SIZE, the one
+   command that carries it, with the same extents rdpq wrote: translate to
+   translate plus the texture size, in 10.2. */
+static void render_scrollTexture(const T3DMaterial *material, const Vector2 *scroll)
+{
+	const T3DMaterialTexture *texture[2] = { &material->textureA, &material->textureB };
+
+	for (int k = 0; k < 2; k++) {
+		const T3DMaterialTexture *tex = texture[k];
+		if (!tex->texture) continue;
+
+		uint16_t s0 = (uint16_t)((tex->s.low + scroll[k].x) * 4.0f);
+		uint16_t t0 = (uint16_t)((tex->t.low + scroll[k].y) * 4.0f);
+		rdpq_set_tile_size_fx((rdpq_tile_t)(TILE0 + k), s0, t0,
+		                      s0 + tex->texWidth * 4, t0 + tex->texHeight * 4);
+	}
+}
+
 void render(void)
 {
 	RenderContext *ctx = &render_context;
@@ -144,14 +165,27 @@ void render(void)
 				continue;
 			}
 
-			T3DModelState state = t3d_model_state_create();
-			state.drawConf = obj->conf;
-			T3DModelIter it = t3d_model_iter_create(obj->model, T3D_CHUNK_TYPE_OBJECT);
-			while (t3d_model_iter_next(&it)) {
-				if (!it.object->isVisible) continue;
-				t3d_model_draw_material(it.object->material, &state);
-				rspq_block_run(it.object->userBlock);
+			/* Object path: the objects come sorted by material, so each
+			   material block runs once, ahead of its visible objects. All of
+			   it is recorded; the CPU only picks which blocks run. */
+			const Mesh *mesh = obj->mesh;
+			int current = -1;
+			for (uint16_t i = 0; i < mesh->object_count; i++) {
+				const T3DObject *object = mesh->object_order[i];
+				if (!object->isVisible) continue;
+
+				uint8_t m = mesh->object_material[i];
+				if (m != current) {
+					if (mesh->material_block[m]) rspq_block_run(mesh->material_block[m]);
+					if (mesh->texture_scroll) render_scrollTexture(object->material, mesh->texture_scroll);
+					current = m;
+				}
+				rspq_block_run(object->userBlock);
 			}
+
+			/* A recorded material leaves its vertex FX set; whatever draws
+			   next starts from a fresh state and would inherit it. */
+			if (mesh->material_vertex_fx) t3d_state_set_vertex_fx(T3D_VERTEX_FX_NONE, 0, 0);
 		}
 
 		if (pushed) t3d_matrix_pop(1);
@@ -236,4 +270,6 @@ void render(void)
 	debugUI_draw();
 
 	render_end();
+}
+
 }

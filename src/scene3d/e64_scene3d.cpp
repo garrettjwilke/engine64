@@ -17,6 +17,7 @@
 #include "physics/e64_physics_settings.h"
 #include "engine/e64_common.h"
 
+namespace e64 {
 
 static Scene3D scene;
 static PhysicsWorld g_physics;
@@ -43,7 +44,7 @@ void scene3d_load(const Scene3DDef *def)
 	fog_init(fog);
 
 	Camera *camera = &viewport_get()->camera;
-	camera_reset(camera);
+	camera::reset(camera);
 	if (def->camera) {
 		camera->target_field_of_view = def->camera->field_of_view;
 		camera->field_of_view        = def->camera->field_of_view;
@@ -53,12 +54,12 @@ void scene3d_load(const Scene3DDef *def)
 		camera->base_far_clipping    = def->camera->far_clipping;
 		camera->auto_clipping        = def->camera->auto_clipping;
 	}
-	switch (def->camera ? def->camera->type : CAMERA_TYPE_NONE) {
-		case CAMERA_TYPE_SPRING_ARM:
-			cameraSpringArm_init(camera, &def->camera->spring_arm);
+	switch (def->camera ? def->camera->type : camera::CAMERA_TYPE_NONE) {
+		case camera::CAMERA_TYPE_SPRING_ARM:
+			camera::springArm::init(camera, &def->camera->spring_arm);
 			break;
-		case CAMERA_TYPE_NONE:
-		case CAMERA_TYPE_COUNT:
+		case camera::CAMERA_TYPE_NONE:
+		case camera::CAMERA_TYPE_COUNT:
 			break;
 	}
 
@@ -79,7 +80,7 @@ void scene3d_load(const Scene3DDef *def)
 
 		/* entity.c builds from a flat parameter block: filled here straight
 		   from the prefab and its placement, and gone after the load. */
-		Entity3DDef entity_def = {
+		entity3d::Def entity_def = {
 			.model_path  = prefab->model,
 			.part          = prefab->part,
 			.part_count    = prefab->part_count,
@@ -108,10 +109,10 @@ void scene3d_load(const Scene3DDef *def)
 				break;
 		}
 
-		Entity3D *entity = entity3d_create(&entity_def);
+		Entity3D *entity = entity3d::create(&entity_def);
 
 		if (entity_def.collider)
-			entity3d_attachPhysics(entity, &entity_def, &g_physics);
+			entity3d::attachPhysics(entity, &entity_def, &g_physics);
 
 		if (entity_def.cloth) {
 			Cloth *cloth = physicsWorld_createCloth(&g_physics, entity_def.cloth);
@@ -126,13 +127,13 @@ void scene3d_load(const Scene3DDef *def)
 		if (entity_def.water) {
 			Water *water = water_create(entity_def.water);
 			/* Same contract as the cloth: points in metres, buffer in render
-			   units. The draw conf is what scrolls the texture layers, so it
-			   only works through the per-frame material path. */
+			   units. The offsets are what scroll the texture layers; render
+			   reads them after the recorded material. */
 			if (water) {
 				water->culled = &entity->mesh->culled;
 				mesh_setDeform(entity->mesh, water->position, water->normal,
 				               water->rgba, water->count, RENDER_SCALE);
-				entity->mesh->draw_conf = &water->conf;
+				entity->mesh->texture_scroll = water->offset;
 
 				/* The entity's collider is the water's sensor volume: bind
 				   them and the bodies inside it start floating. */
@@ -143,15 +144,15 @@ void scene3d_load(const Scene3DDef *def)
 
 		if (entity_def.character) {
 			assert(scene.character3d_count < SCENE_MAX_CHARACTERS);
-			Character3D *character = character3d_create(entity_def.character, entity);
+			Character3D *character = character3d::create(entity_def.character, entity);
 			scene.character[scene.character3d_count++] = character;
 
-			character3dPhysics_createBody(character, &g_physics);
+			character3d::physics::createBody(character, &g_physics);
 
-			const Character3DWeaponsDef *weapons = entity_def.character->weapons_def;
-			for (int slot = 0; weapons && slot < WEAPON_SLOT_COUNT; slot++)
+			const character3d::WeaponsDef *weapons = entity_def.character->weapons_def;
+			for (int slot = 0; weapons && slot < character3d::WEAPON_SLOT_COUNT; slot++)
 				if (weapons->weapon[slot])
-					character3d_equipWeapon(character, slot, weapons->weapon[slot]);
+					character3d::weapon::equip(character, slot, weapons->weapon[slot]);
 		}
 
 		if (!entity_def.character) {
@@ -171,9 +172,9 @@ void scene3d_clear(void)
 void scene3d_unload(void)
 {
 	for (int i = 0; i < scene.character3d_count; i++)
-		character3d_delete(scene.character[i]);
+		character3d::destroy(scene.character[i]);
 	for (int i = 0; i < scene.entity_count; i++)
-		entity3d_delete(scene.entity[i]);
+		entity3d::destroy(scene.entity[i]);
 	water_clear();
 	scene3d_clear();
 	physicsWorld_shutdown(&g_physics);
@@ -190,10 +191,10 @@ void scene3d_updateCharacters(uint8_t fb_index)
 	for (int i = 0; i < scene.character3d_count; i++) {
 		Character3D *character = scene.character[i];
 
-		character3dPhysics_collide(character, &g_physics);
-		character3dPhysics_syncBody(character);
-		entity3d_setTransform(character->entity, &character->body);
-		entity3d_setMatrix(character->entity, fb_index);
+		character3d::physics::collide(character, &g_physics);
+		character3d::physics::syncBody(character);
+		entity3d::setTransform(character->entity, &character->body);
+		entity3d::setMatrix(character->entity, fb_index);
 	}
 }
 
@@ -204,7 +205,7 @@ void scene3d_updateCharacters(uint8_t fb_index)
 void scene3d_updateEntities(uint8_t fb_index)
 {
 	for (int i = 0; i < scene.entity_count; i++)
-		entity3d_setMatrixFromBody(scene.entity[i], fb_index);
+		entity3d::setMatrixFromBody(scene.entity[i], fb_index);
 }
 
 /* The camera's half of the frame: it reads the buttons the scene declared for
@@ -216,7 +217,7 @@ void scene3d_updateCamera(const Vector3 *target)
 	Camera *camera = &viewport_get()->camera;
 
 	if (camera->binding)
-		cameraControl_update(camera, camera->binding, &scene, time_get()->delta);
+		camera::control::update(camera, camera->binding, &scene, time_get()->delta);
 
 	viewport_updateCamera((Vector3 *)target, &scene);
 	viewport_setPerspectiveCamera();
@@ -260,7 +261,7 @@ void scene3d_setRenderContext(const Scene3D *s, RenderContext *ctx, const Viewpo
 
 		if (mesh->dl_count == 0) {
 			assert(ctx->object_count < RENDER_MAX_3D_ELEMENTS);
-			ctx->object[ctx->object_count++] = (Element3D){ NULL, mesh->model, matrix, skel, mesh->draw_conf };
+			ctx->object[ctx->object_count++] = (Element3D){ NULL, mesh, matrix, skel };
 			continue;
 		}
 
@@ -276,4 +277,6 @@ void scene3d_setRenderContext(const Scene3D *s, RenderContext *ctx, const Viewpo
 			ctx->object[ctx->object_count++] = (Element3D){ mesh->dl[part], NULL, part_matrix, skel };
 		}
 	}
+}
+
 }

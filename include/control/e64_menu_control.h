@@ -3,11 +3,16 @@
 
 #include "e64_controller.h"
 
+namespace e64 {
+
 /* The menu module reads this binding, so naming its declaration is as far as
    this file can go towards it. */
 typedef struct MenuDef MenuDef;
 
-typedef struct MenuControlBinding {
+
+namespace menu {
+
+typedef struct ControlBinding {
 
 	/* Whose controller moves the cursor. There is one cursor, so the game
 	   names the player here, the way it does for the camera. */
@@ -26,10 +31,10 @@ typedef struct MenuControlBinding {
 	ButtonID tab_left;
 	ButtonID tab_right;
 
-} MenuControlBinding;
+} ControlBinding;
 
 
-typedef struct MenuControls {
+typedef struct Controls {
 
 	bool confirm;
 	bool cancel;
@@ -46,10 +51,18 @@ typedef struct MenuControls {
 	bool tab_left;
 	bool tab_right;
 
-} MenuControls;
+} Controls;
 
 
-void menuControls_map(MenuControls *controls, const Controller *controller, const MenuControlBinding *binding);
-void menuControl_update(void);
+namespace control {
+
+void read(Controls *controls, const Controller *controller, const ControlBinding *binding);
+void update(void);
+
+}
+
+}
+
+}
 
 #endif

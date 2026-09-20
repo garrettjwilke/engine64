@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 
+namespace e64 {
 
 #define PHYSICS_STACK_INITIAL_ENTRIES 64
 
@@ -55,5 +56,7 @@ void  physicsStack_reserve(PhysicsStack *s, uint32_t size);
 void *physicsStack_allocate(PhysicsStack *s, int32_t size);
 void  physicsStack_free(PhysicsStack *s, void *data);
 
+
+}
 
 #endif

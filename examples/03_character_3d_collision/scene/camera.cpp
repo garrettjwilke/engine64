@@ -6,10 +6,12 @@
 */
 #include "camera/e64_camera.h"
 
+using namespace e64;
 
-extern const CameraDef camera = {
 
-	.type = CAMERA_TYPE_SPRING_ARM,
+extern const camera::Def camera = {
+
+	.type = camera::CAMERA_TYPE_SPRING_ARM,
 
 	.field_of_view = 60.0f,
 	.near_clipping = 1.0f,

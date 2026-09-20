@@ -1,6 +1,8 @@
 #ifndef ENGINE64_COLOR_H
 #define ENGINE64_COLOR_H
 
+namespace e64 {
+
 typedef struct {
 
 	float h, s, v, a;
@@ -11,5 +13,7 @@ typedef struct {
 color_t color_lerp(color_t *a, color_t *b, float t);
 
 color_t color_lerpRGB(color_t *a, color_t *b, float t);
+
+}
 
 #endif

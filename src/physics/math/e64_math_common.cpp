@@ -4,6 +4,7 @@
 
 #include "../../../include/physics/math/e64_math_common.h"
 
+namespace e64 {
 
 #define LN2 0.6931472f
 
@@ -114,4 +115,6 @@ float ease_expo_in_out(float t)
 	if (t >= 1.0f) return 1.0f;
 	if (t < 0.5f) return 0.5f * fm_expf((20.0f * t - 10.0f) * LN2);
 	return 1.0f - 0.5f * fm_expf((-20.0f * t + 10.0f) * LN2);
+}
+
 }

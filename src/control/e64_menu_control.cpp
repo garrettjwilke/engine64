@@ -9,6 +9,7 @@
 #include "game/e64_game_states.h"
 #include "time/e64_time.h"
 
+namespace e64 {
 
 /* A direction given once moves the index once. Kept held, it waits out
    MENU_REPEAT_DELAY and from there steps every MENU_REPEAT_PERIOD, so reaching
@@ -22,6 +23,9 @@
 /* Half the stick's travel, on a reading that comes in from -1 to 1. */
 #define STICK_REPEAT_THRESHOLD 0.5f
 
+
+namespace menu {
+namespace control {
 
 typedef enum {
 
@@ -43,7 +47,7 @@ static struct {
 
 /* Whether this direction hands the menu a step this frame: the frame it is
    pressed, and then once per period for as long as it is kept down. */
-static bool direction_getStep(MenuDirection direction, bool pressed, bool held)
+static bool getStep(MenuDirection direction, bool pressed, bool held)
 {
 	if (pressed) {
 		menuRepeat.direction = direction;
@@ -82,59 +86,64 @@ static bool direction_getStep(MenuDirection direction, bool pressed, bool held)
 	return true;
 }
 
-void menuControls_map(MenuControls *controls, const Controller *controller, const MenuControlBinding *binding)
+void read(Controls *controls, const Controller *controller, const ControlBinding *binding)
 {
 	/* Holding a direction repeats it, but only past half the stick's travel:
 	   near the centre it would repeat on the slightest lean. */
-	Vector2 stick = controller_getStickNormalized(controller);
+	Vector2 stick = controller::getStickNormalized(controller);
 
-	const bool up    = direction_getStep(MENU_DIR_UP,
-		button_isPressed(controller, binding->up)
+	const bool up    = getStep(MENU_DIR_UP,
+		controller::isPressed(controller, binding->up)
 		|| controller->stick_pressed_y > 0,
-		button_isHeld(controller, binding->up)
+		controller::isHeld(controller, binding->up)
 		|| stick.y > STICK_REPEAT_THRESHOLD);
 
-	const bool down  = direction_getStep(MENU_DIR_DOWN,
-		button_isPressed(controller, binding->down)
+	const bool down  = getStep(MENU_DIR_DOWN,
+		controller::isPressed(controller, binding->down)
 		|| controller->stick_pressed_y < 0,
-		button_isHeld(controller, binding->down)
+		controller::isHeld(controller, binding->down)
 		|| stick.y < -STICK_REPEAT_THRESHOLD);
 
-	const bool left  = direction_getStep(MENU_DIR_LEFT,
-		button_isPressed(controller, binding->left)
+	const bool left  = getStep(MENU_DIR_LEFT,
+		controller::isPressed(controller, binding->left)
 		|| controller->stick_pressed_x < 0,
-		button_isHeld(controller, binding->left)
+		controller::isHeld(controller, binding->left)
 		|| stick.x < -STICK_REPEAT_THRESHOLD);
 
-	const bool right = direction_getStep(MENU_DIR_RIGHT,
-		button_isPressed(controller, binding->right)
+	const bool right = getStep(MENU_DIR_RIGHT,
+		controller::isPressed(controller, binding->right)
 		|| controller->stick_pressed_x > 0,
-		button_isHeld(controller, binding->right)
+		controller::isHeld(controller, binding->right)
 		|| stick.x > STICK_REPEAT_THRESHOLD);
 
-	*controls = (MenuControls){
-		.confirm   = button_isPressed(controller, binding->confirm),
-		.cancel    = button_isPressed(controller, binding->cancel),
-		.pause     = button_isPressed(controller, binding->pause),
+	*controls = (Controls){
+		.confirm   = controller::isPressed(controller, binding->confirm),
+		.cancel    = controller::isPressed(controller, binding->cancel),
+		.pause     = controller::isPressed(controller, binding->pause),
 
 		.up        = up,
 		.down      = down,
 
 		/* How fast, not whether: a button is all the way, the stick is as far
 		   as it is pushed, and whichever asks for more wins. */
-		.up_held   = fmaxf(button_isHeld(controller, binding->up),   fmaxf( stick.y, 0.0f)),
-		.down_held = fmaxf(button_isHeld(controller, binding->down), fmaxf(-stick.y, 0.0f)),
+		.up_held   = fmaxf(controller::isHeld(controller, binding->up),   fmaxf( stick.y, 0.0f)),
+		.down_held = fmaxf(controller::isHeld(controller, binding->down), fmaxf(-stick.y, 0.0f)),
 
 		.left      = left,
 		.right     = right,
 
-		.tab_left  = button_isPressed(controller, binding->tab_left),
-		.tab_right = button_isPressed(controller, binding->tab_right),
+		.tab_left  = controller::isPressed(controller, binding->tab_left),
+		.tab_right = controller::isPressed(controller, binding->tab_right),
 	};
 }
 
-void menuControl_update(void)
+void update(void)
 {
 	const GameStateDef *def = gameState_get(game_get()->state);
 	if (def->control) def->control();
+}
+
+}
+}
+
 }

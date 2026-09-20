@@ -9,6 +9,8 @@
 #include "viewport/e64_viewport.h"
 #include "control/e64_player_control.h"
 
+namespace e64 {
+
 /* Game holds the current state, so it cannot be included back from here. */
 typedef struct Game Game;
 
@@ -30,7 +32,7 @@ struct GameStateDef {
 	bool (*canLeave)(void);
 
 	/* Per-state input handling (menus, pause); NULL for none. The controller is
-	   already polled: the game reads it with controller_get. */
+	   already polled: the game reads it with controller::get. */
 	void (*control)(void);
 
 	/* The scenes this state runs on, either or both: the 3D world and the
@@ -41,7 +43,7 @@ struct GameStateDef {
 	/* What drives what while this state is current. Each binding names the
 	   piece it moves, so the engine wires them itself once the scenes are
 	   built. A state that drives nothing leaves it out. */
-	const ControlsDef   *controls;
+	const controls::Def *controls;
 
 	/* The screen this state is played on. The engine opens none by itself,
 	   so the first state entered is what puts one up, and a state that wants
@@ -65,5 +67,7 @@ const GameStateDef *gameState_get(GameState id);
 void game_setState(Game *game, GameState new_state);
 void game_updateState(void);
 
+
+}
 
 #endif

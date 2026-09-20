@@ -14,6 +14,7 @@
 #include "physics/math/e64_matrix3.h"
 #include "time/e64_time.h"
 
+namespace e64 {
 
 /* As the joint list of a Godot setting: the bones from root to end, found
    by walking the end bone's parents. */
@@ -411,4 +412,6 @@ void springBone_apply(T3DSkeleton *skeleton, void *context)
 	T3DBone *bone = &skeleton->bones[joint->bone];
 	bone->rotation   = (T3DQuat){{ local.x, local.y, local.z, local.w }};
 	bone->hasChanged = 1;
+}
+
 }

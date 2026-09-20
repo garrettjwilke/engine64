@@ -27,6 +27,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 typedef struct HalfSpace {
 	Vector3 normal;
@@ -48,5 +49,7 @@ static inline Vector3 halfSpace_origin(const HalfSpace *h)
 	return vector3_scaled(&h->normal, h->distance);
 }
 
+
+}
 
 #endif

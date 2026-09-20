@@ -16,6 +16,7 @@
 #include "physics/geometry/e64_triangle.h"
 #include "physics/broadphase/e64_dynamic_aabb_tree.h"
 
+namespace e64 {
 
 /* Authoring side, matching the other shape defs. There is no density: a mesh
    only ever hangs off a static body, so it has no mass to compute. */
@@ -50,5 +51,7 @@ void collisionMesh_queryAABB(const CollisionMesh *mesh, void *cb, PhysicsQueryCa
 
 int  collisionMesh_raycast  (const CollisionMesh *mesh, const Transform *world, RaycastData *raycast);
 
+
+}
 
 #endif

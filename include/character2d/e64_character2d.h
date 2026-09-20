@@ -9,23 +9,19 @@
 #include "character2d/e64_character2d_animation.h"
 #include "character2d/e64_character2d_physics.h"
 
+namespace e64 {
+
 typedef struct Stage2D Stage2D;
+namespace character2d { struct Def; }
 
 
-typedef struct Character2DDef {
+class Character2D {
+public:
 
-	const Character2DMovementSettings  *movement_settings;
-	const Character2DAnimationDef      *animation_def;
-	const Character2DColliderSettings  *collider_settings;
-
-} Character2DDef;
-
-typedef struct Character2D {
-
-	const Character2DDef *def;
+	const character2d::Def *def;
 
 	/* The scene entity this character draws through. The character writes
-	   its frame, flip and position from create to delete, and puts the
+	   its frame, flip and position from create to destroy, and puts the
 	   entity's own sprite back when it goes. */
 	Entity2D        *entity;
 	struct sprite_s *entity_sprite;
@@ -37,17 +33,33 @@ typedef struct Character2D {
 	Vector2 position;      /* feet, in pixels; float so movement stays smooth */
 	bool    facing_left;
 
-	Character2DMovement  movement;
-	Character2DAnimation animation;
+	character2d::Movement  movement;
+	character2d::Animation animation;
 
-} Character2D;
+	void updateMovement(character2d::MovementCommand *cmd, float dt);
+};
 
 
-Character2D *character2d_create(const Character2DDef *def, Entity2D *entity);
-void character2d_delete(Character2D *character);
+namespace character2d {
+
+typedef struct Def {
+
+	const MovementSettings *movement_settings;
+	const AnimationDef     *animation_def;
+	const ColliderSettings *collider_settings;
+
+} Def;
+
+
+Character2D *create(const Def *def, Entity2D *entity);
+void destroy(Character2D *character);
 
 /* Advances the animation off the movement and writes the frame to the
    entity, anchored at the feet and snapped to whole pixels. */
-void character2d_update(Character2D *character, float dt);
+void update(Character2D *character, float dt);
+
+}
+
+}
 
 #endif

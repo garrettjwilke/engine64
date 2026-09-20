@@ -13,6 +13,7 @@
 #include "graphics/e64_sprites.h"
 #include "graphics/e64_font.h"
 
+namespace e64 {
 
 typedef enum {
 
@@ -36,5 +37,7 @@ typedef struct {
 	bool    is_hidden;
 
 } Graphic;
+
+}
 
 #endif

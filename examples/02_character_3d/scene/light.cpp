@@ -8,6 +8,8 @@
 */
 #include "scene3d/e64_lighting.h"
 
+using namespace e64;
+
 
 /* One point light: it radiates in every direction from .position, and .size is
    the radius it reaches, in metres. Placed above the middle of the room, high

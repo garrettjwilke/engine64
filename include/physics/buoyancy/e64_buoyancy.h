@@ -16,6 +16,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 struct PhysicsWorld;
 struct RigidBody;
@@ -38,5 +39,7 @@ typedef struct BuoyancyVolume {
 
 void buoyancy_apply(struct PhysicsWorld *world, const BuoyancyVolume *volume);
 
+
+}
 
 #endif

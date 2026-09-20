@@ -6,6 +6,8 @@
 #include <t3d/t3dmath.h>
 #include <t3d/tpx.h>
 
+namespace e64 {
+
 /* tpx stores particles interleaved in pairs, so a buffer always holds an even
    count. S8 keeps local coords in one byte (16 bytes per pair) for local
    effects; S16 covers a larger range (24 bytes per pair) for world placement. */
@@ -63,5 +65,7 @@ void particleBuffer_delete(ParticleBuffer *buffer);
 void particleBuffer_setMatrix(ParticleBuffer *buffer, const float scale[3], const float rotation[3], const float position[3], uint8_t fb_index);
 void particleBuffer_draw(const ParticleBuffer *buffer, const T3DMat4FP *matrix);
 void particleBuffer_drawTextured(const ParticleBuffer *buffer, const T3DMat4FP *matrix);
+
+}
 
 #endif

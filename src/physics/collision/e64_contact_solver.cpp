@@ -27,6 +27,7 @@
 #include "physics/world/e64_physics_island.h"
 #include "physics/body/e64_rigid_body.h"
 
+namespace e64 {
 
 static inline float clampf(float lo, float hi, float v)
 {
@@ -251,4 +252,6 @@ void contactSolver_solve(ContactSolver *s)
 		s->velocities[cs->index_b].v = vB;
 		s->velocities[cs->index_b].w = wB;
 	}
+}
+
 }

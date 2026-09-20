@@ -10,6 +10,7 @@
 
 #include "physics/math/e64_vector3.h"
 
+namespace e64 {
 
 typedef struct {
 
@@ -33,5 +34,7 @@ void spring_reset(Spring *spring);
 
 /* Steps the particle and returns position - anchor, clamped to max_offset. */
 Vector3 spring_update(Spring *spring, const SpringSettings *settings, Vector3 anchor, float dt);
+
+}
 
 #endif

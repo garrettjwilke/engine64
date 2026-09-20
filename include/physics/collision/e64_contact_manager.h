@@ -30,6 +30,7 @@
 #include "physics/broadphase/e64_broad_phase.h"
 #include "physics/memory/e64_physics_paged_allocator.h"
 
+namespace e64 {
 
 struct ContactConstraint;
 struct PhysicsShape;
@@ -57,5 +58,7 @@ void contactManager_removeContactsFromBody(ContactManager *m, struct RigidBody *
 void contactManager_removeFromBroadphase(ContactManager *m, struct RigidBody *body);
 void contactManager_testCollisions      (ContactManager *m);
 
+
+}
 
 #endif

@@ -6,6 +6,7 @@
 #include "physics/math/e64_vector3.h"
 #include "physics/math/e64_math_common.h"
 
+namespace e64 {
 
 typedef struct Camera Camera;
 
@@ -19,7 +20,10 @@ typedef struct Camera Camera;
    metres, and still far from where a float starts losing the direction. */
 #define SPRING_ARM_MIN_LENGTH 0.1f
 
-typedef struct CameraSpringArmSettings {
+
+namespace camera {
+
+typedef struct SpringArmSettings {
 
 	Vector2 response_rate;
 	Vector2 max_velocity;
@@ -41,11 +45,11 @@ typedef struct CameraSpringArmSettings {
 	float aim_field_of_view;
 	float aim_velocity_scale;
 
-} CameraSpringArmSettings;
+} SpringArmSettings;
 
 
 /* Where the arm is right now: seeded from the def, moved by the engine. */
-typedef struct CameraSpringArmData {
+typedef struct SpringArmData {
 
 	/* What the arm is asked for and where it actually is. The stick writes the
 	   target, the aim adds its offset on top, and the arm chases the sum: the
@@ -64,10 +68,10 @@ typedef struct CameraSpringArmData {
 	Vector2 velocity;
 	Vector2 target_velocity;
 
-} CameraSpringArmData;
+} SpringArmData;
 
 
-typedef struct CameraSpringArmDef {
+typedef struct SpringArmDef {
 
 	float arm_length;
 	float side_offset;
@@ -76,19 +80,27 @@ typedef struct CameraSpringArmDef {
 	float pitch;
 	float height_offset;
 
-	CameraSpringArmSettings settings;
+	SpringArmSettings settings;
 
-} CameraSpringArmDef;
+} SpringArmDef;
 
 
-void cameraSpringArm_init(Camera *camera, const CameraSpringArmDef *def);
-void cameraSpringArm_update(Camera *camera, Vector3 *center, float dt);
+namespace springArm {
+
+void init(Camera *camera, const SpringArmDef *def);
+void update(Camera *camera, Vector3 *center, float dt);
 
 /* The arm's two control-driven angles, in degrees. Both answer zero on a
    camera that is not an arm, which is what a caller that needs them reads as
    nothing to do. */
-float cameraSpringArm_getPitch(const Camera *camera);
-float cameraSpringArm_getYaw(const Camera *camera);
-float cameraSpringArm_getLength(const Camera *camera);
+float getPitch(const Camera *camera);
+float getYaw(const Camera *camera);
+float getLength(const Camera *camera);
+
+}
+
+}
+
+}
 
 #endif

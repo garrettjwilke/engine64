@@ -4,6 +4,7 @@
 
 #include "physics/math/e64_quaternion.h"
 
+namespace e64 {
 
 Quaternion quaternion_create(float x, float y, float z, float w)
 {
@@ -31,6 +32,25 @@ Quaternion quaternion_fromAxisAngle(const Vector3 *axis, float radians)
 	Quaternion q;
 	quaternion_setAxisAngle(&q, axis, radians);
 	return q;
+}
+
+Quaternion quaternion_fromEuler(float pitch, float yaw, float roll)
+{
+	float sp, cp, sy, cy, sr, cr;
+	fm_sincosf(pitch * 0.5f, &sp, &cp);
+	fm_sincosf(yaw   * 0.5f, &sy, &cy);
+	fm_sincosf(roll  * 0.5f, &sr, &cr);
+
+	/* Conjugated: t3d_mat4_from_srt_euler writes the transposed rotation, so
+	   every Euler angle in the engine turns the opposite way to the standard
+	   quaternion, and the conjugate is what t3d_mat4_from_srt needs to build
+	   the same matrix. */
+	return (Quaternion){
+		-(sp * cy * cr - cp * sy * sr),
+		-(cp * sy * cr + sp * cy * sr),
+		-(cp * cy * sr - sp * sy * cr),
+		  cp * cy * cr + sp * sy * sr,
+	};
 }
 
 void quaternion_toAxisAngle(const Quaternion *q, Vector3 *axis, float *angle)
@@ -169,4 +189,6 @@ Vector3 quaternion_rotateVector(const Quaternion *q, const Vector3 *v)
 		v->y + q->w * ty + (q->z * tx - q->x * tz),
 		v->z + q->w * tz + (q->x * ty - q->y * tx),
 	};
+}
+
 }

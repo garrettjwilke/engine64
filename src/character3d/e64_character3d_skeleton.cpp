@@ -4,6 +4,7 @@
 #include "physics/math/e64_quaternion.h"
 #include "character3d/e64_character3d_skeleton.h"
 
+namespace e64 {
 
 void skeletonModifiers_add(SkeletonModifiers *modifiers, SkeletonModifierFn apply, void *context)
 {
@@ -48,3 +49,4 @@ void skeleton_getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *po
 	}
 }
 
+}

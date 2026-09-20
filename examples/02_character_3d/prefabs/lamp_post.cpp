@@ -21,6 +21,8 @@
 */
 #include "prefab/e64_prefab3d.h"
 
+using namespace e64;
+
 
 /* Both objects were modelled sitting at the origin, one inside the other. A
    part can be drawn somewhere other than where it was modelled, and that is

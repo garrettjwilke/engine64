@@ -25,6 +25,7 @@
 #include "physics/memory/e64_physics_heap.h"
 #include "physics/memory/e64_physics_memory.h"
 
+namespace e64 {
 
 void physicsHeap_init(PhysicsHeap *h)
 {
@@ -150,4 +151,6 @@ void physicsHeap_free(PhysicsHeap *h, void *memory)
 
 		h->free_blocks[h->free_block_count++] = block;
 	}
+}
+
 }

@@ -31,6 +31,7 @@
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 #define PHYSICS_TREE_NULL (-1)
 
@@ -75,5 +76,7 @@ typedef int (*PhysicsQueryCallback)(void *cb, int32_t id);
 void dynamicAABBTree_queryAABB(const DynamicAABBTree *t, void *cb, PhysicsQueryCallback callback, AABB aabb);
 void dynamicAABBTree_queryRay (const DynamicAABBTree *t, void *cb, PhysicsQueryCallback callback, RaycastData *raycast);
 
+
+}
 
 #endif

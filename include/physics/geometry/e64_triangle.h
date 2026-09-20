@@ -10,6 +10,7 @@
 #include "physics/math/e64_vector3.h"
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 typedef struct Triangle {
 	Vector3 vertices[3];
@@ -20,5 +21,7 @@ typedef struct Triangle {
 
 int triangle_raycast(const Triangle *t, RaycastData *raycast);
 
+
+}
 
 #endif

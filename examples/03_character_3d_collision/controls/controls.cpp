@@ -15,17 +15,22 @@
 #include "camera/e64_camera.h"
 #include "prefab/e64_prefab3d.h"
 
+using namespace e64;
 
-extern const CameraDef camera;
+
+extern const camera::Def camera;
 extern const Prefab3D  character;
 
 
 /* Naming the player here is also what the camera follows: it tracks the body
    seated in that slot, with no target passed in from the game. */
-extern const CameraControlBinding camera_binding = {
+extern const camera::ControlBinding camera_binding = {
 
 	.player = PLAYER_1,
-	.camera = &camera,
+
+	/* The engine has a namespace of this name (camera::), so with `using
+	   namespace e64` the variable is reached through the global scope. */
+	.camera = &::camera,
 
 	.pan_left  = BTN_C_LEFT,
 	.pan_right = BTN_C_RIGHT,
@@ -47,7 +52,7 @@ extern const CameraControlBinding camera_binding = {
    out, so those buttons read as never pressed. */
 static const Prefab3D *const character3d_prefab[] = { &character };
 
-extern const Character3DControlBinding character3d_binding = {
+extern const character3d::ControlBinding character3d_binding = {
 
 	.player          = PLAYER_1,
 	.character       = character3d_prefab,
@@ -58,7 +63,7 @@ extern const Character3DControlBinding character3d_binding = {
 };
 
 /* The state names this, and the engine wires both when it is entered. */
-extern const ControlsDef controls = {
+extern const controls::Def controls = {
 
 	.camera      = &camera_binding,
 	.character3d = &character3d_binding,

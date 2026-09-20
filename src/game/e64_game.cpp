@@ -12,6 +12,7 @@
 #include "menu/e64_menu.h"
 #include "particles/e64_particles.h"
 
+namespace e64 {
 
 static Game game;
 
@@ -30,7 +31,7 @@ void game_init()
 	
 	joypad_init();
 	
-	controller_start();
+	controller::start();
 	
 	time_init();
 
@@ -38,7 +39,7 @@ void game_init()
 
 	particles_init();
 
-	player_init();
+	player::init();
 
 	settings_init();
 
@@ -54,7 +55,7 @@ void game_runStep(void)
 	
 	time_update();
 
-	controller_poll();
+	controller::poll();
 
 	game_updateState();
 
@@ -66,4 +67,6 @@ void game_runStep(void)
 void game_close()
 {
 	t3d_destroy();
+}
+
 }

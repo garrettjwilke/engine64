@@ -1,5 +1,6 @@
 #include "physics/math/e64_transform.h"
 
+namespace e64 {
 
 Transform transform_inverse(const Transform *t)
 {
@@ -87,4 +88,6 @@ HalfSpace transform_mulHalfSpaceTransposed(const Transform *t, const HalfSpace *
 	out.normal   = localNormal;
 	out.distance = vector3_dot(&localOrigin, &localNormal);
 	return out;
+}
+
 }

@@ -3,6 +3,7 @@
 
 #include <math.h>
 
+namespace e64 {
 
 typedef struct Vector3 {
 	float x;
@@ -122,5 +123,7 @@ float   vector3_magnitude(const Vector3 *v);
 void    vector3_normalize(Vector3 *v);
 Vector3 vector3_normalized(const Vector3 *v);
 
+
+}
 
 #endif

@@ -21,6 +21,7 @@
 
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 void raycast_set(RaycastData *r, const Vector3 *start, const Vector3 *dir, float endTime)
 {
@@ -33,4 +34,6 @@ Vector3 raycast_getImpactPoint(const RaycastData *r)
 {
 	Vector3 off = vector3_scaled(&r->dir, r->toi);
 	return vector3_sum(&r->start, &off);
+}
+
 }

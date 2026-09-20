@@ -1,6 +1,8 @@
 #ifndef ENGINE64_MATH_COMMON_H
 #define ENGINE64_MATH_COMMON_H
 
+namespace e64 {
+
 #define PI 3.141592f
 #define PI_TIMES_2 6.283185f
 
@@ -54,5 +56,7 @@ float ease_expo_in(float t);
 float ease_expo_out(float t);
 float ease_expo_in_out(float t);
 
+
+}
 
 #endif

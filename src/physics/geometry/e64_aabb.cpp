@@ -23,6 +23,7 @@
 
 #include "physics/geometry/e64_aabb.h"
 
+namespace e64 {
 
 int aabb_containsAABB(const AABB *a, const AABB *other)
 {
@@ -169,4 +170,6 @@ Vector3 aabb_closestToSegment(const AABB *aabb, const Vector3 *a, const Vector3 
 	else if (tmp.z > half_size.z) tmp.z = half_size.z;
 
 	return (Vector3){ tmp.x + center.x, tmp.y + center.y, tmp.z + center.z };
+}
+
 }

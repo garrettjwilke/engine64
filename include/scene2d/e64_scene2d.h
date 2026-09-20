@@ -8,6 +8,8 @@
 #include "camera/e64_camera2d.h"
 #include "stage2d/e64_stage2d.h"
 
+namespace e64 {
+
 #define SCENE2D_MAX_LAYER      8
 #define SCENE2D_MAX_ENTITY    64
 #define SCENE2D_MAX_CHARACTER  4
@@ -43,7 +45,7 @@ typedef struct Scene2DLayer {
 
 typedef struct Scene2DDef {
 
-	const Camera2DDef *camera;
+	const camera2d::Def *camera;
 
 	const Scene2DLayer *layer;
 	uint8_t             layer_count;
@@ -104,5 +106,7 @@ Stage2D *scene2d_getStage(uint8_t index);
    scissor and one Element2D per entity in it. A stage entity contributes
    its own elements instead, those the camera can see. */
 void scene2d_setRenderContext(const Scene2D *scene, RenderContext *ctx);
+
+}
 
 #endif

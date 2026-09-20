@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+namespace e64 {
 
 typedef enum {
 	DIFFICULTY_EASY,
@@ -60,5 +61,7 @@ typedef struct {
 Settings *settings_get(void);
 void      settings_init(void);
 void      settings_reset(void);
+
+}
 
 #endif

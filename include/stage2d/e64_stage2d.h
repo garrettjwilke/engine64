@@ -19,6 +19,8 @@
 #include "entity/e64_entity2d.h"
 #include "camera/e64_camera2d.h"
 
+namespace e64 {
+
 #define STAGE2D_MAX_LAYER 16
 /* A cell is one byte, 0 empty: as many tiles as a byte can name. */
 #define STAGE2D_MAX_TILE  255
@@ -106,5 +108,7 @@ uint8_t stage2d_getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t 
 /* Whether any layer holds a solid tile at the cell. Outside the map is
    open. */
 bool stage2d_isSolid(const Stage2D *stage, int32_t x, int32_t y);
+
+}
 
 #endif

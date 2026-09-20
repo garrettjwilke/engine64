@@ -5,7 +5,9 @@
 #include <stdint.h>
 #include <t3d/t3dmath.h>
 
-typedef struct Character3D Character3D;
+namespace e64 {
+
+class Character3D;
 
 
 #define LOCOMOTION_MIN_SPEED 0.05f
@@ -77,6 +79,8 @@ enum {
 };
 
 
+namespace character3d {
+
 /* How the button becomes height. Charge holds the body down for as long as
    the crouch lasts and launches with what it gathered; snap leaves the floor
    on the press and keeps adding while the button stays down. Zero is charge,
@@ -100,6 +104,37 @@ typedef enum {
 	MOVEMENT_STATE_NONE
 } MovementState;
 
+typedef struct {
+	float target_yaw;
+
+	bool roll_triggered;
+
+	bool jump_held;
+	bool jump_triggered;
+
+	bool strafe;
+	bool strafe_locked;
+	float strafe_yaw;
+
+	bool aiming;
+	bool charging_shoot;
+	bool shooting;
+
+	/* Which gait is asked for. A whole number is that gait; between two of
+	   them the speed lands between theirs. A character with a single gait has
+	   none above it to step to, so the fraction is the share of that one
+	   speed being asked for, straight off how far the stick is held. */
+	float gait;
+	uint8_t swim_gait;   /* CHARACTER3D_SWIM_GAIT_*, from the stick while swimming */
+
+	/* Stick along the ladder: +1 climbs, -1 descends, 0 holds. The stick is
+	   read in the ladder's own frame, so pushing at the rungs always climbs
+	   whichever way the camera happens to look. */
+	float climb;
+	bool  climb_release;   /* jump button: let go and drop */
+} MovementCommand;
+
+
 /* One gait phase of the WALKING state. How many and their values are up to
    the caller; the order runs from lowest to highest target_speed.
 
@@ -117,14 +152,14 @@ typedef struct {
 	float response_rate;
 	float rotation_response_rate;
 	float stick_threshold;
-} Character3DGaitSettings;
+} GaitSettings;
 
 typedef struct {
 
 	float idle_response_rate;
 	float idle_rotation_response_rate;
 
-	const Character3DGaitSettings *gait;
+	const GaitSettings *gait;
 	uint8_t gait_count;
 
 	float roll_target_speed;
@@ -186,7 +221,7 @@ typedef struct {
 	float water_equilibrium_idle;
 	float water_equilibrium_swim;
 
-} Character3DMovementSettings;
+} MovementSettings;
 
 typedef struct {
 	float previous_yaw;
@@ -203,7 +238,7 @@ typedef struct {
 	/* Straight down from the feet, written by the collision pass. Negative
 	   with no floor within reach: the animation times the landing on it. */
 	float floor_distance;
-	
+
 	bool in_water;
 	float submerged_fraction;   /* 0..1 of the capsule under the surface */
 
@@ -220,63 +255,41 @@ typedef struct {
 	bool strafe;
 	bool strafe_locked;
 	float strafe_yaw;
-	
-	bool aiming;
-	bool charging_shoot;
-	bool shooting;
-
-	float gait;
-} Character3DMovementData;
-
-typedef struct {
-	float target_yaw;
-	
-	bool roll_triggered;
-
-	bool jump_held;
-	bool jump_triggered;
-
-	bool strafe;
-	bool strafe_locked;
-	float strafe_yaw;
 
 	bool aiming;
 	bool charging_shoot;
 	bool shooting;
 
-	/* Which gait is asked for. A whole number is that gait; between two of
-	   them the speed lands between theirs. A character with a single gait has
-	   none above it to step to, so the fraction is the share of that one
-	   speed being asked for, straight off how far the stick is held. */
 	float gait;
-	uint8_t swim_gait;   /* CHARACTER3D_SWIM_GAIT_*, from the stick while swimming */
+} MovementData;
 
-	/* Stick along the ladder: +1 climbs, -1 descends, 0 holds. The stick is
-	   read in the ladder's own frame, so pushing at the rungs always climbs
-	   whichever way the camera happens to look. */
-	float climb;
-	bool  climb_release;   /* jump button: let go and drop */
-} MovementCommand;
-
-typedef struct Character3DMovement {
-	const Character3DMovementSettings *settings;
-	Character3DMovementData data;
+typedef struct Movement {
+	const MovementSettings *settings;
+	MovementData data;
 	uint8_t current;
 	uint8_t locomotion;
 	uint8_t next;
-} Character3DMovement;
+} Movement;
 
-void character3d_updateMovement(Character3D *character, MovementCommand *cmd, float dt);
-void character3dMovement_setMode(Character3DMovement *movement, uint8_t new_mode);
-bool character3dMovement_isLocomotion(uint8_t mode);
+
+namespace movement {
+
+void setMode(Movement *movement, uint8_t new_mode);
+bool isLocomotion(uint8_t mode);
 
 /* A crouch under way. The floor probe reads it to leave the body in locomotion
    when the ledge runs out mid-charge, so the jump it was building survives. */
-bool character3dMovement_isChargingJump(const Character3D *character);
+bool isChargingJump(const Character3D *character);
 
 /* Still inside the coyote window: off the floor, but not for long enough that
    the jump has stopped answering. The control reads it to keep taking the
    button after the ledge. */
-bool character3dMovement_isCoyoteOpen(const Character3D *character);
+bool isCoyoteOpen(const Character3D *character);
+
+}
+
+}
+
+}
 
 #endif

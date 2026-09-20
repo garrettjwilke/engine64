@@ -1,6 +1,7 @@
 #ifndef ENGINE64_TIME_H
 #define ENGINE64_TIME_H
 
+namespace e64 {
 
 typedef struct
 {
@@ -21,5 +22,7 @@ void time_setScale(float scale);
    is a normal one instead of the whole load measured as gameplay. */
 void time_reset();
 
+
+}
 
 #endif

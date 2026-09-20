@@ -14,6 +14,7 @@
 #include "game/e64_game.h"
 #include "game/e64_game_states.h"
 
+namespace e64 {
 
 static const GameStateDef *game_state;
 static uint8_t             game_state_count;
@@ -34,8 +35,8 @@ static void gameState_load(GameState id)
 	if (game_state[id].scene2d) scene2d_load(game_state[id].scene2d);
 
 	/* After the scenes: the bodies the controls name exist from here on. */
-	controls_bind(game_state[id].controls, game_state[id].scene3d);
-	controls_bind2D(game_state[id].controls, game_state[id].scene2d);
+	controls::bind(game_state[id].controls, game_state[id].scene3d);
+	controls::bind2D(game_state[id].controls, game_state[id].scene2d);
 
 	if (game_state[id].onEnter) game_state[id].onEnter();
 }
@@ -45,7 +46,7 @@ static void gameState_unload(GameState id)
 	if (game_state[id].onExit) game_state[id].onExit();
 	if (game_state[id].scene2d) scene2d_unload();
 	if (game_state[id].scene3d) {
-		player_init();
+		player::init();
 		scene3d_unload();
 	}
 }
@@ -119,4 +120,6 @@ void game_updateState(void)
 
 	game_state[game->state].update();
 	gameState_settle(game);
+}
+
 }

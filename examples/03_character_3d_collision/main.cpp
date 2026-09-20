@@ -34,22 +34,24 @@
 #include "time/e64_time.h"               /* frame delta                       */
 #include "debug/e64_debug.h"             /* on-screen debug lines             */
 
+using namespace e64;
+
 
 /* Declared in the other files of this example. */
 extern const Prefab3D room;
 extern const Prefab3D character;
 
-extern const CameraDef camera;
+extern const camera::Def camera;
 extern const LightDef  light;
 extern const FogDef    fog;
 
-extern const ControlsDef controls;
+extern const controls::Def controls;
 
 
 /* --- the primitives --------------------------------------------------------
 	Collision is declared in two steps, and both are needed. A PhysicsShapeDef
 	is one solid: its kind, the measurements that kind takes, and what it does
-	on contact. An Entity3DColliderDef is the array of those shapes plus how
+	on contact. An entity3d::ColliderDef is the array of those shapes plus how
 	many there are, and that is what the prefab points at. They are separate
 	because one body can carry several shapes, each with its own offset, so a
 	prefab always takes a collider even when it holds a single shape.
@@ -70,7 +72,7 @@ static const PhysicsShapeDef capsule_shapes[] = {
 	}},
 };
 
-static const Entity3DColliderDef capsule_collider = { capsule_shapes, 1 };
+static const entity3d::ColliderDef capsule_collider = { capsule_shapes, 1 };
 
 static const Prefab3D capsule = {
 
@@ -89,7 +91,7 @@ static const PhysicsShapeDef box_shapes[] = {
 	}},
 };
 
-static const Entity3DColliderDef box_collider = { box_shapes, 1 };
+static const entity3d::ColliderDef box_collider = { box_shapes, 1 };
 
 static const Prefab3D cube = {
 
@@ -106,7 +108,7 @@ static const PhysicsShapeDef sphere_shapes[] = {
 	}},
 };
 
-static const Entity3DColliderDef sphere_collider = { sphere_shapes, 1 };
+static const entity3d::ColliderDef sphere_collider = { sphere_shapes, 1 };
 
 static const Prefab3D sphere = {
 
@@ -137,7 +139,9 @@ static Scene3DDef scene = {
 
 	.light  = &light,
 	.fog    = &fog,
-	.camera = &camera,
+	/* The engine has a namespace of this name (camera::), so with `using
+	   namespace e64` the variable is reached through the global scope. */
+	.camera = &::camera,
 
 	.prefab       = scene_prefabs,
 	.prefab_count = sizeof(scene_prefabs) / sizeof(scene_prefabs[0]),
@@ -158,12 +162,12 @@ static void gameplay3d_update(void)
 	Viewport *viewport = viewport_get();
 	float delta = time_get()->delta;
 
-	player_setCharacter3DControl(PLAYER_1, viewport);
-	player_update();
+	player::setCharacter3DControl(PLAYER_1, viewport);
+	player::update();
 	
 	scene3d_updateCharacters(viewport->fb_index);
 
-	cameraControl_update(&viewport->camera, viewport->camera.binding, scene3d_get(), delta);
+	camera::control::update(&viewport->camera, viewport->camera.binding, scene3d_get(), delta);
 	viewport_setPerspectiveCamera();
 
 	/* Debug lines have to be rewritten every frame; nothing persists.
@@ -176,7 +180,7 @@ static void gameplay3d_update(void)
 	debugUI_set(6, "DPAD fov");
 
 	debugUI_showFPS();
-	debugUI_setRight(0, "arm %.1f", cameraSpringArm_getLength(&viewport->camera));
+	debugUI_setRight(0, "arm %.1f", camera::springArm::getLength(&viewport->camera));
 	debugUI_setRight(1, "fov %.1f", viewport->camera.field_of_view);
 }
 
@@ -189,7 +193,7 @@ static const GameStateDef states[STATE_COUNT] = {
 		/* Wired once, after the scene is loaded and before the first update:
 		   the player is seated on the body its binding names, and the camera
 		   answers to the buttons that name it. */
-		.controls      = &controls,
+		.controls      = &::controls,
 
 		/* The engine opens no screen by itself, so a state that draws has to
 		   name one. */

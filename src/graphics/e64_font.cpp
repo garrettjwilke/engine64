@@ -2,6 +2,7 @@
 #include "graphics/e64_font.h"
 #include "resource/e64_resource.h"
 
+namespace e64 {
 
 /* The game's table, handed over at font_init. rdpq keeps the loaded font
    behind its id, so nothing else is stored here. */
@@ -40,4 +41,6 @@ void font_unloadAsset(uint8_t id)
 void text_draw(const Text *element, Vector2 position)
 {
 	rdpq_text_printf(element->parms, element->font, position.x, position.y, "^%02d%s", element->style, element->text);
+}
+
 }

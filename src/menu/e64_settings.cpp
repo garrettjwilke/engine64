@@ -1,5 +1,6 @@
 #include "menu/e64_settings.h"
 
+namespace e64 {
 
 static Settings settings;
 
@@ -39,3 +40,5 @@ void settings_init(void)
 }
 
 void settings_reset(void) { settings_init(); }
+
+}

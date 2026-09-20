@@ -23,6 +23,7 @@
 
 #include "physics/geometry/e64_half_space.h"
 
+namespace e64 {
 
 HalfSpace halfSpace_create(const Vector3 *normal, float distance)
 {
@@ -65,4 +66,6 @@ void vector3_computeBasis(const Vector3 *a, Vector3 *b, Vector3 *c)
 	}
 	*b = vector3_normalized(b);
 	*c = vector3_cross(a, b);
+}
+
 }

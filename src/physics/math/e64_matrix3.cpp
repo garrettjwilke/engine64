@@ -3,6 +3,7 @@
 
 #include "physics/math/e64_matrix3.h"
 
+namespace e64 {
 
 Matrix3 matrix3_create(float a, float b, float c, float d, float e, float f, float g, float h, float i)
 {
@@ -218,4 +219,6 @@ Vector3 matrix3_transformVectorTransposed(const Matrix3 *m, const Vector3 *v)
 		vector3_dot(&m->ey, v),
 		vector3_dot(&m->ez, v),
 	};
+}
+
 }

@@ -31,6 +31,7 @@
 #include "physics/math/e64_matrix3.h"
 #include "physics/e64_physics_settings.h"
 
+namespace e64 {
 
 struct PhysicsIsland;
 struct VelocityState;
@@ -80,5 +81,7 @@ void contactSolver_shutdown  (ContactSolver *s);
 void contactSolver_preSolve  (ContactSolver *s, float dt);
 void contactSolver_solve     (ContactSolver *s);
 
+
+}
 
 #endif

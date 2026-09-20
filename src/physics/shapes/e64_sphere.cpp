@@ -4,6 +4,7 @@
 #include "physics/shapes/e64_physics_shape.h"   /* MassData */
 #include "physics/math/e64_math_common.h"        /* PI */
 
+namespace e64 {
 
 int sphere_testPoint(const Sphere *s, const Transform *world, const Vector3 *p)
 {
@@ -89,3 +90,5 @@ void sphereDef_setFriction(SphereDef *d, float f)     { d->friction = f; }
 void sphereDef_setRestitution(SphereDef *d, float r)  { d->restitution = r; }
 void sphereDef_setDensity(SphereDef *d, float rho)    { d->density = rho; }
 void sphereDef_setSensor(SphereDef *d, int s)         { d->sensor = s; }
+
+}

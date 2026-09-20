@@ -6,14 +6,18 @@
 #include "sound/e64_sound.h"
 #include "time/e64_time.h"
 
+namespace e64 {
 
 /* Submersion above this keeps the dry footsteps quiet: wading out of the
    ramp is still water, and tile steps from inside it sound wrong. */
 #define CHARACTER3D_SOUND_WET_FRACTION 0.25f
 
 
+namespace character3d {
+namespace sound {
+
 /* One of the event's entries at random, out of the entity's open list. */
-static const Sound *character3dSound_pick(const Character3D *character, const uint8_t *index, uint8_t count)
+static const e64::Sound *pick(const Character3D *character, const uint8_t *index, uint8_t count)
 {
 	return &character->entity->sound[index[rand() % count]];
 }
@@ -21,7 +25,7 @@ static const Sound *character3dSound_pick(const Character3D *character, const ui
 
 /* True when the normalized cycle walked past mark since the previous frame,
    including the frame where the clip wraps around. */
-static bool character3dSound_crossed(float previous, float current, float mark)
+static bool crossed(float previous, float current, float mark)
 {
 	if (previous < 0.0f) return false;
 
@@ -34,7 +38,7 @@ static bool character3dSound_crossed(float previous, float current, float mark)
 /* A step at walking pace lands softer than one at a sprint: linear ramp
    from volume_min to volume_max over [0, footstep_speed_max]. A zero
    speed_max opts out of the scaling and every step hits at max. */
-static float character3dSound_footstepVolume(const Character3DSoundDef *def, float speed)
+static float footstepVolume(const SoundDef *def, float speed)
 {
 	if (def->footstep_speed_max <= 0.0f) return def->footstep_volume_max;
 
@@ -51,13 +55,13 @@ static float character3dSound_footstepVolume(const Character3DSoundDef *def, flo
    land on the feet no matter which gait carries the blend. Grounded and in
    locomotion only: airborne or rolling feet touch nothing, and the swim
    reads the same cycle through its own marks. */
-static void character3dSound_updateFootsteps(Character3D *character, const Character3DSoundDef *def)
+static void updateFootsteps(Character3D *character, const SoundDef *def)
 {
-	const Character3DMovement *movement = &character->movement;
+	const Movement *movement = &character->movement;
 
 	if (!def->footstep_count || !def->footing_count) return;
 	if (!movement->data.is_grounded) return;
-	if (!character3dMovement_isLocomotion(movement->current)) return;
+	if (!character3d::movement::isLocomotion(movement->current)) return;
 
 	/* Wading: no dry steps until the body is mostly out of the water. */
 	if (movement->data.in_water && movement->data.submerged_fraction > CHARACTER3D_SOUND_WET_FRACTION) return;
@@ -66,12 +70,12 @@ static void character3dSound_updateFootsteps(Character3D *character, const Chara
 	float speed = movement->data.horizontal_speed;
 
 	for (int i = 0; i < def->footing_count; i++) {
-		if (!character3dSound_crossed(character->sound.previous_cycle, cycle, def->footing[i]))
+		if (!crossed(character->sound.previous_cycle, cycle, def->footing[i]))
 			continue;
 
-		sound_play(character3dSound_pick(character, def->footstep, def->footstep_count),
+		sound_play(pick(character, def->footstep, def->footstep_count),
 			&character->entity->transform.position,
-			character3dSound_footstepVolume(def, speed), 0.0f);
+			footstepVolume(def, speed), 0.0f);
 
 		/* Clock reading for whoever must keep distance from a step: the
 		   roll's launch foot skips itself when one just landed. */
@@ -82,11 +86,11 @@ static void character3dSound_updateFootsteps(Character3D *character, const Chara
 
 /* The launch is still in the air: the body only starts scraping the floor once
    the roll timer reaches roll_ground_time, and that is where the noise is. */
-static void character3dSound_updateRoll(Character3D *character, const Character3DSoundDef *def)
+static void updateRoll(Character3D *character, const SoundDef *def)
 {
 	if (character->movement.current != MOVEMENT_STATE_ROLLING) return;
 
-	const Character3DMovementSettings *settings = character->movement.settings;
+	const MovementSettings *settings = character->movement.settings;
 
 	float previous = character->sound.previous_roll_timer;
 	float timer    = character->movement.data.roll_timer;
@@ -100,20 +104,20 @@ static void character3dSound_updateRoll(Character3D *character, const Character3
 	   previous roll ended — a ledge can leave the timer part way through. */
 	if (def->footstep_count && timer > 0.0f && timer <= time_get()->delta
 	    && time_get()->counter - character->sound.last_footstep >= def->roll_launch_gap)
-		sound_play(character3dSound_pick(character, def->footstep, def->footstep_count),
+		sound_play(pick(character, def->footstep, def->footstep_count),
 			&character->entity->transform.position,
 			def->roll_launch_volume, 0.0f);
 
 	/* The body scrapes the floor until grip: the sample is asked to cover
 	   what is left of that, and slows down as much as that takes. */
 	if (def->roll_count && previous < start && timer >= start)
-		sound_play(character3dSound_pick(character, def->roll, def->roll_count),
+		sound_play(pick(character, def->roll, def->roll_count),
 			&character->entity->transform.position,
 			def->roll_volume, settings->roll_grip_time - start);
 
 	/* Grip is the foot planting to come out of the roll. */
 	if (def->footstep_count && previous < settings->roll_grip_time && timer >= settings->roll_grip_time)
-		sound_play(character3dSound_pick(character, def->footstep, def->footstep_count),
+		sound_play(pick(character, def->footstep, def->footstep_count),
 			&character->entity->transform.position,
 			def->roll_stand_volume, 0.0f);
 }
@@ -124,7 +128,7 @@ static void character3dSound_updateRoll(Character3D *character, const Character3
 /* The charge is the crouch; the launch is the body leaving the floor. The
    noise belongs to the second, so it fires when the timer crosses the end of
    the first. */
-static void character3dSound_updateJump(Character3D *character, const Character3DSoundDef *def)
+static void updateJump(Character3D *character, const SoundDef *def)
 {
 	if (!def->jump_count) return;
 
@@ -140,13 +144,13 @@ static void character3dSound_updateJump(Character3D *character, const Character3
 
 	/* jump_anim_air is where the clip has the body leaving the floor: the
 	   sample is stretched to cover exactly that. */
-	sound_play(character3dSound_pick(character, def->jump, def->jump_count),
+	sound_play(pick(character, def->jump, def->jump_count),
 		&character->entity->transform.position, def->jump_volume,
 		character->animation.def->settings->jump_anim_air);
 }
 
 
-static void character3dSound_updateLanding(Character3D *character, const Character3DSoundDef *def)
+static void updateLanding(Character3D *character, const SoundDef *def)
 {
 	if (!def->land_count) return;
 
@@ -167,14 +171,14 @@ static void character3dSound_updateLanding(Character3D *character, const Charact
 		volume = def->land_volume_min + t * (def->land_volume_max - def->land_volume_min);
 	}
 
-	sound_play(character3dSound_pick(character, def->land, def->land_count),
+	sound_play(pick(character, def->land, def->land_count),
 		&character->entity->transform.position, volume, 0.0f);
 }
 
 
-static void character3dSound_updateSwim(Character3D *character, const Character3DSoundDef *def)
+static void updateSwim(Character3D *character, const SoundDef *def)
 {
-	const Character3DMovement *movement = &character->movement;
+	const Movement *movement = &character->movement;
 
 	/* Splash on the frame the body enters the water, scaled by the plunge:
 	   the minimum sits near zero, so wading in from the ramp is close to
@@ -191,7 +195,7 @@ static void character3dSound_updateSwim(Character3D *character, const Character3
 			volume = def->splash_volume_min + t * (def->splash_volume_max - def->splash_volume_min);
 		}
 
-		sound_play(character3dSound_pick(character, def->splash, def->splash_count),
+		sound_play(pick(character, def->splash, def->splash_count),
 			&character->entity->transform.position, volume, 0.0f);
 	}
 
@@ -201,7 +205,7 @@ static void character3dSound_updateSwim(Character3D *character, const Character3
 	if (movement->current != MOVEMENT_STATE_SWIMMING) return;
 	if (!def->stroke_count) return;
 
-	const Character3DMovementSettings *settings = movement->settings;
+	const MovementSettings *settings = movement->settings;
 	float speed = movement->data.horizontal_speed;
 	if (speed < settings->swim_slow_speed * 0.5f) return;
 
@@ -213,26 +217,26 @@ static void character3dSound_updateSwim(Character3D *character, const Character3
 	float cycle = character->animation.locomotion_cycle;
 
 	for (int i = 0; i < def->stroke_count; i++) {
-		if (!character3dSound_crossed(character->sound.previous_cycle, cycle, def->stroke[i]))
+		if (!crossed(character->sound.previous_cycle, cycle, def->stroke[i]))
 			continue;
 
-		sound_play(character3dSound_pick(character, stroke, count),
+		sound_play(pick(character, stroke, count),
 			&character->entity->transform.position, def->stroke_volume, 0.0f);
 	}
 }
 
 
-void character3dSound_update(Character3D *character)
+void update(Character3D *character)
 {
-	const Character3DSoundDef *def = character->sound.def;
+	const SoundDef *def = character->sound.def;
 
 	if (!def) return;
 
-	character3dSound_updateFootsteps(character, def);
-	character3dSound_updateRoll(character, def);
-	character3dSound_updateJump(character, def);
-	character3dSound_updateLanding(character, def);
-	character3dSound_updateSwim(character, def);
+	updateFootsteps(character, def);
+	updateRoll(character, def);
+	updateJump(character, def);
+	updateLanding(character, def);
+	updateSwim(character, def);
 
 	character->sound.previous_cycle      = character->animation.locomotion_cycle;
 	character->sound.previous_roll_timer = character->movement.data.roll_timer;
@@ -244,4 +248,9 @@ void character3dSound_update(Character3D *character)
 
 	if (!character->movement.data.in_water)
 		character->sound.previous_plunge_speed = character->body.velocity.z;
+}
+
+}
+}
+
 }

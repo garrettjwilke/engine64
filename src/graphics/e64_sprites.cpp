@@ -1,6 +1,7 @@
 #include <libdragon.h>
 #include "graphics/e64_sprites.h"
 
+namespace e64 {
 
 /* Half of TMEM: the other half takes the palette of a colour indexed
    texture, and a tile never comes close to either. */
@@ -66,4 +67,6 @@ void sprite_draw(const Sprite *element, Vector2 position, Vector2 scale, float r
 		.theta   = rotation,
 	};
 	rdpq_sprite_blit(s, position.x, position.y, &parms);
+}
+
 }

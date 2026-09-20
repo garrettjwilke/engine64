@@ -11,6 +11,7 @@
 #include "menu/e64_settings.h"
 #include "viewport/e64_viewport.h"
 
+namespace e64 {
 
 static Viewport viewport;
 
@@ -84,6 +85,11 @@ static void viewport_applyMode(void)
 	   ask the video hardware, which darkens no picture. */
 	gamma_t gamma = settings->gamma > 50 ? GAMMA_CORRECT_DITHER : GAMMA_NONE;
 
+	/* Matrices, skeletons and deform buffers rotate over FB_COUNT frames:
+	   more display buffers than that would let the RSP still read a frame
+	   the update is already overwriting. */
+	assert(mode->buffers <= FB_COUNT);
+
 	/* The video hardware's own smoothing pass, off. It works on the coverage
 	   each draw leaves behind, and 3D edges leave partial coverage where 2D
 	   leaves it whole, so turning it on makes the picture change with
@@ -104,7 +110,7 @@ void viewport_init(void)
 {
 	viewport.mode = (ViewportModeDef){};
 
-	camera_init(&viewport.camera);
+	camera::init(&viewport.camera);
 	viewport.fb_index = 0;
 }
 
@@ -189,5 +195,7 @@ void viewport_detach(void)
 
 void viewport_updateCamera(Vector3 *center, const struct Scene3D *scene)
 {
-	camera_update(&viewport.camera, center, scene, time_get()->delta);
+	camera::update(&viewport.camera, center, scene, time_get()->delta);
+}
+
 }

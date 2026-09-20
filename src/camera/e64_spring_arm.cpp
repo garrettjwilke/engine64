@@ -5,30 +5,34 @@
 #include "camera/e64_camera.h"
 #include "camera/e64_spring_arm.h"
 
+namespace e64 {
 
-float cameraSpringArm_getPitch(const Camera *camera)
+namespace camera {
+namespace springArm {
+
+float getPitch(const Camera *camera)
 {
 	if (camera->type != CAMERA_TYPE_SPRING_ARM) return 0.0f;
 	return camera->spring_arm.data.pitch;
 }
 
-float cameraSpringArm_getYaw(const Camera *camera)
+float getYaw(const Camera *camera)
 {
 	if (camera->type != CAMERA_TYPE_SPRING_ARM) return 0.0f;
 	return camera->spring_arm.data.yaw;
 }
 
-float cameraSpringArm_getLength(const Camera *camera)
+float getLength(const Camera *camera)
 {
 	if (camera->type != CAMERA_TYPE_SPRING_ARM) return 0.0f;
 	return camera->spring_arm.data.arm_length;
 }
 
 
-static void cameraSpringArm_setVelocity(Camera *camera, float dt)
+static void setVelocity(Camera *camera, float dt)
 {
-	CameraSpringArmData *data = &camera->spring_arm.data;
-	const CameraSpringArmSettings *settings = &camera->spring_arm.settings;
+	SpringArmData *data = &camera->spring_arm.data;
+	const SpringArmSettings *settings = &camera->spring_arm.settings;
 
 	float factor_x = fm_expf(-settings->response_rate.x * dt);
 	float factor_y = fm_expf(-settings->response_rate.y * dt);
@@ -37,10 +41,10 @@ static void cameraSpringArm_setVelocity(Camera *camera, float dt)
 }
 
 
-static void cameraSpringArm_setPosition(Camera *camera, Vector3 *center, float dt)
+static void setPosition(Camera *camera, Vector3 *center, float dt)
 {
-	CameraSpringArmData *data = &camera->spring_arm.data;
-	const CameraSpringArmSettings *settings = &camera->spring_arm.settings;
+	SpringArmData *data = &camera->spring_arm.data;
+	const SpringArmSettings *settings = &camera->spring_arm.settings;
 
 	data->pitch += data->velocity.y * dt;
 	data->yaw   += data->velocity.x * dt;
@@ -73,11 +77,11 @@ static void cameraSpringArm_setPosition(Camera *camera, Vector3 *center, float d
 }
 
 
-void cameraSpringArm_init(Camera *camera, const CameraSpringArmDef *def)
+void init(Camera *camera, const SpringArmDef *def)
 {
 	camera->type = CAMERA_TYPE_SPRING_ARM;
 	camera->spring_arm.settings = def->settings;
-	camera->spring_arm.data     = (CameraSpringArmData){
+	camera->spring_arm.data     = (SpringArmData){
 		.target_arm_length  = def->arm_length,
 		.arm_length         = def->arm_length,
 		.target_side_offset = def->side_offset,
@@ -89,8 +93,13 @@ void cameraSpringArm_init(Camera *camera, const CameraSpringArmDef *def)
 }
 
 
-void cameraSpringArm_update(Camera *camera, Vector3 *center, float dt)
+void update(Camera *camera, Vector3 *center, float dt)
 {
-	cameraSpringArm_setVelocity(camera, dt);
-	cameraSpringArm_setPosition(camera, center, dt);
+	setVelocity(camera, dt);
+	setPosition(camera, center, dt);
+}
+
+}
+}
+
 }

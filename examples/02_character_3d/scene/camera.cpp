@@ -9,12 +9,14 @@
 */
 #include "camera/e64_camera.h"
 
+using namespace e64;
+
 
 /* A spring arm camera hangs at the end of an arm anchored to a target point,
    and orbits that point in yaw and pitch. */
-extern const CameraDef camera = {
+extern const camera::Def camera = {
 
-	.type    = CAMERA_TYPE_SPRING_ARM,
+	.type    = camera::CAMERA_TYPE_SPRING_ARM,
 
 	/* The lens. Nothing closer than the near plane or farther than the far one
 	   is drawn. Depth precision is spread across that range, so keeping it

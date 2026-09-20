@@ -18,6 +18,7 @@
 #include "physics/math/e64_quaternion.h"
 #include "render/e64_render.h"
 
+namespace e64 {
 
 #define SPRING_BONE_COLLIDER_MAX 4
 
@@ -125,5 +126,7 @@ bool springBone_init(SpringBone *spring_bone, const T3DSkeleton *skeleton, int16
 
 /* SkeletonModifierFn; context is the SpringBone */
 void springBone_apply(T3DSkeleton *skeleton, void *context);
+
+}
 
 #endif

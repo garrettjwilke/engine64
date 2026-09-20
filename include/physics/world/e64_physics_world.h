@@ -40,6 +40,7 @@
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
+namespace e64 {
 
 struct ContactConstraint;
 
@@ -136,5 +137,7 @@ void physicsWorld_allocShape (PhysicsWorld *s, PhysicsShape **out);
 void physicsWorld_freeShape  (PhysicsWorld *s, PhysicsShape  *shape);
 void physicsWorld_markNewShape(PhysicsWorld *s);
 
+
+}
 
 #endif

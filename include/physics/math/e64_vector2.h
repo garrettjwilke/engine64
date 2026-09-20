@@ -3,6 +3,7 @@
 
 #include <math.h>
 
+namespace e64 {
 
 typedef struct Vector2 {
 	float x;
@@ -109,5 +110,7 @@ static inline Vector2 vector2_max(const Vector2 *a, const Vector2 *b)
 float   vector2_magnitude(const Vector2 *v);
 void    vector2_normalize(Vector2 *v);
 Vector2 vector2_normalized(const Vector2 *v);
+
+}
 
 #endif

@@ -13,6 +13,8 @@
 #include "physics/math/e64_vector3.h"
 #include "viewport/e64_viewport.h"
 
+namespace e64 {
+
 /* A stage contributes one entry per visible tile: a full screen of 16 px
    cells is 300 of them per layer. */
 #define RENDER_MAX_2D_ELEMENTS 1024
@@ -40,13 +42,14 @@ typedef struct {
 
 } Element2D;
 
+struct Mesh;
+
 typedef struct {
 
-	rspq_block_t *dl;      /* NULL: draw model's visible objects instead */
-	T3DModel     *model;
+	rspq_block_t *dl;      /* NULL: draw the mesh's visible objects instead */
+	struct Mesh  *mesh;
 	T3DMat4FP    *matrix;
 	T3DSkeleton  *skeleton;
-	T3DModelDrawConf *conf; /* optional, object path only: per-frame tile/texture hooks */
 
 } Element3D;
 
@@ -87,5 +90,7 @@ void render_initContext(RenderContext *ctx);
    shows. Reaches the scenes and the viewport itself. */
 void render(void);
 
+
+}
 
 #endif
