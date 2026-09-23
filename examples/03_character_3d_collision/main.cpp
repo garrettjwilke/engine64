@@ -23,38 +23,38 @@
 */
 #include <libdragon.h>
 
-#include "game/e64_game.h"               /* init, state table, frame step    */
-#include "scene3d/e64_scene3d.h"         /* scene declaration and live scene */
-#include "entity/e64_entity3d.h"         /* colliders and shapes for a prefab */
-#include "viewport/e64_viewport.h"       /* screen modes and the live camera  */
-#include "camera/e64_spring_arm.h"       /* reading the arm back for debug    */
-#include "player/e64_player.h"           /* the seat a controller drives      */
-#include "control/e64_camera_control.h"  /* buttons wired to camera motion    */
-#include "control/e64_player_control.h"  /* the controls a state declares     */
-#include "time/e64_time.h"               /* frame delta                       */
-#include "debug/e64_debug.h"             /* on-screen debug lines             */
-
-using namespace e64;
+#include "game/e64_game.h" /* init, state table, frame step */
+#include "game/e64_game_states.h"
+#include "scene3d/e64_scene3d.h" /* scene declaration and live scene */
+#include "entity/e64_entity3d.h" /* colliders and shapes for a prefab */
+#include "viewport/e64_viewport.h" /* screen modes and the live camera */
+#include "camera/e64_spring_arm.h" /* reading the arm back for debug */
+#include "player/e64_player.h" /* the seat a controller drives */
+#include "camera/e64_camera3d_control.h" /* buttons wired to camera motion */
+#include "player/e64_player_control.h" /* reading a seat's buttons */
+#include "time/e64_time.h" /* frame delta */
+#include "debug/e64_debug.h" /* on-screen debug lines */
 
 
 /* Declared in the other files of this example. */
-extern const Prefab3D room;
-extern const Prefab3D character;
+extern const e64::Prefab3D room;
+extern const e64::Prefab3D character;
 
-extern const camera::Def camera;
-extern const LightDef  light;
-extern const FogDef    fog;
+extern const e64::camera3d::Def camera;
+extern const e64::light::Def light;
+extern const e64::fog::Def fog;
 
-extern const controls::Def controls;
+extern const e64::controls::Def controls;
 
 
 /* --- the primitives --------------------------------------------------------
-	Collision is declared in two steps, and both are needed. A PhysicsShapeDef
-	is one solid: its kind, the measurements that kind takes, and what it does
-	on contact. An entity3d::ColliderDef is the array of those shapes plus how
-	many there are, and that is what the prefab points at. They are separate
-	because one body can carry several shapes, each with its own offset, so a
-	prefab always takes a collider even when it holds a single shape.
+	Collision is declared in two steps, and both are needed. A
+	physics::Shape::Def is one solid: its kind, the measurements that kind
+	takes, and what it does on contact. A collider::Def is the array of
+	those shapes plus how many there are, and that is what the prefab
+	points at. They are separate because one body can carry several shapes,
+	each with its own offset, so a prefab always takes a collider even when it
+	holds a single shape.
 
 	Shapes are in metres.
 */
@@ -64,20 +64,20 @@ extern const controls::Def controls;
 /* Half height is the segment between the two caps, so the whole capsule stands
    radius plus half height either side of its centre. Raised by that centre, it
    rests on the floor. */
-static const PhysicsShapeDef capsule_shapes[] = {
-	{ .type = SHAPE_CAPSULE, .capsule = {
-		.tx          = { .position = { 0.0f, 0.0f, 0.90f } },
-		.radius      = 0.35f,
+static const e64::physics::Shape::Def capsule_shapes[] = {
+	{ .type = e64::physics::Shape::SHAPE_CAPSULE, .capsule = {
+		.tx = { .position = { 0.0f, 0.0f, 0.90f } },
+		.radius = 0.35f,
 		.half_height = 0.55f,
 	}},
 };
 
-static const entity3d::ColliderDef capsule_collider = { capsule_shapes, 1 };
+static const e64::collider::Def capsule_collider = { capsule_shapes, 1 };
 
-static const Prefab3D capsule = {
+static const e64::Prefab3D capsule = {
 
-	.type     = PREFAB3D_PROP,
-	.model    = "rom:/models/capsule.t3dm",
+	.type = e64::prefab3d::PREFAB3D_PROP,
+	.model = "rom:/models/capsule.t3dm",
 	.collider = &capsule_collider,
 };
 
@@ -85,66 +85,66 @@ static const Prefab3D capsule = {
 
 /* Box extents are measured from the centre out, so a one metre cube is half a
    metre on each axis. */
-static const PhysicsShapeDef box_shapes[] = {
-	{ .type = SHAPE_BOX, .box = {
-		.e           = { 0.5f, 0.5f, 0.5f },
+static const e64::physics::Shape::Def box_shapes[] = {
+	{ .type = e64::physics::Shape::SHAPE_BOX, .box = {
+		.e = { 0.5f, 0.5f, 0.5f },
 	}},
 };
 
-static const entity3d::ColliderDef box_collider = { box_shapes, 1 };
+static const e64::collider::Def box_collider = { box_shapes, 1 };
 
-static const Prefab3D cube = {
+static const e64::Prefab3D cube = {
 
-	.type     = PREFAB3D_PROP,
-	.model    = "rom:/models/cube.t3dm",
+	.type = e64::prefab3d::PREFAB3D_PROP,
+	.model = "rom:/models/cube.t3dm",
 	.collider = &box_collider,
 };
 
 /* --- sphere ---------------------------------------------------------------*/
 
-static const PhysicsShapeDef sphere_shapes[] = {
-	{ .type = SHAPE_SPHERE, .sphere = {
-		.radius      = 0.5f,
+static const e64::physics::Shape::Def sphere_shapes[] = {
+	{ .type = e64::physics::Shape::SHAPE_SPHERE, .sphere = {
+		.radius = 0.5f,
 	}},
 };
 
-static const entity3d::ColliderDef sphere_collider = { sphere_shapes, 1 };
+static const e64::collider::Def sphere_collider = { sphere_shapes, 1 };
 
-static const Prefab3D sphere = {
+static const e64::Prefab3D sphere = {
 
-	.type     = PREFAB3D_PROP,
-	.model    = "rom:/models/sphere.t3dm",
+	.type = e64::prefab3d::PREFAB3D_PROP,
+	.model = "rom:/models/sphere.t3dm",
 	.collider = &sphere_collider,
 };
 
 
 /* --- the scene -------------------------------------------------------------*/
 
-/* One row per placement: which prefab, then where it stands. Declaring them
+/* One row per entity: which prefab, then where it stands. Declaring them
    here is the whole job: the load builds each one in order, registers it in
    the physics and draws it, with nothing else to call. What is left out stays
-   zero, and a zero scale means original size. */
-static Scene3DPrefab scene_prefabs[] = {
+   zero, and a zero scale means original size.
+
+   Not static: the character binding in controls/ points at the first row. */
+e64::scene3d::Entity scene_entities[] = {
 
 	{ &character, { 0.0f, -6.0f, 0.0f } },
 
-	{ &capsule, {   0.0f, 0.0f, 0.0f } },
-	{ &cube,    { -10.0f, 0.0f, 1.0f }, {0}, { 2.0f, 2.0f, 2.0f } },
-	{ &sphere,  {  10.0f, 0.0f, 1.0f }, {0}, { 2.0f, 2.0f, 2.0f } },
+	{ &capsule, { 0.0f, 0.0f, 0.0f } },
+	{ &cube, { -10.0f, 0.0f, 1.0f }, {0}, { 2.0f, 2.0f, 2.0f } },
+	{ &sphere, { 10.0f, 0.0f, 1.0f }, {0}, { 2.0f, 2.0f, 2.0f } },
 
 	{ &room },
 };
 
-static Scene3DDef scene = {
+static e64::scene3d::Def scene = {
 
-	.light  = &light,
-	.fog    = &fog,
-	/* The engine has a namespace of this name (camera::), so with `using
-	   namespace e64` the variable is reached through the global scope. */
-	.camera = &::camera,
+	.light = &light,
+	.fog = &fog,
+	.camera = &camera,
 
-	.prefab       = scene_prefabs,
-	.prefab_count = sizeof(scene_prefabs) / sizeof(scene_prefabs[0]),
+	.entity = scene_entities,
+	.entity_count = sizeof(scene_entities) / sizeof(scene_entities[0]),
 };
 
 
@@ -159,45 +159,45 @@ enum { GAMEPLAY3D, STATE_COUNT };
 
 static void gameplay3d_update(void)
 {
-	Viewport *viewport = viewport_get();
-	float delta = time_get()->delta;
+	e64::Viewport *viewport = e64::viewport::get();
+	float delta = e64::time::get()->delta;
 
-	player::setCharacter3DControl(PLAYER_1, viewport);
-	player::update();
-	
-	scene3d_updateCharacters(viewport->fb_index);
+	e64::player::setCharacter3DControl(e64::PLAYER_1, viewport);
+	e64::player::update();
 
-	camera::control::update(&viewport->camera, viewport->camera.binding, scene3d_get(), delta);
-	viewport_setPerspectiveCamera();
+	e64::scene3d::updateCharacters(viewport->fb_index);
+
+	e64::camera3d::control::update(&viewport->camera, viewport->camera.binding, e64::scene3d::get(), delta);
+	e64::viewport::setPerspectiveCamera();
 
 	/* Debug lines have to be rewritten every frame; nothing persists.
 	*/
-	debugUI_set(0, "STICK walk");
-	debugUI_set(1, "A jump");
-	debugUI_set(2, "Z sprint");
-	debugUI_set(4, "CBUTTONS orbit camera");
-	debugUI_set(5, "L R arm length");
-	debugUI_set(6, "DPAD fov");
+	e64::debug::ui::set(0, "STICK walk");
+	e64::debug::ui::set(1, "A jump");
+	e64::debug::ui::set(2, "Z sprint");
+	e64::debug::ui::set(4, "CBUTTONS orbit camera");
+	e64::debug::ui::set(5, "L R arm length");
+	e64::debug::ui::set(6, "DPAD fov");
 
-	debugUI_showFPS();
-	debugUI_setRight(0, "arm %.1f", camera::springArm::getLength(&viewport->camera));
-	debugUI_setRight(1, "fov %.1f", viewport->camera.field_of_view);
+	e64::debug::ui::showFPS();
+	e64::debug::ui::setRight(0, "arm %.1f", e64::camera3d::springArm::getLength(&viewport->camera));
+	e64::debug::ui::setRight(1, "fov %.1f", viewport->camera.field_of_view);
 }
 
-static const GameStateDef states[STATE_COUNT] = {
+static const e64::Game::State::Def states[STATE_COUNT] = {
 
 	[GAMEPLAY3D] = {
-		.update        = gameplay3d_update,
-		.scene3d       = &scene,
+		.update = gameplay3d_update,
+		.scene3d = &scene,
 
 		/* Wired once, after the scene is loaded and before the first update:
 		   the player is seated on the body its binding names, and the camera
 		   answers to the buttons that name it. */
-		.controls      = &::controls,
+		.controls = &controls,
 
 		/* The engine opens no screen by itself, so a state that draws has to
 		   name one. */
-		.viewport      = SCREEN_320x240,
+		.viewport = SCREEN_320x240,
 	},
 };
 
@@ -207,15 +207,15 @@ int main()
 	debug_init_isviewer();
 	debug_init_usblog();
 
-	game_init();
+	e64::game::init();
 
-	debugUI_init();
+	e64::debug::ui::init();
 
-	game_start(states, STATE_COUNT, GAMEPLAY3D);
+	e64::game::state::start(states, STATE_COUNT, GAMEPLAY3D);
 
-	for (;;) game_runStep();
+	for (;;) e64::game::runStep();
 
-	game_close();
+	e64::game::close();
 
 	return 0;
 }

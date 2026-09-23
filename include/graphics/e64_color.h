@@ -1,18 +1,22 @@
 #ifndef ENGINE64_COLOR_H
 #define ENGINE64_COLOR_H
 
+#include <libdragon.h>
+
 namespace e64 {
 
-typedef struct {
+namespace color {
 
+struct HSV {
 	float h, s, v, a;
+};
 
-} color_hsv;
 
+color_t lerp(color_t *a, color_t *b, float t);
 
-color_t color_lerp(color_t *a, color_t *b, float t);
+color_t lerpRGB(color_t *a, color_t *b, float t);
 
-color_t color_lerpRGB(color_t *a, color_t *b, float t);
+}
 
 }
 

@@ -4,7 +4,7 @@
 #include <fmath.h>
 #include <t3d/t3dskeleton.h>
 
-#include "physics/math/e64_math_common.h"
+#include "math/e64_math.h"
 #include "camera/e64_spring_arm.h"
 #include "viewport/e64_viewport.h"
 #include "entity/e64_entity3d.h"
@@ -24,7 +24,7 @@ void init(Character3D *character, const AimingSettings *settings)
 	aiming->pitch_scale = settings->pitch_scale;
 
 	for (uint8_t i = 0; i < aiming->count; i++)
-		aiming->bone[i] = (int16_t)t3d_skeleton_find_bone(&character->animation.main,
+		aiming->bone[i] = (int16_t)t3d_skeleton_find_bone(&character->animation.graph.main,
 		                                                  (char *)settings->bone[i]);
 }
 
@@ -35,13 +35,13 @@ void apply(T3DSkeleton *skeleton, void *context)
 
 	/* The hold is already half an aim: both modes bend, and the combined
 	   presence keeps the weight steady through the hold-aim crossfade. */
-	float hold  = character->animation.aiming_blend;
-	float draw  = character->animation.charging_shoot_blend;
+	float hold = character->animation.aiming_blend;
+	float draw = character->animation.charging_shoot_blend;
 	float blend = 1.0f - (1.0f - hold) * (1.0f - draw);
 	if (blend <= 0.0f || aiming->count == 0) return;
 
-	const Camera *camera = &viewport_get()->camera;
-	float pitch = camera::springArm::getPitch(camera);
+	const Camera *camera = &viewport::get()->camera;
+	float pitch = camera3d::springArm::getPitch(camera);
 	if (pitch == 0.0f) return;
 
 	/* The bend is about the camera's horizontal right. That is the model's X
@@ -49,7 +49,7 @@ void apply(T3DSkeleton *skeleton, void *context)
 	   guarantees: mid-turn, or with the strafe off while the pose fades, the
 	   body sits at its own yaw. So the axis is turned by however far the body
 	   is off from facing the camera, which is zero once it is. */
-	float facing = camera::springArm::getYaw(camera) + 180.0f;
+	float facing = camera3d::springArm::getYaw(camera) + 180.0f;
 	float offset = (angle_wrap_relative(facing, character->body.rotation.z)
 	                - character->body.rotation.z) * 0.01745329f;
 
@@ -72,8 +72,8 @@ void apply(T3DSkeleton *skeleton, void *context)
 		   carry their share, so each one bends about the same world axis. */
 		T3DVec3 parent_pos;
 		T3DQuat parent_rot;
-		getBonePose(skeleton, (int16_t)skeleton->skeletonRef->bones[b].parentIdx,
-		            &parent_pos, &parent_rot);
+		skeleton::getBonePose(skeleton, (int16_t)skeleton->skeletonRef->bones[b].parentIdx,
+		                      &parent_pos, &parent_rot);
 
 		T3DQuat inverse = {{ -parent_rot.v[0], -parent_rot.v[1], -parent_rot.v[2], parent_rot.v[3] }};
 		T3DBone *bone = &skeleton->bones[b];

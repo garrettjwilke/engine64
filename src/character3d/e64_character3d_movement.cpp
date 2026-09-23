@@ -3,7 +3,7 @@
 #include <fmath.h>
 
 #include "character3d/e64_character3d.h"
-#include "physics/math/e64_math_common.h"
+#include "math/e64_math.h"
 
 namespace e64 {
 
@@ -11,10 +11,10 @@ namespace character3d {
 namespace movement {
 
 static const bool updates_locomotion[MOVEMENT_STATE_COUNT] = {
-	[MOVEMENT_STATE_IDLE]     = true,
-	[MOVEMENT_STATE_WALKING]  = true,
-	[MOVEMENT_STATE_ROLLING]  = false,
-	[MOVEMENT_STATE_FALLING]  = false,
+	[MOVEMENT_STATE_IDLE] = true,
+	[MOVEMENT_STATE_WALKING] = true,
+	[MOVEMENT_STATE_ROLLING] = false,
+	[MOVEMENT_STATE_FALLING] = false,
 	[MOVEMENT_STATE_SWIMMING] = false,
 	[MOVEMENT_STATE_CLIMBING] = false,
 };
@@ -86,7 +86,7 @@ static void setHorizontalVelocity(Character3D *character, float yaw, float targe
 
 	float s, c;
 	fm_sincosf(deg_to_rad(yaw), &s, &c);
-	float target_vx = target_speed *  s;
+	float target_vx = target_speed * s;
 	float target_vy = target_speed * -c;
 
 	float factor = fm_expf(-response_rate * dt);
@@ -123,7 +123,7 @@ static void setRotation(Character3D *character, float dt)
 
 	if (moving) {
 		Vector2 horizontal_velocity = {body->velocity.x, body->velocity.y};
-		data->horizontal_speed = vector2_magnitude(&horizontal_velocity);
+		data->horizontal_speed = vector2::magnitude(&horizontal_velocity);
 	}
 
 	float facing_yaw;
@@ -204,7 +204,7 @@ static void updateBody(Character3D *character, float dt)
 	}
 
 	if (body->velocity.x != 0 || body->velocity.y != 0 || body->velocity.z != 0)
-		vector3_addScaledVector(&body->position, &body->velocity, dt);
+		vector3::addScaledVector(&body->position, &body->velocity, dt);
 
 	setRotation(character, dt);
 }
@@ -221,8 +221,8 @@ static void setChargingJump(Character3D *character, MovementCommand *cmd, float 
 
 	if (cmd->jump_triggered) {
 		data->jump_initial_velocity = body->velocity;
-		data->jump_timer    = 0.0f;
-		data->jump_force    = 0.0f;
+		data->jump_timer = 0.0f;
+		data->jump_force = 0.0f;
 		cmd->jump_triggered = false;
 
 		/* Snap: no crouch at all. The floor is left on this very frame with
@@ -230,26 +230,26 @@ static void setChargingJump(Character3D *character, MovementCommand *cmd, float 
 		   for as long as the button holds. */
 		if (settings->jump_mode == JUMP_SNAP) {
 			body->velocity = data->jump_initial_velocity;
-			vector3_scale(&body->velocity, CHARACTER3D_JUMP_LAUNCH_VELOCITY_SCALE);
+			vector3::scale(&body->velocity, CHARACTER3D_JUMP_LAUNCH_VELOCITY_SCALE);
 			body->velocity.z = settings->jump_base_speed;
 
 			character->movement.next = MOVEMENT_STATE_FALLING;
 			return;
 		}
 	}
-	else if (data->jump_timer == 0.0f) return;   /* nothing being charged */
+	else if (data->jump_timer == 0.0f) return; /* nothing being charged */
 
 	data->jump_timer += dt;
 	if (cmd->jump_held) {
 		data->jump_force += dt;
-		vector3_scale(&body->velocity, CHARACTER3D_JUMP_HOLD_VELOCITY_SCALE);
+		vector3::scale(&body->velocity, CHARACTER3D_JUMP_HOLD_VELOCITY_SCALE);
 	}
 
 	if (data->jump_timer < settings->jump_timer_max) return;
 
 	/* Leaving the floor: the launch keeps a share of the run it came from. */
 	body->velocity = data->jump_initial_velocity;
-	vector3_scale(&body->velocity, CHARACTER3D_JUMP_LAUNCH_VELOCITY_SCALE);
+	vector3::scale(&body->velocity, CHARACTER3D_JUMP_LAUNCH_VELOCITY_SCALE);
 	body->velocity.z = data->jump_force * settings->jump_force_multiplier;
 	if (body->velocity.z < settings->jump_base_speed)
 		body->velocity.z = settings->jump_base_speed;
@@ -283,11 +283,11 @@ static void setSnappingJump(Character3D *character, MovementCommand *cmd, float 
 	/* The run it walked off the ledge with is what it launches on: there was
 	   no press on the floor to have saved one. */
 	data->jump_initial_velocity = body->velocity;
-	vector3_scale(&body->velocity, CHARACTER3D_JUMP_LAUNCH_VELOCITY_SCALE);
+	vector3::scale(&body->velocity, CHARACTER3D_JUMP_LAUNCH_VELOCITY_SCALE);
 	body->velocity.z = settings->jump_base_speed;
 
 	/* One launch per edge: the window closes on the jump it granted. */
-	data->coyote_timer  = settings->jump_coyote_time;
+	data->coyote_timer = settings->jump_coyote_time;
 	cmd->jump_triggered = false;
 }
 
@@ -328,8 +328,8 @@ static void setRolling(Character3D *character, MovementCommand *cmd, float dt)
 	   taken once and held until grip, and the timer starts from zero however
 	   the previous roll ended — a ledge can end one before its own last phase. */
 	if (cmd->roll_triggered) {
-		data->roll_yaw      = cmd->target_yaw;
-		data->roll_timer    = 0.0f;
+		data->roll_yaw = cmd->target_yaw;
+		data->roll_timer = 0.0f;
 		cmd->roll_triggered = false;
 	}
 
@@ -349,18 +349,18 @@ static void setRolling(Character3D *character, MovementCommand *cmd, float dt)
 	/* Three phases off the one timer: the launch drives the stick yaw at the
 	   roll's own speed, the spin holds whatever speed it reached along the
 	   body's own facing, and the grip hands the steering back to the stick. */
-	float yaw           = data->roll_yaw;
-	float target_speed  = settings->roll_target_speed;
+	float yaw = data->roll_yaw;
+	float target_speed = settings->roll_target_speed;
 	float response_rate = settings->roll_launch_response_rate;
 
 	if (data->roll_timer >= settings->roll_grip_time) {
-		yaw           = cmd->target_yaw;
-		target_speed  = data->horizontal_speed;
+		yaw = cmd->target_yaw;
+		target_speed = data->horizontal_speed;
 		response_rate = settings->roll_grip_response_rate;
 	}
 	else if (data->roll_timer >= settings->roll_ground_time) {
-		yaw           = -character->body.rotation.z;
-		target_speed  = data->horizontal_speed;
+		yaw = -character->body.rotation.z;
+		target_speed = data->horizontal_speed;
 		response_rate = settings->roll_spin_response_rate;
 	}
 
@@ -450,7 +450,7 @@ static void setClimbing(Character3D *character, MovementCommand *cmd, float dt)
 	data->is_grounded = 0;
 
 	/* The rungs are what the body faces, whatever it faced walking in. */
-	body->rotation.z   = data->ladder_yaw;
+	body->rotation.z = data->ladder_yaw;
 	data->rotation_mode = CHARACTER3D_ROTATION_MODE_SNAP;
 }
 
@@ -486,7 +486,7 @@ static void evaluateLadder(Character3D *character, MovementCommand *cmd)
 		   caught by a ladder would otherwise ride its own speed down past
 		   the rungs while the climb slowly talks it out of it. */
 		body->velocity.z = 0.0f;
-		movement->next   = MOVEMENT_STATE_CLIMBING;
+		movement->next = MOVEMENT_STATE_CLIMBING;
 		return;
 	}
 
@@ -495,8 +495,8 @@ static void evaluateLadder(Character3D *character, MovementCommand *cmd)
 		   dies here, or the fall would carry it to the floor and launch it
 		   on the landing. */
 		cmd->jump_triggered = false;
-		cmd->jump_held      = false;
-		movement->next      = MOVEMENT_STATE_FALLING;
+		cmd->jump_held = false;
+		movement->next = MOVEMENT_STATE_FALLING;
 		return;
 	}
 
@@ -514,11 +514,11 @@ static void evaluateLadder(Character3D *character, MovementCommand *cmd)
 		if (cmd->climb > 0.0f) {
 			float s, c;
 			fm_sincosf(deg_to_rad(-data->ladder_yaw), &s, &c);
-			body->velocity.x = CHARACTER3D_LADDER_EXIT_SPEED *  s;
+			body->velocity.x = CHARACTER3D_LADDER_EXIT_SPEED * s;
 			body->velocity.y = CHARACTER3D_LADDER_EXIT_SPEED * -c;
 			body->velocity.z = 0.0f;
 			data->horizontal_speed = CHARACTER3D_LADDER_EXIT_SPEED;
-			cmd->target_yaw        = -data->ladder_yaw;
+			cmd->target_yaw = -data->ladder_yaw;
 		}
 		movement->next = MOVEMENT_STATE_FALLING;
 		return;
@@ -565,10 +565,10 @@ static void evaluateWater(Character3D *character)
 }
 
 static void (*handler[MOVEMENT_STATE_COUNT])(Character3D *, MovementCommand *, float) = {
-	[MOVEMENT_STATE_IDLE]     = setLocomotion,
-	[MOVEMENT_STATE_WALKING]  = setLocomotion,
-	[MOVEMENT_STATE_ROLLING]  = setRolling,
-	[MOVEMENT_STATE_FALLING]  = setFalling,
+	[MOVEMENT_STATE_IDLE] = setLocomotion,
+	[MOVEMENT_STATE_WALKING] = setLocomotion,
+	[MOVEMENT_STATE_ROLLING] = setRolling,
+	[MOVEMENT_STATE_FALLING] = setFalling,
 	[MOVEMENT_STATE_SWIMMING] = setSwimming,
 	[MOVEMENT_STATE_CLIMBING] = setClimbing,
 };
@@ -586,16 +586,16 @@ void Character3D::updateMovement(character3d::MovementCommand *cmd, float dt)
 	assert(character3d::movement::handler[movement.current] != NULL);
 
 	movement.data.rotation_mode = CHARACTER3D_ROTATION_MODE_LERP;
-	movement.data.strafe        = cmd->strafe;
+	movement.data.strafe = cmd->strafe;
 	movement.data.strafe_locked = cmd->strafe_locked;
-	movement.data.strafe_yaw    = cmd->strafe_yaw;
-	movement.data.aiming         = cmd->aiming;
+	movement.data.strafe_yaw = cmd->strafe_yaw;
+	movement.data.aiming = cmd->aiming;
 	movement.data.charging_shoot = cmd->charging_shoot;
-	movement.data.shooting       = cmd->shooting;
+	movement.data.shooting = cmd->shooting;
 
 	/* Tired locks the top gait away: the character stays on the previous one
 	   until the stamina is back. */
-	float   gait = cmd->gait;
+	float gait = cmd->gait;
 	uint8_t last = movement.settings->gait_count - 1;
 	if (stats.tired && last > 0 && gait > (float)(last - 1))
 		gait = (float)(last - 1);

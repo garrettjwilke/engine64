@@ -1,72 +1,28 @@
 #ifndef ENGINE64_GAME_STATES_H
 #define ENGINE64_GAME_STATES_H
 
-#include <stdbool.h>
 #include <stdint.h>
 
-#include "scene3d/e64_scene3d.h"
-#include "scene2d/e64_scene2d.h"
-#include "viewport/e64_viewport.h"
-#include "control/e64_player_control.h"
+#include "game/e64_game.h"
 
 namespace e64 {
 
-/* Game holds the current state, so it cannot be included back from here. */
-typedef struct Game Game;
+namespace game {
 
-
-/* Index into the state table the game hands to game_start. */
-typedef uint8_t GameState;
-
-
-typedef struct GameStateDef GameStateDef;
-
-struct GameStateDef {
-
-	void (*update)(void);
-	void (*onEnter)(void);
-	void (*onExit)(void);
-
-	/* Holds the switch back while it answers false, so a state that plays
-	   its way out is seen through. NULL leaves the moment it is asked. */
-	bool (*canLeave)(void);
-
-	/* Per-state input handling (menus, pause); NULL for none. The controller is
-	   already polled: the game reads it with controller::get. */
-	void (*control)(void);
-
-	/* The scenes this state runs on, either or both: the 3D world and the
-	   2D one drawn over it. */
-	Scene3DDef          *scene3d;
-	const Scene2DDef    *scene2d;
-
-	/* What drives what while this state is current. Each binding names the
-	   piece it moves, so the engine wires them itself once the scenes are
-	   built. A state that drives nothing leaves it out. */
-	const controls::Def *controls;
-
-	/* The screen this state is played on. The engine opens none by itself,
-	   so the first state entered is what puts one up, and a state that wants
-	   the one already there declares the same. */
-	const ViewportModeDef *viewport;
-
-	/* The table entry this one rides on top of (&states[BASE]); NULL, the
-	   default, for none. Switching between an overlay and its base leaves
-	   the base untouched. */
-	const GameStateDef *overlay_of;
-
-};
-
+namespace state {
 
 /* Hands the engine the game's state table and loads the initial state.
-   Runs after game_init and the game's own inits, before the first runStep. */
-void game_start(const GameStateDef *states, uint8_t count, GameState initial);
+   Runs after game::init and the game's own inits, before the first runStep. */
+void start(const Game::State::Def *table, uint8_t count, Game::State::ID initial);
 
-const GameStateDef *gameState_get(GameState id);
+const Game::State::Def *get(Game::State::ID id);
 
-void game_setState(Game *game, GameState new_state);
-void game_updateState(void);
+void set(Game::State::ID new_state);
+void update(void);
 
+}
+
+}
 
 }
 

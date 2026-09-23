@@ -66,20 +66,20 @@ static void updateFootsteps(Character3D *character, const SoundDef *def)
 	/* Wading: no dry steps until the body is mostly out of the water. */
 	if (movement->data.in_water && movement->data.submerged_fraction > CHARACTER3D_SOUND_WET_FRACTION) return;
 
-	float cycle = character->animation.locomotion_cycle;
+	float cycle = character->animation.graph.cycle;
 	float speed = movement->data.horizontal_speed;
 
 	for (int i = 0; i < def->footing_count; i++) {
 		if (!crossed(character->sound.previous_cycle, cycle, def->footing[i]))
 			continue;
 
-		sound_play(pick(character, def->footstep, def->footstep_count),
+		e64::sound::play(pick(character, def->footstep, def->footstep_count),
 			&character->entity->transform.position,
 			footstepVolume(def, speed), 0.0f);
 
 		/* Clock reading for whoever must keep distance from a step: the
 		   roll's launch foot skips itself when one just landed. */
-		character->sound.last_footstep = time_get()->counter;
+		character->sound.last_footstep = time::get()->counter;
 	}
 }
 
@@ -93,7 +93,7 @@ static void updateRoll(Character3D *character, const SoundDef *def)
 	const MovementSettings *settings = character->movement.settings;
 
 	float previous = character->sound.previous_roll_timer;
-	float timer    = character->movement.data.roll_timer;
+	float timer = character->movement.data.roll_timer;
 
 	float start = settings->roll_ground_time + def->roll_delay;
 
@@ -102,22 +102,22 @@ static void updateRoll(Character3D *character, const SoundDef *def)
 	   off. Dropped when a footstep just played, or the two land too close.
 	   Reading the value instead of the edge keeps it working however the
 	   previous roll ended — a ledge can leave the timer part way through. */
-	if (def->footstep_count && timer > 0.0f && timer <= time_get()->delta
-	    && time_get()->counter - character->sound.last_footstep >= def->roll_launch_gap)
-		sound_play(pick(character, def->footstep, def->footstep_count),
+	if (def->footstep_count && timer > 0.0f && timer <= time::get()->delta
+	    && time::get()->counter - character->sound.last_footstep >= def->roll_launch_gap)
+		e64::sound::play(pick(character, def->footstep, def->footstep_count),
 			&character->entity->transform.position,
 			def->roll_launch_volume, 0.0f);
 
 	/* The body scrapes the floor until grip: the sample is asked to cover
 	   what is left of that, and slows down as much as that takes. */
 	if (def->roll_count && previous < start && timer >= start)
-		sound_play(pick(character, def->roll, def->roll_count),
+		e64::sound::play(pick(character, def->roll, def->roll_count),
 			&character->entity->transform.position,
 			def->roll_volume, settings->roll_grip_time - start);
 
 	/* Grip is the foot planting to come out of the roll. */
 	if (def->footstep_count && previous < settings->roll_grip_time && timer >= settings->roll_grip_time)
-		sound_play(pick(character, def->footstep, def->footstep_count),
+		e64::sound::play(pick(character, def->footstep, def->footstep_count),
 			&character->entity->transform.position,
 			def->roll_stand_volume, 0.0f);
 }
@@ -136,15 +136,15 @@ static void updateJump(Character3D *character, const SoundDef *def)
 
 	/* Same as the roll: the timer starts at zero and grows a frame at a time,
 	   so a single frame's worth of it is the frame the crouch started. */
-	if (timer <= 0.0f || timer > time_get()->delta) return;
+	if (timer <= 0.0f || timer > time::get()->delta) return;
 
 	/* The jump set is the footstep samples: taking off mid stride right
 	   after a step would flam two of them, same case as the roll launch. */
-	if (time_get()->counter - character->sound.last_footstep < def->jump_launch_gap) return;
+	if (time::get()->counter - character->sound.last_footstep < def->jump_launch_gap) return;
 
 	/* jump_anim_air is where the clip has the body leaving the floor: the
 	   sample is stretched to cover exactly that. */
-	sound_play(pick(character, def->jump, def->jump_count),
+	e64::sound::play(pick(character, def->jump, def->jump_count),
 		&character->entity->transform.position, def->jump_volume,
 		character->animation.def->settings->jump_anim_air);
 }
@@ -171,7 +171,7 @@ static void updateLanding(Character3D *character, const SoundDef *def)
 		volume = def->land_volume_min + t * (def->land_volume_max - def->land_volume_min);
 	}
 
-	sound_play(pick(character, def->land, def->land_count),
+	e64::sound::play(pick(character, def->land, def->land_count),
 		&character->entity->transform.position, volume, 0.0f);
 }
 
@@ -184,7 +184,7 @@ static void updateSwim(Character3D *character, const SoundDef *def)
 	   the minimum sits near zero, so wading in from the ramp is close to
 	   silent and a jump from the deck slaps. */
 	if (def->splash_count && movement->data.in_water && !character->sound.previous_in_water) {
-		float speed  = -character->sound.previous_plunge_speed;
+		float speed = -character->sound.previous_plunge_speed;
 		float volume = def->splash_volume_max;
 
 		if (def->splash_speed_max > 0.0f) {
@@ -195,7 +195,7 @@ static void updateSwim(Character3D *character, const SoundDef *def)
 			volume = def->splash_volume_min + t * (def->splash_volume_max - def->splash_volume_min);
 		}
 
-		sound_play(pick(character, def->splash, def->splash_count),
+		e64::sound::play(pick(character, def->splash, def->splash_count),
 			&character->entity->transform.position, volume, 0.0f);
 	}
 
@@ -210,17 +210,17 @@ static void updateSwim(Character3D *character, const SoundDef *def)
 	if (speed < settings->swim_slow_speed * 0.5f) return;
 
 	bool heavy = speed > (settings->swim_slow_speed + settings->swim_fast_speed) * 0.5f;
-	const uint8_t *stroke = heavy ? def->swim_stroke_heavy       : def->swim_stroke_light;
-	uint8_t count         = heavy ? def->swim_stroke_heavy_count : def->swim_stroke_light_count;
+	const uint8_t *stroke = heavy ? def->swim_stroke_heavy : def->swim_stroke_light;
+	uint8_t count = heavy ? def->swim_stroke_heavy_count : def->swim_stroke_light_count;
 	if (!count) return;
 
-	float cycle = character->animation.locomotion_cycle;
+	float cycle = character->animation.graph.cycle;
 
 	for (int i = 0; i < def->stroke_count; i++) {
 		if (!crossed(character->sound.previous_cycle, cycle, def->stroke[i]))
 			continue;
 
-		sound_play(pick(character, stroke, count),
+		e64::sound::play(pick(character, stroke, count),
 			&character->entity->transform.position, def->stroke_volume, 0.0f);
 	}
 }
@@ -238,10 +238,10 @@ void update(Character3D *character)
 	updateLanding(character, def);
 	updateSwim(character, def);
 
-	character->sound.previous_cycle      = character->animation.locomotion_cycle;
+	character->sound.previous_cycle = character->animation.graph.cycle;
 	character->sound.previous_roll_timer = character->movement.data.roll_timer;
-	character->sound.previous_grounded   = character->movement.data.is_grounded;
-	character->sound.previous_in_water   = character->movement.data.in_water;
+	character->sound.previous_grounded = character->movement.data.is_grounded;
+	character->sound.previous_in_water = character->movement.data.in_water;
 
 	if (!character->movement.data.is_grounded)
 		character->sound.previous_fall_speed = character->body.velocity.z;

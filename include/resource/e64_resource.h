@@ -15,22 +15,34 @@
 
 namespace e64 {
 
-/* What kind of file a path is, which picks how it opens and closes. */
-typedef enum {
+class Resource {
 
-	RESOURCE_MODEL,    /* T3DModel */
-	RESOURCE_SPRITE,   /* sprite_t */
-	RESOURCE_FONT,     /* rdpq_font_t, still to be registered by whoever asked */
-	RESOURCE_WAVE,     /* wav64_t */
+public:
 
-} ResourceType;
+	/* Files open at once, across every scene up at the same time. A 2D
+	   character opens one file per frame and a stage one per tile it uses,
+	   so a 2D scene alone runs into the hundreds. */
+	static constexpr uint16_t MAX = 512;
+
+	/* What kind of file a path is, which picks how it opens and closes. */
+	enum Type {
+
+		MODEL, /* T3DModel */
+		SPRITE, /* sprite_t */
+		FONT, /* rdpq_font_t, still to be registered by whoever asked */
+		WAVE, /* wav64_t */
+
+	};
+
+	const char *path; /* NULL = free slot */
+	void *data;
+	Type type;
+	uint8_t users;
+
+};
 
 
-/* Files open at once, across every scene up at the same time. A 2D
-   character opens one file per frame and a stage one per tile it uses, so
-   a 2D scene alone runs into the hundreds. */
-#define RESOURCE_MAX 512
-
+namespace resource {
 
 /* Hands back the loaded data for the path, opening it on the first ask and
    sharing it after that. The pointer is the type's own: cast at the caller.
@@ -39,11 +51,13 @@ typedef enum {
    takes nothing: a wave passes its wav64_loadparms_t here, since libdragon
    fixes at load whether the sample is decoded into RAM or streamed from ROM.
    A file already open is handed back as it is, whatever parms say. */
-void *resource_load(const char *path, ResourceType type, const void *parms);
+void *load(const char *path, Resource::Type type, const void *parms);
 
-/* Lets go of a pointer resource_load handed out. Closes the file when nobody
-   else holds it. */
-void resource_unload(void *data);
+/* Lets go of a pointer load handed out. Closes the file when nobody else
+   holds it. */
+void unload(void *data);
+
+}
 
 }
 

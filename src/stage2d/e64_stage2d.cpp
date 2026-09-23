@@ -26,23 +26,12 @@
 #include "stage2d/e64_stage2d.h"
 #include "resource/e64_resource.h"
 #include "viewport/e64_viewport.h"
+#include "engine/e64_common.h"
 
 namespace e64 {
+namespace stage2d {
 
-static uint16_t stage2d_readU16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
-static uint32_t stage2d_readU32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
-static float    stage2d_readF32(const uint8_t *p)
-{
-	uint32_t bits = stage2d_readU32(p);
-	float v;
-	memcpy(&v, &bits, sizeof v);
-	return v;
-}
-
-static size_t stage2d_padded8(size_t n) { return (n + 7) & ~(size_t)7; }
-
-
-Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
+Stage2D *create(const Def *def, Entity2D *entity)
 {
 	assert(def && def->path && entity);
 
@@ -58,24 +47,24 @@ Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
 	stage->file = file;
 
 	stage->layer_count = file[5];
-	stage->width       = stage2d_readU16(file + 6);
-	stage->height      = stage2d_readU16(file + 8);
-	stage->stride      = stage2d_readU16(file + 10);
-	stage->cell_width  = stage2d_readU16(file + 12);
-	stage->cell_height = stage2d_readU16(file + 14);
-	uint16_t tile_count = stage2d_readU16(file + 16);
-	uint8_t  digits     = file[18];
-	uint8_t  base_len   = file[19];
-	assert(stage->layer_count && stage->layer_count <= STAGE2D_MAX_LAYER);
-	assert(tile_count && tile_count <= STAGE2D_MAX_TILE);
+	stage->width = readU16(file + 6);
+	stage->height = readU16(file + 8);
+	stage->stride = readU16(file + 10);
+	stage->cell_width = readU16(file + 12);
+	stage->cell_height = readU16(file + 14);
+	uint16_t tile_count = readU16(file + 16);
+	uint8_t digits = file[18];
+	uint8_t base_len = file[19];
+	assert(stage->layer_count && stage->layer_count <= MAX_LAYER);
+	assert(tile_count && tile_count <= MAX_TILE);
 
-	const char    *base  = (const char *)file + 24;
-	stage->solid         = file + 24 + stage2d_padded8(base_len);
+	const char *base = (const char *)file + 24;
+	stage->solid = file + 24 + padded8(base_len);
 	const uint8_t *table = stage->solid + 32;
 
 	for (int i = 0; i < stage->layer_count; i++) {
-		stage->layer[i].parallax = stage2d_readF32(table + i * 8);
-		stage->layer[i].cell     = file + stage2d_readU32(table + i * 8 + 4);
+		stage->layer[i].parallax = readF32(table + i * 8);
+		stage->layer[i].cell = file + readU32(table + i * 8 + 4);
 	}
 
 	/* --- the tiles ------------------------------------------------------ */
@@ -94,26 +83,26 @@ Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
 
 	/* One path string per open tile: base, number, extension. */
 	size_t path_len = base_len + digits + sizeof ".sprite";
-	stage->path    = (char *)malloc(stage->graphic_count * path_len);
+	stage->path = (char *)malloc(stage->graphic_count * path_len);
 	stage->graphic = (Graphic *)calloc(stage->graphic_count, sizeof(Graphic));
 	assert(stage->path && stage->graphic);
 
-	for (int tile = 1; tile <= STAGE2D_MAX_TILE; tile++) {
+	for (int tile = 1; tile <= MAX_TILE; tile++) {
 		if (!stage->slot[tile]) continue;
 		assert(tile <= tile_count);
 
-		char    *path    = stage->path + (stage->slot[tile] - 1) * path_len;
+		char *path = stage->path + (stage->slot[tile] - 1) * path_len;
 		Graphic *graphic = &stage->graphic[stage->slot[tile] - 1];
 
 		snprintf(path, path_len, "%s%0*d.sprite", base, digits, tile - 1);
 
-		*graphic = (Graphic){ .type = GRAPHIC_SPRITE, .sprite = { .path = path } };
-		graphic->sprite.asset = (sprite_t *)resource_load(path, RESOURCE_SPRITE, NULL);
+		*graphic = (Graphic){ .type = Graphic::SPRITE, .sprite = { .path = path } };
+		graphic->sprite.asset = (sprite_t *)resource::load(path, Resource::SPRITE, NULL);
 		assert(graphic->sprite.asset);
 	}
 
 	/* --- the elements --------------------------------------------------- */
-	stage->element = (Element2D *)malloc(cells * sizeof(Element2D));
+	stage->element = (Render::Element2D *)malloc(cells * sizeof(Render::Element2D));
 	assert(stage->element);
 
 	/* Grouped by graphic inside each layer, not in cell order: the draw
@@ -124,12 +113,12 @@ Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
 	   Layers stay apart because each carries its own parallax, so their
 	   cells do not line up on the screen. */
 	for (int i = 0; i < stage->layer_count; i++) {
-		Stage2DLayer *layer = &stage->layer[i];
+		Layer *layer = &stage->layer[i];
 		layer->element_start = stage->element_count;
 
 		/* Where each graphic's run starts, as cells are counted into it:
 		   one pass to count, one to place. */
-		uint16_t run[STAGE2D_MAX_TILE + 1] = { 0 };
+		uint16_t run[MAX_TILE + 1] = { 0 };
 
 		for (int y = 0; y < stage->height; y++) {
 			const uint8_t *row = layer->cell + y * stage->stride;
@@ -141,7 +130,7 @@ Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
 		for (int g = 1; g <= stage->graphic_count; g++) {
 			uint16_t count = run[g];
 			run[g] = next;
-			next  += count;
+			next += count;
 		}
 
 		for (int y = 0; y < stage->height; y++) {
@@ -151,18 +140,18 @@ Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
 				uint8_t tile = row[x];
 				if (!tile) continue;
 
-				const Graphic  *graphic = &stage->graphic[stage->slot[tile] - 1];
-				const sprite_t *sprite  = graphic->sprite.asset;
+				const Graphic *graphic = &stage->graphic[stage->slot[tile] - 1];
+				const sprite_t *sprite = graphic->sprite.asset;
 
 				/* Hung from the cell's bottom left corner, as Tiled draws a
 				   tile larger than the grid. */
-				stage->element[run[stage->slot[tile]]++] = (Element2D){
-					.graphic  = graphic,
+				stage->element[run[stage->slot[tile]]++] = (Render::Element2D){
+					.graphic = graphic,
 					.position = {
 						(float)(x * stage->cell_width),
 						(float)((y + 1) * stage->cell_height - sprite->height),
 					},
-					.scale    = { 1.0f, 1.0f },
+					.scale = { 1.0f, 1.0f },
 					.rotation = 0.0f,
 				};
 			}
@@ -175,12 +164,12 @@ Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity)
 	return stage;
 }
 
-void stage2d_delete(Stage2D *stage)
+void destroy(Stage2D *stage)
 {
 	if (!stage) return;
 
 	for (int i = 0; i < stage->graphic_count; i++)
-		resource_unload(stage->graphic[i].sprite.asset);
+		resource::unload(stage->graphic[i].sprite.asset);
 
 	free(stage->element);
 	free(stage->graphic);
@@ -189,7 +178,7 @@ void stage2d_delete(Stage2D *stage)
 	free(stage);
 }
 
-void stage2d_setRenderContext(const Stage2D *stage, const Camera2D *camera, RenderContext *ctx)
+void setRenderContext(const Stage2D *stage, const Camera2D *camera, Render::Context *ctx)
 {
 	Vector2 origin = stage->entity->position;
 
@@ -200,17 +189,17 @@ void stage2d_setRenderContext(const Stage2D *stage, const Camera2D *camera, Rend
 	/* Asked once per frame rather than per tile, but never kept: the display
 	   mode changes while the game runs, and with it what a world pixel
 	   measures on the screen. */
-	float   screen_width  = display_get_width();
-	float   screen_height = display_get_height();
-	Vector2 scale         = viewport_getScale();
+	float screen_width = display_get_width();
+	float screen_height = display_get_height();
+	Vector2 scale = viewport::getScale();
 
 	for (int l = 0; l < stage->layer_count; l++) {
-		const Stage2DLayer *layer = &stage->layer[l];
+		const Layer *layer = &stage->layer[l];
 
 		for (int i = 0; i < layer->element_count; i++) {
-			const Element2D *element = &stage->element[layer->element_start + i];
+			const Render::Element2D *element = &stage->element[layer->element_start + i];
 
-			Vector2 world  = { origin.x + element->position.x, origin.y + element->position.y };
+			Vector2 world = { origin.x + element->position.x, origin.y + element->position.y };
 			Vector2 screen = camera2d::toScreen(camera, world, layer->parallax);
 
 			if (screen.x < -margin || screen.x > screen_width ||
@@ -219,18 +208,18 @@ void stage2d_setRenderContext(const Stage2D *stage, const Camera2D *camera, Rend
 			/* The zoom scales what is drawn as well as where: a tile is
 			   cell_width world pixels wide, whatever that comes to on the
 			   screen. */
-			assert(ctx->element_count < RENDER_MAX_2D_ELEMENTS);
+			assert(ctx->element2d_count < Render::MAX_2D_ELEMENTS);
 			/* Whole screen pixels: a tile blitted at a fraction lands on
 			   the wrong texels and the seams show. */
-			ctx->element[ctx->element_count]          = *element;
-			ctx->element[ctx->element_count].position = (Vector2){ floorf(screen.x), floorf(screen.y) };
-			ctx->element[ctx->element_count].scale    = (Vector2){ camera->zoom * scale.x, camera->zoom * scale.y };
-			ctx->element_count++;
+			ctx->element2d[ctx->element2d_count] = *element;
+			ctx->element2d[ctx->element2d_count].position = (Vector2){ floorf(screen.x), floorf(screen.y) };
+			ctx->element2d[ctx->element2d_count].scale = (Vector2){ camera->zoom * scale.x, camera->zoom * scale.y };
+			ctx->element2d_count++;
 		}
 	}
 }
 
-void stage2d_getCell(const Stage2D *stage, Vector2 position, int32_t *x, int32_t *y)
+void getCell(const Stage2D *stage, Vector2 position, int32_t *x, int32_t *y)
 {
 	Vector2 origin = stage->entity->position;
 
@@ -238,7 +227,7 @@ void stage2d_getCell(const Stage2D *stage, Vector2 position, int32_t *x, int32_t
 	*y = (int32_t)floorf((position.y - origin.y) / stage->cell_height);
 }
 
-uint8_t stage2d_getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t y)
+uint8_t getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t y)
 {
 	if (layer >= stage->layer_count) return 0;
 	if (x < 0 || y < 0 || x >= stage->width || y >= stage->height) return 0;
@@ -246,7 +235,7 @@ uint8_t stage2d_getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t 
 	return stage->layer[layer].cell[y * stage->stride + x];
 }
 
-bool stage2d_isSolid(const Stage2D *stage, int32_t x, int32_t y)
+bool isSolid(const Stage2D *stage, int32_t x, int32_t y)
 {
 	if (x < 0 || y < 0 || x >= stage->width || y >= stage->height) return false;
 
@@ -257,4 +246,5 @@ bool stage2d_isSolid(const Stage2D *stage, int32_t x, int32_t y)
 	return false;
 }
 
+}
 }

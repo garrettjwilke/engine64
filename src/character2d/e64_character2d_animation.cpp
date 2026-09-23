@@ -32,8 +32,8 @@ static void loadFrames(Animation *animation)
 {
 	const AnimationDef *def = animation->def;
 
-	uint16_t total   = 0;
-	size_t   longest = 0;
+	uint16_t total = 0;
+	size_t longest = 0;
 	animation->frame_start = (uint16_t *)malloc(def->clip_count * sizeof(uint16_t));
 	assert(animation->frame_start);
 
@@ -45,7 +45,7 @@ static void loadFrames(Animation *animation)
 	}
 
 	animation->frame_sprite = (sprite_t **)malloc(total * sizeof(sprite_t *));
-	animation->path         = (char *)malloc(total * longest);
+	animation->path = (char *)malloc(total * longest);
 	assert(animation->frame_sprite && animation->path);
 
 	for (int c = 0; c < def->clip_count; c++) {
@@ -61,11 +61,11 @@ static void loadFrames(Animation *animation)
 
 		for (int f = 0; f < def->clip[c].frame_count; f++) {
 			uint16_t index = animation->frame_start[c] + f;
-			char    *path  = animation->path + index * longest;
+			char *path = animation->path + index * longest;
 
 			snprintf(path, longest, "%.*s%0*d%s", (int)(num - first), first, digits, base + f, dot);
 
-			animation->frame_sprite[index] = (sprite_t *)resource_load(path, RESOURCE_SPRITE, NULL);
+			animation->frame_sprite[index] = (sprite_t *)resource::load(path, Resource::SPRITE, NULL);
 			assert(animation->frame_sprite[index]);
 		}
 	}
@@ -78,9 +78,9 @@ void init(Character2D *character, const AnimationDef *def)
 	Animation *animation = &character->animation;
 
 	*animation = (Animation){
-		.def          = def,
+		.def = def,
 		.action_state = MOVEMENT2D_STATE_IDLE,
-		.clip         = def->idle_animation,
+		.clip = def->idle_animation,
 	};
 	loadFrames(animation);
 }
@@ -92,7 +92,7 @@ void free(Character2D *character)
 
 	uint16_t total = animation->frame_start[def->clip_count - 1] + def->clip[def->clip_count - 1].frame_count;
 	for (int i = 0; i < total; i++)
-		resource_unload(animation->frame_sprite[i]);
+		resource::unload(animation->frame_sprite[i]);
 
 	::free(animation->frame_sprite);
 	::free(animation->frame_start);
@@ -146,7 +146,7 @@ static void getGaitAxis(Character2D *character, float dt)
 	const MovementSettings *settings = movement->settings;
 	const float speed = movement->data.horizontal_speed;
 
-	const float raw_gait  = getGaitParam(speed, settings);
+	const float raw_gait = getGaitParam(speed, settings);
 	const float prev_gait = animation->gait_axis;
 
 	uint8_t state = movement->current;
@@ -164,7 +164,7 @@ static void getGaitAxis(Character2D *character, float dt)
 
 	/* The stick can ask for a gait the speed has not reached yet, and the
 	   axis converges on whichever of the two is higher. */
-	const float asked_gait  = (last > 0) ? (float)gait / last : 0.0f;
+	const float asked_gait = (last > 0) ? (float)gait / last : 0.0f;
 	const float target_gait = (asked_gait > raw_gait) ? asked_gait : raw_gait;
 
 	const float factor = fm_expf(-settings->gait[gait].response_rate * dt);
@@ -187,7 +187,7 @@ static uint8_t selectLocomotionClip(const Character2D *character)
 	/* The axis is a position over the gait table and the nearest gait wins:
 	   the first is the walk, the last the sprint, anything between the run. */
 	const uint8_t gait = (uint8_t)(animation->gait_axis * last + 0.5f);
-	if (gait == 0)    return def->walk_animation;
+	if (gait == 0) return def->walk_animation;
 	if (gait == last) return def->sprint_animation;
 	return def->run_animation;
 }
@@ -211,8 +211,8 @@ static uint8_t selectActionClip(Character2D *character, bool *restart)
 	Animation *animation = &character->animation;
 	const AnimationDef *def = animation->def;
 	const Movement *movement = &character->movement;
-	uint8_t  cur = movement->current;
-	uint8_t *as  = &animation->action_state;
+	uint8_t cur = movement->current;
+	uint8_t *as = &animation->action_state;
 
 	*restart = false;
 
@@ -242,7 +242,7 @@ static uint8_t selectActionClip(Character2D *character, bool *restart)
 		if (animation->landing) return def->land_animation;
 
 		float floor_distance = movement->data.floor_distance;
-		float fall_speed     = movement->data.velocity.y;
+		float fall_speed = movement->data.velocity.y;
 		if (floor_distance >= 0.0f && fall_speed > 0.0f
 		 && floor_distance <= fall_speed * def->settings->land_anim_ground) {
 			animation->landing = true;
@@ -275,7 +275,7 @@ static uint8_t selectActionClip(Character2D *character, bool *restart)
 			return def->land_animation;
 	}
 
-	return def->clip_count;   /* none: the locomotion picks */
+	return def->clip_count; /* none: the locomotion picks */
 }
 
 
@@ -354,7 +354,7 @@ static void setClip(Animation *animation, uint8_t wanted, bool restart)
 	if (wanted == animation->clip && !restart) return;
 
 	const AnimationClipDef *from = &def->clip[animation->clip];
-	const AnimationClipDef *to   = &def->clip[wanted];
+	const AnimationClipDef *to = &def->clip[wanted];
 
 	/* Phase carry, the 3D syncGridClips: the clip coming in starts where
 	   the one going out was, measured as a fraction of its own cycle. The
@@ -369,7 +369,7 @@ static void setClip(Animation *animation, uint8_t wanted, bool restart)
 		carried = (animation->phase / (float)from->frame_count) * (float)to->frame_count;
 	}
 
-	animation->clip  = wanted;
+	animation->clip = wanted;
 	animation->phase = carried;
 	animation->frame = 0;
 }
@@ -380,7 +380,7 @@ void update(Character2D *character, float dt)
 
 	getGaitAxis(character, dt);
 
-	bool    restart;
+	bool restart;
 	uint8_t wanted = selectActionClip(character, &restart);
 	if (wanted == animation->def->clip_count)
 		wanted = selectLocomotionClip(character);

@@ -4,37 +4,41 @@
 
 namespace e64 {
 
-static TimeData timer;
-static float time_scale = 1.0f;
+namespace time {
+
+static Time t;
+static float scale = 1.0f;
 static uint32_t last_ticks;
 
 
-TimeData* time_get(void) { return &timer; }
+Time *get(void) { return &t; }
 
-void time_setScale(float scale) { time_scale = scale; }
+void setScale(float new_scale) { scale = new_scale; }
 
-void time_init()
+void init(void)
 {
-	timer.counter = 1.0f;
-	timer.delta = 0.0f;
-	timer.rate = 0.0f;
+	t.counter = 1.0f;
+	t.delta = 0.0f;
+	t.rate = 0.0f;
 
 	last_ticks = TICKS_READ();
 }
 
-void time_reset()
+void reset(void)
 {
 	last_ticks = TICKS_READ();
 }
 
-void time_update()
+void update(void)
 {
 	uint32_t now = TICKS_READ();
-	timer.delta = (float)TICKS_DISTANCE(last_ticks, now) / TICKS_PER_SECOND * time_scale;
+	t.delta = (float)TICKS_DISTANCE(last_ticks, now) / TICKS_PER_SECOND * scale;
 	last_ticks = now;
 
-	timer.counter += timer.delta;
-	timer.rate = display_get_fps();
+	t.counter += t.delta;
+	t.rate = display_get_fps();
+}
+
 }
 
 }

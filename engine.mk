@@ -56,11 +56,9 @@ endif
 # first, cold code last.
 ENGINE_ORDER = \
 	time \
-	physics/math physics/geometry physics/memory physics/shapes \
-	physics/body physics/broadphase physics/collision physics/world \
-	physics/spring physics/cloth physics/buoyancy \
-	character3d entity player control graphics shaders render scene3d \
-	camera viewport particles sound game scene2d stage2d character2d ui menu resource
+	math memory physics/geometry physics/shapes physics/collision physics \
+	character3d entity player controller model graphics shaders render scene3d \
+	camera viewport particles sound game scene2d stage2d character2d ui menu resource debug
 
 engine_listed = $(foreach m,$(ENGINE_ORDER),\
 	$(if $(filter %.cpp,$(m)),$(m),\
@@ -115,10 +113,26 @@ filesystem/sprites/%.sprite: assets/sprites/%.png
 	@echo "    [SPRITE] $@"
 	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) -o $(dir $@) "$<"
 
-filesystem/models/%.t3dm: assets/models/%.glb
+# The engine's own copy of tiny3d's gltf importer, built on demand: it writes
+# the same .t3dm, so a model converted by either binary works in the same ROM.
+# MODEL_IMPORTER goes back to the installed one with
+#   MODEL_IMPORTER = $(T3D_GLTF_TO_3D)
+# in the project makefile. The binary is a prerequisite of the conversion: a
+# change to the importer has to reconvert the models, or a measurement compares
+# a new importer against models it never touched.
+E64_GLTF_TO_T3D  = $(ENGINE_DIR)/tools/model_importer/gltf_to_t3d
+MODEL_IMPORTER  ?= $(E64_GLTF_TO_T3D)
+
+$(E64_GLTF_TO_T3D): $(wildcard $(ENGINE_DIR)/tools/model_importer/src/*.cpp \
+                               $(ENGINE_DIR)/tools/model_importer/src/*.h \
+                               $(ENGINE_DIR)/tools/model_importer/src/*/*.cpp \
+                               $(ENGINE_DIR)/tools/model_importer/src/*/*.h)
+	$(MAKE) -C $(ENGINE_DIR)/tools/model_importer
+
+filesystem/models/%.t3dm: assets/models/%.glb $(MODEL_IMPORTER)
 	@mkdir -p $(dir $@)
 	@echo "    [T3D-MODEL] $@"
-	$(T3D_GLTF_TO_3D) --bvh $(GLTF_FLAGS) "$<" $@
+	$(MODEL_IMPORTER) --bvh $(GLTF_FLAGS) "$<" $@
 	$(N64_BINDIR)/mkasset -c 2 -o $(dir $@) $@
 
 filesystem/fonts/%.font64: assets/fonts/%.ttf

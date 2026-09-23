@@ -13,9 +13,9 @@
 #include <stdbool.h>
 #include <t3d/t3dskeleton.h>
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_matrix3.h"
-#include "physics/math/e64_quaternion.h"
+#include "math/e64_vector3.h"
+#include "math/e64_matrix3.h"
+#include "math/e64_quaternion.h"
 #include "render/e64_render.h"
 
 namespace e64 {
@@ -38,11 +38,11 @@ typedef struct {
 
 	SpringBoneCollisionShape shape;
 	const char *bone;
-	Vector3     position;
-	Vector3     rotation;
-	float       radius;   /* sphere and capsule */
-	float       height;   /* capsule */
-	bool        inside;   /* sphere and capsule: keep the tail inside */
+	Vector3 position;
+	Vector3 rotation;
+	float radius; /* sphere and capsule */
+	float height; /* capsule */
+	bool inside; /* sphere and capsule: keep the tail inside */
 
 } SpringBoneColliderDef;
 
@@ -55,12 +55,12 @@ typedef struct {
 	   for the owner's allocation; root == end is a single-joint chain. */
 	const char *root_bone;
 	const char *end_bone;
-	uint8_t     count;
-	float       end_bone_length;          /* tail extension of the last joint, metres */
-	float              stiffness;         /* pull toward the animated pose, m/s */
-	float              drag;              /* velocity kept per frame is 1 - drag, 0..1 */
-	float              gravity;           /* m/s, velocity gained per second */
-	Vector3            gravity_direction; /* world space, usually {0, 0, -1} */
+	uint8_t count;
+	float end_bone_length; /* tail extension of the last joint, metres */
+	float stiffness; /* pull toward the animated pose, m/s */
+	float drag; /* velocity kept per frame is 1 - drag, 0..1 */
+	float gravity; /* m/s, velocity gained per second */
+	Vector3 gravity_direction; /* world space, usually {0, 0, -1} */
 
 	/* KawaiiPhysics WorldDamping: the owner's world motion enters the
 	   simulation scaled by 1 - damping (0 = full sway, 1 = none). A frame
@@ -75,30 +75,30 @@ typedef struct {
 	   each collider in the list. radius is the uniform thickness; a
 	   joint_radius array of count entries overrides it per joint, as
 	   Godot's individual_config. */
-	float                        radius;   /* metres */
-	const float                 *joint_radius;
+	float radius; /* metres */
+	const float *joint_radius;
 	const SpringBoneColliderDef *collider;
-	uint8_t                      collider_count;
+	uint8_t collider_count;
 
 } SpringBonesDef;
 
 /* Godot's SpringBone3DVerletInfo plus what _process_joints reads per joint. */
 typedef struct {
 
-	Vector3    forward_vector;   /* toward the child in rest pose, unit */
-	float      length;           /* render units, from the child's rest offset */
-	Vector3    current_tail;     /* character space */
-	Vector3    prev_tail;
-	Quaternion current_rot;      /* last from-to rotation, the degenerate fallback */
+	Vector3 forward_vector; /* toward the child in rest pose, unit */
+	float length; /* render units, from the child's rest offset */
+	Vector3 current_tail; /* character space */
+	Vector3 prev_tail;
+	Quaternion current_rot; /* last from-to rotation, the degenerate fallback */
 
-	const SpringBonesDef  *def;
-	const RenderTransform *world;   /* the center */
+	const SpringBonesDef *def;
+	const Render::Transform *world; /* the center */
 	int16_t bone;
-	float   radius;                 /* render units */
-	bool    primed;
+	float radius; /* render units */
+	bool primed;
 
-	Vector3 pre_skel_comp_pos;   /* owner's transform last frame, for the */
-	Matrix3 pre_skel_comp_rot;   /* damped world-motion follow */
+	Vector3 pre_skel_comp_pos; /* owner's transform last frame, for the */
+	Matrix3 pre_skel_comp_rot; /* damped world-motion follow */
 
 	/* def colliders resolved against the skeleton, render units */
 	struct {
@@ -106,9 +106,9 @@ typedef struct {
 		int16_t bone;
 		Vector3 position;
 		Matrix3 rotation;
-		float   radius;
-		float   height;
-		bool    inside;
+		float radius;
+		float height;
+		bool inside;
 	} collider[SPRING_BONE_COLLIDER_MAX];
 	uint8_t collider_count;
 
@@ -122,9 +122,9 @@ uint8_t springBones_resolveChain(const T3DSkeleton *skeleton, const SpringBonesD
                                  int16_t *joints, uint8_t max);
 
 bool springBone_init(SpringBone *spring_bone, const T3DSkeleton *skeleton, int16_t bone,
-                     uint8_t joint_index, const SpringBonesDef *def, const RenderTransform *world);
+                     uint8_t joint_index, const SpringBonesDef *def, const Render::Transform *world);
 
-/* SkeletonModifierFn; context is the SpringBone */
+/* skeleton::Modifiers::Fn; context is the SpringBone */
 void springBone_apply(T3DSkeleton *skeleton, void *context);
 
 }

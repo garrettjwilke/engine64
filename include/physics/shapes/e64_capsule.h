@@ -1,53 +1,62 @@
 /*
 	Capsule geometry (local Z axis): cylinder + hemispheres. Admin fields live
-	in PhysicsShape.
+	in physics::Shape.
 */
 #ifndef ENGINE64_CAPSULE_H
 #define ENGINE64_CAPSULE_H
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_transform.h"
+#include "math/e64_vector3.h"
+#include "math/e64_transform.h"
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
 namespace e64 {
 
-struct MassData;
+namespace physics { namespace shape { struct MassData; } }
 
 
-typedef struct Capsule {
+class Capsule {
+public:
+
+	struct Def {
+		Transform tx;
+		float radius;
+		float half_height;
+		float friction;
+		float restitution;
+		float density;
+		int sensor;
+	};
+
+
 	float radius;
-	float half_height;   /* half-height along local Z, excluding caps */
-} Capsule;
+	float half_height; /* half-height along local Z, excluding caps */
+};
 
 
-typedef struct CapsuleDef {
-	Transform tx;
-	float     radius;
-	float     half_height;
-	float     friction;
-	float     restitution;
-	float     density;
-	int       sensor;
-} CapsuleDef;
-
+namespace capsule {
 
 /* Endpoints of the inner segment (center ± half_height along Z), in world space. */
-void  capsule_getSegment(const Capsule *c, const Transform *world, Vector3 *a, Vector3 *b);
+void getSegment(const Capsule *c, const Transform *world, Vector3 *a, Vector3 *b);
 
-int   capsule_testPoint(const Capsule *c, const Transform *world, const Vector3 *p);
-int   capsule_raycast(const Capsule *c, const Transform *world, RaycastData *raycast);
-void  capsule_computeAABB(const Capsule *c, const Transform *world, AABB *aabb);
-void  capsule_computeMass(const Capsule *c, const Transform *local, float density, struct MassData *md);
+int testPoint(const Capsule *c, const Transform *world, const Vector3 *p);
+int raycast(const Capsule *c, const Transform *world, RaycastData *raycast);
+void computeAABB(const Capsule *c, const Transform *world, AABB *aabb);
+void computeMass(const Capsule *c, const Transform *local, float density, physics::shape::MassData *md);
 
 
-void  capsuleDef_init(CapsuleDef *d);
-void  capsuleDef_set(CapsuleDef *d, const Transform *tx, float radius, float half_height);
-void  capsuleDef_setFriction(CapsuleDef *d, float f);
-void  capsuleDef_setRestitution(CapsuleDef *d, float r);
-void  capsuleDef_setDensity(CapsuleDef *d, float rho);
-void  capsuleDef_setSensor(CapsuleDef *d, int s);
+namespace def {
 
+void init(Capsule::Def *d);
+void set(Capsule::Def *d, const Transform *tx, float radius, float half_height);
+void setFriction(Capsule::Def *d, float f);
+void setRestitution(Capsule::Def *d, float r);
+void setDensity(Capsule::Def *d, float rho);
+void setSensor(Capsule::Def *d, int s);
+
+}
+
+}
 
 }
 

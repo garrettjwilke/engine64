@@ -23,17 +23,17 @@ public:
 	/* The scene entity this character draws through. The character writes
 	   its frame, flip and position from create to destroy, and puts the
 	   entity's own sprite back when it goes. */
-	Entity2D        *entity;
+	Entity2D *entity;
 	struct sprite_s *entity_sprite;
 
 	/* The stage the body collides with, handed over by the scene once it
 	   is loaded. */
 	const Stage2D *stage;
 
-	Vector2 position;      /* feet, in pixels; float so movement stays smooth */
-	bool    facing_left;
+	Vector2 position; /* feet, in pixels; float so movement stays smooth */
+	bool facing_left;
 
-	character2d::Movement  movement;
+	character2d::Movement movement;
 	character2d::Animation animation;
 
 	void updateMovement(character2d::MovementCommand *cmd, float dt);
@@ -45,7 +45,7 @@ namespace character2d {
 typedef struct Def {
 
 	const MovementSettings *movement_settings;
-	const AnimationDef     *animation_def;
+	const AnimationDef *animation_def;
 	const ColliderSettings *collider_settings;
 
 } Def;

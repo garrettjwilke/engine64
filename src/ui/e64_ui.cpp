@@ -4,24 +4,28 @@
 
 namespace e64 {
 
-static UIAnimationPlayer ui_player;
+namespace ui {
+
+static UIAnimation::Player player;
 
 
-void ui_play(const UIAnimation *animation, bool reversed)
+void play(const UIAnimation *animation, bool reversed)
 {
-	uiAnimationPlayer_start(&ui_player, scene2d_get(), animation, UI_ANIMATION_PLAY_ONCE, reversed);
+	uiAnimation::player::start(&player, scene2d::get(), animation, UIAnimation::PLAY_ONCE, reversed);
 }
 
-bool ui_isTransitioning(void)
+bool isTransitioning(void)
 {
-	return ui_player.is_active;
+	return player.is_active;
 }
 
-void ui_update(const UIAnimation *idle)
+void update(const UIAnimation *idle)
 {
-	uiAnimationPlayer_update(&ui_player, scene2d_get(), time_get()->delta);
+	uiAnimation::player::update(&player, scene2d::get(), time::get()->delta);
 
-	if (idle) uiAnimation_apply(scene2d_get(), idle, 0.0f);
+	if (idle) uiAnimation::apply(scene2d::get(), idle, 0.0f);
+}
+
 }
 
 }

@@ -14,6 +14,8 @@
 
 namespace e64 {
 
+namespace prefab2d {
+
 typedef enum {
 
 	PREFAB2D_WIDGET,
@@ -21,12 +23,14 @@ typedef enum {
 	PREFAB2D_CHARACTER,
 	PREFAB2D_STAGE,
 
-} Prefab2DType;
+} Type;
+
+}
 
 
 typedef struct Prefab2D {
 
-	Prefab2DType type;
+	prefab2d::Type type;
 
 	/* The entity copies it and loads the sprite's file. A character's is a
 	   sprite sheet it picks its frames out of. */
@@ -34,13 +38,13 @@ typedef struct Prefab2D {
 
 	/* Opened in the entity from create to delete. The looping ones play on
 	   their own; the rest wait for whoever fires them. */
-	const SoundDef *const *sound;
-	uint8_t                sound_count;
+	const Sound::Def *const *sound;
+	uint8_t sound_count;
 
 	/* What the kind needs. Collision comes with the 2D physics. A stage
 	   draws its own tiles and leaves the graphic above unused. */
 	const character2d::Def *character;
-	const Stage2DDef     *stage;
+	const stage2d::Def *stage;
 
 	/* PROP only: how much of the camera's scroll it takes. 1 sits in the
 	   world and moves with it, and a backdrop takes some fraction of that,

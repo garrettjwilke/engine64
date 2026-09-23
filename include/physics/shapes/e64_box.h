@@ -21,48 +21,58 @@
 
 /*
 	OBB geometry (half-extents on each local axis). Admin fields live in
-	PhysicsShape.
+	physics::Shape.
 */
 #ifndef ENGINE64_BOX_H
 #define ENGINE64_BOX_H
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_transform.h"
+#include "math/e64_vector3.h"
+#include "math/e64_transform.h"
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
 namespace e64 {
 
-struct MassData;
+namespace physics { namespace shape { struct MassData; } }
 
 
-typedef struct Box {
-	Vector3 e;   /* half-extents on each OBB axis */
-} Box;
+class Box {
+public:
+
+	struct Def {
+		Transform tx;
+		Vector3 e;
+		float friction;
+		float restitution;
+		float density;
+		int sensor;
+	};
 
 
-typedef struct BoxDef {
-	Transform tx;
-	Vector3   e;
-	float     friction;
-	float     restitution;
-	float     density;
-	int       sensor;
-} BoxDef;
-
-int   box_testPoint(const Box *b, const Transform *world, const Vector3 *p);
-int   box_raycast(const Box *b, const Transform *world, RaycastData *raycast);
-void  box_computeAABB(const Box *b, const Transform *world, AABB *aabb);
-void  box_computeMass(const Box *b, const Transform *local, float density, struct MassData *md);
+	Vector3 e; /* half-extents on each OBB axis */
+};
 
 
-void  boxDef_init(BoxDef *d);
-void  boxDef_set(BoxDef *d, const Transform *tx, const Vector3 *full_extents);
-void  boxDef_setFriction(BoxDef *d, float f);
-void  boxDef_setRestitution(BoxDef *d, float r);
-void  boxDef_setDensity(BoxDef *d, float rho);
-void  boxDef_setSensor(BoxDef *d, int s);
+namespace box {
 
+int testPoint(const Box *b, const Transform *world, const Vector3 *p);
+int raycast(const Box *b, const Transform *world, RaycastData *raycast);
+void computeAABB(const Box *b, const Transform *world, AABB *aabb);
+void computeMass(const Box *b, const Transform *local, float density, physics::shape::MassData *md);
+
+
+namespace def {
+
+void init(Box::Def *d);
+void set(Box::Def *d, const Transform *tx, const Vector3 *full_extents);
+void setFriction(Box::Def *d, float f);
+void setRestitution(Box::Def *d, float r);
+void setDensity(Box::Def *d, float rho);
+void setSensor(Box::Def *d, int s);
+
+}
+
+}
 
 }
 

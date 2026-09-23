@@ -1,15 +1,16 @@
 #include "graphics/e64_shapes.h"
 
 namespace e64 {
+namespace rectangle {
 
 #define COLOR_NORM 0.003922f
 
-void shape_drawRectangle(const Rectangle *rect, Vector2 position, Vector2 scale)
+void draw(const Rectangle *rect, Vector2 position, Vector2 scale)
 {
-	float x  = position.x, y  = position.y;
-	float sx = scale.x,    sy = scale.y;
+	float x = position.x, y = position.y;
+	float sx = scale.x, sy = scale.y;
 
-	if (rect->fill == SHAPE_FILL_SOLID) {
+	if (rect->fill == Rectangle::SOLID) {
 
 		rdpq_set_prim_color(rect->color);
 		rdpq_mode_combiner(RDPQ_COMBINER_FLAT);
@@ -26,10 +27,10 @@ void shape_drawRectangle(const Rectangle *rect, Vector2 position, Vector2 scale)
 		rdpq_mode_dithering(DITHER_NOISE_NOISE);
 
 		float vtx[4][6] = {
-			{ x,    y,     c0.r*COLOR_NORM, c0.g*COLOR_NORM, c0.b*COLOR_NORM, c0.a*COLOR_NORM },
-			{ x+sx, y,     c1.r*COLOR_NORM, c1.g*COLOR_NORM, c1.b*COLOR_NORM, c1.a*COLOR_NORM },
-			{ x+sx, y+sy,  c2.r*COLOR_NORM, c2.g*COLOR_NORM, c2.b*COLOR_NORM, c2.a*COLOR_NORM },
-			{ x,    y+sy,  c3.r*COLOR_NORM, c3.g*COLOR_NORM, c3.b*COLOR_NORM, c3.a*COLOR_NORM },
+			{ x, y, c0.r*COLOR_NORM, c0.g*COLOR_NORM, c0.b*COLOR_NORM, c0.a*COLOR_NORM },
+			{ x+sx, y, c1.r*COLOR_NORM, c1.g*COLOR_NORM, c1.b*COLOR_NORM, c1.a*COLOR_NORM },
+			{ x+sx, y+sy, c2.r*COLOR_NORM, c2.g*COLOR_NORM, c2.b*COLOR_NORM, c2.a*COLOR_NORM },
+			{ x, y+sy, c3.r*COLOR_NORM, c3.g*COLOR_NORM, c3.b*COLOR_NORM, c3.a*COLOR_NORM },
 		};
 
 		rdpq_triangle(&TRIFMT_SHADE, vtx[0], vtx[1], vtx[2]);
@@ -39,4 +40,5 @@ void shape_drawRectangle(const Rectangle *rect, Vector2 position, Vector2 scale)
 
 #undef COLOR_NORM
 
+}
 }

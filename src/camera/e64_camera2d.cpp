@@ -32,9 +32,9 @@ static float clampZoom(float zoom)
    Kept with the zoom so drawing never divides. */
 static void setExtent(Camera2D *camera)
 {
-	Vector2 scale = viewport_getScale();
+	Vector2 scale = viewport::getScale();
 
-	camera->extent.x = display_get_width()  * 0.5f / (camera->zoom * scale.x);
+	camera->extent.x = display_get_width() * 0.5f / (camera->zoom * scale.x);
 	camera->extent.y = display_get_height() * 0.5f / (camera->zoom * scale.y);
 }
 
@@ -47,13 +47,13 @@ void setZoom(Camera2D *camera, float zoom)
 void init(Camera2D *camera, const Def *def)
 {
 	*camera = (Camera2D){
-		.type          = def->type,
-		.anchor        = def->anchor,
-		.position      = def->position,
-		.offset        = def->offset,
+		.type = def->type,
+		.anchor = def->anchor,
+		.position = def->position,
+		.offset = def->offset,
 		.limit_enabled = def->limit_enabled,
-		.rotate        = def->rotate,
-		.settings      = def->follow,
+		.rotate = def->rotate,
+		.settings = def->follow,
 	};
 
 	for (int i = 0; i < CAMERA2D_SIDE_COUNT; i++)
@@ -73,9 +73,9 @@ static float setDrag(float current, float target, float extent,
                      bool drag, float offset)
 {
 	if (drag) {
-		float low  = target + extent * margin_low;
+		float low = target + extent * margin_low;
 		float high = target - extent * margin_high;
-		if (current > low)  current = low;
+		if (current > low) current = low;
 		if (current < high) current = high;
 		return current;
 	}
@@ -89,8 +89,8 @@ static float setDrag(float current, float target, float extent,
 static float setLimit(float position, float extent, float low, float high)
 {
 	if (low > high - extent * 2.0f) return (low + high) * 0.5f;
-	if (position - extent < low)    return low  + extent;
-	if (position + extent > high)   return high - extent;
+	if (position - extent < low) return low + extent;
+	if (position + extent > high) return high - extent;
 	return position;
 }
 
@@ -111,7 +111,7 @@ void update(Camera2D *camera, Vector2 target, float facing, float dt)
 	if (camera->type == CAMERA2D_TYPE_NONE) return;
 
 	FollowSettings *settings = &camera->settings;
-	FollowData     *data     = &camera->data;
+	FollowData *data = &camera->data;
 
 	/* The look ahead turns with the body: the offset carries the sign, so a
 	   change of direction slides the lead across instead of jumping it. */
@@ -135,7 +135,7 @@ void update(Camera2D *camera, Vector2 target, float facing, float dt)
 	   declared would sweep the whole world once. */
 	if (!data->settled) {
 		camera->position = data->target_position;
-		data->settled    = true;
+		data->settled = true;
 	}
 	else if (settings->position_smoothing_speed > 0.0f) {
 		float factor = fm_expf(-settings->position_smoothing_speed * dt);
@@ -162,11 +162,11 @@ Vector2 toScreen(const Camera2D *camera, Vector2 position, float parallax)
 
 	/* What the thing takes of the camera's movement is all the parallax is:
 	   at zero the view never moves under it and it stays where it was placed. */
-	Vector2 view = vector2_scaled(&camera->position, parallax);
+	Vector2 view = vector2::scaled(&camera->position, parallax);
 
 	/* World pixels become screen pixels here: a mode whose columns are
 	   split in two lays two of them down for every one across. */
-	Vector2 scale = viewport_getScale();
+	Vector2 scale = viewport::getScale();
 
 	Vector2 screen = {
 		(position.x - view.x) * camera->zoom * scale.x + camera->offset.x,
@@ -174,7 +174,7 @@ Vector2 toScreen(const Camera2D *camera, Vector2 position, float parallax)
 	};
 
 	if (camera->anchor == CAMERA2D_ANCHOR_CENTER) {
-		screen.x += display_get_width()  * 0.5f;
+		screen.x += display_get_width() * 0.5f;
 		screen.y += display_get_height() * 0.5f;
 	}
 
@@ -186,7 +186,7 @@ Vector2 toWorld(const Camera2D *camera, Vector2 screen)
 	if (camera->type == CAMERA2D_TYPE_NONE) return screen;
 
 	if (camera->anchor == CAMERA2D_ANCHOR_CENTER) {
-		screen.x -= display_get_width()  * 0.5f;
+		screen.x -= display_get_width() * 0.5f;
 		screen.y -= display_get_height() * 0.5f;
 	}
 

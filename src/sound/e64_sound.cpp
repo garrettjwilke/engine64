@@ -9,31 +9,33 @@
 
 namespace e64 {
 
+namespace sound {
+
 /* Output rate of the AI. The mixer resamples every voice to it, so its cost is
    paid per output sample: this is the number that sets the RSP budget, not the
    rate of the samples themselves. */
-#define SOUND_OUTPUT_RATE 32000
+static constexpr int OUTPUT_RATE = 32000;
 
 /* Volume changes walk to their new value over one frame instead of jumping,
    which is what keeps a moving emitter from clicking. */
-#define SOUND_RAMP_MIN_SAMPLES 16
+static constexpr int RAMP_MIN_SAMPLES = 16;
 
 /* The mixer sums its channels into one accumulator, so voices playing at once
    add up. This is the headroom that keeps a handful of them from running past
    the end of the range. */
-#define SOUND_MASTER_VOLUME 0.5f
+static constexpr float MASTER_VOLUME = 0.5f;
 
-#define SOUND_EPSILON 1e-4f
+static constexpr float EPSILON = 1e-4f;
 
 
-typedef struct {
+struct Listener {
 
 	Vector3 position;
 	Vector3 right;
 
-} SoundListener;
+};
 
-typedef struct {
+struct EmitterState {
 
 	const Sound *sound;
 	Vector3 position;
@@ -46,36 +48,36 @@ typedef struct {
 
 	bool active;
 
-} SoundEmitterState;
+};
 
 
-static SoundEmitterState sound_emitter[SOUND_MAX_EMITTERS];
-static SoundListener sound_listener;
+static EmitterState emitter_state[Sound::MAX_EMITTERS];
+static Listener listener;
 
 /* Emitter each channel belongs to. A one-shot frees its channel the moment the
    sample ends, one frame before its emitter notices, so without this the next
    sound to start can take that channel while the old emitter still writes
    volume to it. */
-static SoundEmitter sound_channel_owner[SOUND_MIXER_CHANNELS];
+static Sound::Emitter channel_owner[Sound::MIXER_CHANNELS];
 
 
-void sound_setListener(const Vector3 *position, const Vector3 *right)
+void setListener(const Vector3 *position, const Vector3 *right)
 {
-	sound_listener.position = *position;
-	sound_listener.right    = *right;
+	listener.position = *position;
+	listener.right = *right;
 }
 
 
 /* Inverse rolloff between the two radii, rescaled so it reaches zero exactly
    at max_distance instead of trailing off forever. */
-static float sound_attenuation(const SoundDef *def, float distance)
+static float attenuation(const Sound::Def *def, float distance)
 {
 	if (def->max_distance <= 0.0f) return 1.0f;
 	if (distance <= def->min_distance) return 1.0f;
 	if (distance >= def->max_distance) return 0.0f;
 
 	float near_gain = def->min_distance / distance;
-	float far_gain  = def->min_distance / def->max_distance;
+	float far_gain = def->min_distance / def->max_distance;
 
 	return (near_gain - far_gain) / (1.0f - far_gain);
 }
@@ -84,12 +86,12 @@ static float sound_attenuation(const SoundDef *def, float distance)
 /* A sound on top of the listener has no side to come from: its direction is
    whatever a frame of movement left over, which would slam the panning to one
    end. Inside min_distance it is walked back to the centre. */
-static float sound_panning(const SoundDef *def, const Vector3 *to_emitter, float distance)
+static float panning(const Sound::Def *def, const Vector3 *to_emitter, float distance)
 {
-	if (distance < SOUND_EPSILON) return 0.5f;
+	if (distance < EPSILON) return 0.5f;
 
-	Vector3 direction = vector3_scaled(to_emitter, 1.0f / distance);
-	float side = vector3_dot(&direction, &sound_listener.right);
+	Vector3 direction = vector3::scaled(to_emitter, 1.0f / distance);
+	float side = vector3::dot(&direction, &listener.right);
 
 	if (def->min_distance > 0.0f && distance < def->min_distance)
 		side *= distance / def->min_distance;
@@ -109,12 +111,12 @@ static float sound_panning(const SoundDef *def, const Vector3 *to_emitter, float
    left/right volumes. The mixer keeps the two independent, so neither erases
    the other. Constant power keeps a sound crossing the screen from dipping as
    it passes the centre. */
-static void sound_applyMix(int channel, float gain, float pan, int ramp_samples)
+static void applyMix(int channel, float gain, float pan, int ramp_samples)
 {
 	if (gain > 1.0f) gain = 1.0f;
 	if (gain < 0.0f) gain = 0.0f;
 
-	float left  = sqrtf(1.0f - pan);
+	float left = sqrtf(1.0f - pan);
 	float right = sqrtf(pan);
 
 	if (ramp_samples > 0) {
@@ -130,12 +132,12 @@ static void sound_applyMix(int channel, float gain, float pan, int ramp_samples)
 
 /* Playing a sample slower makes it last longer and drop in pitch by the same
    factor. The caller names the length it needs and gets it. */
-static void sound_applyStretch(int channel, const waveform_t *wave, float duration)
+static void applyStretch(int channel, const waveform_t *wave, float duration)
 {
 	if (duration <= 0.0f) return;
 
 	float length = (float)wave->len / wave->frequency;
-	if (length < SOUND_EPSILON) return;
+	if (length < EPSILON) return;
 
 	float stretch = duration / length;
 	if (stretch <= 1.0f) return;
@@ -145,87 +147,87 @@ static void sound_applyStretch(int channel, const waveform_t *wave, float durati
 
 
 /* True while the channel is still the emitter's to write to. */
-static bool sound_ownsChannel(const SoundEmitterState *emitter)
+static bool ownsChannel(const EmitterState *emitter)
 {
 	if (emitter->channel < 0) return false;
 
-	return sound_channel_owner[emitter->channel] == (SoundEmitter)(emitter - sound_emitter);
+	return channel_owner[emitter->channel] == (Sound::Emitter)(emitter - emitter_state);
 }
 
 
-static void sound_dropChannel(SoundEmitterState *emitter)
+static void dropChannel(EmitterState *emitter)
 {
-	if (sound_ownsChannel(emitter)) {
+	if (ownsChannel(emitter)) {
 		mixer_ch_stop(emitter->channel);
-		sound_channel_owner[emitter->channel] = SOUND_NO_EMITTER;
+		channel_owner[emitter->channel] = Sound::NO_EMITTER;
 	}
 
 	emitter->channel = -1;
 }
 
 
-static bool sound_startEmitter(SoundEmitterState *emitter, float gain, float pan)
+static bool startEmitter(EmitterState *emitter, float gain, float pan)
 {
-	const SoundDef *def = emitter->sound->def;
+	const Sound::Def *def = emitter->sound->def;
 	wav64_t *wave = emitter->sound->wave;
 
 	bool stereo = wave->wave.channels == 2;
 	int channel;
 
-	if (!mixer_ch_alloc(0, SOUND_MIXER_CHANNELS, 1, stereo,
+	if (!mixer_ch_alloc(0, Sound::MIXER_CHANNELS, 1, stereo,
 			def->priority, &wave->wave, &channel))
 		return false;
 
 	/* Whatever held it is losing it. Only the owner changes hands: the previous
-	   emitter keeps its channel number so sound_update still finds it by the
-	   >= 0 test, sees it no longer owns the channel and gives its slot back.
+	   emitter keeps its channel number so update still finds it by the >= 0
+	   test, sees it no longer owns the channel and gives its slot back.
 	   Clearing its channel here would hide it from that test forever. */
 	if (mixer_ch_playing(channel))
 		mixer_ch_stop(channel);
 
 	wav64_play(wave, channel);
 	mixer_ch_set_priority(channel, def->priority);
-	sound_applyStretch(channel, &wave->wave, emitter->duration);
-	sound_applyMix(channel, gain, pan, 0);
+	applyStretch(channel, &wave->wave, emitter->duration);
+	applyMix(channel, gain, pan, 0);
 
 	emitter->channel = channel;
-	sound_channel_owner[channel] = (SoundEmitter)(emitter - sound_emitter);
+	channel_owner[channel] = (Sound::Emitter)(emitter - emitter_state);
 	return true;
 }
 
 
-static void sound_releaseEmitter(SoundEmitterState *emitter)
+static void releaseEmitter(EmitterState *emitter)
 {
-	sound_dropChannel(emitter);
+	dropChannel(emitter);
 	emitter->active = false;
 }
 
 
-void sound_init(void)
+void init(void)
 {
-	audio_init(SOUND_OUTPUT_RATE, AUDIO_DEFAULT_LATENCY);
-	mixer_init(SOUND_MIXER_CHANNELS);
-	mixer_set_vol(SOUND_MASTER_VOLUME);
+	audio_init(OUTPUT_RATE, AUDIO_DEFAULT_LATENCY);
+	mixer_init(Sound::MIXER_CHANNELS);
+	mixer_set_vol(MASTER_VOLUME);
 
-	sound_listener.right = vector3_create(0.0f, -1.0f, 0.0f);
+	listener.right = vector3::create(0.0f, -1.0f, 0.0f);
 
-	for (int i = 0; i < SOUND_MAX_EMITTERS; i++)
-		sound_emitter[i].channel = -1;
+	for (int i = 0; i < Sound::MAX_EMITTERS; i++)
+		emitter_state[i].channel = -1;
 
-	for (int i = 0; i < SOUND_MIXER_CHANNELS; i++)
-		sound_channel_owner[i] = SOUND_NO_EMITTER;
+	for (int i = 0; i < Sound::MIXER_CHANNELS; i++)
+		channel_owner[i] = Sound::NO_EMITTER;
 }
 
 
-void sound_close(void)
+void close(void)
 {
-	sound_stopAll();
+	stopAll();
 	mixer_close();
 	audio_close();
 }
 
 
-Sound sound_load(const SoundDef *def)
+Sound load(const Sound::Def *def)
 {
 	assert(def && def->path);
 
@@ -234,7 +236,7 @@ Sound sound_load(const SoundDef *def)
 		                               : WAV64_STREAMING_FULL,
 	};
 
-	wav64_t *wave = (wav64_t *)resource_load(def->path, RESOURCE_WAVE, &parms);
+	wav64_t *wave = (wav64_t *)resource::load(def->path, Resource::WAVE, &parms);
 	assert(wave);
 
 	if (def->loop)
@@ -243,177 +245,179 @@ Sound sound_load(const SoundDef *def)
 	return (Sound){ .def = def, .wave = wave };
 }
 
-void sound_unload(Sound *sound)
+void unload(Sound *sound)
 {
 	if (!sound->wave) return;
 
 	/* Nothing may keep playing a file about to close. */
-	for (int i = 0; i < SOUND_MAX_EMITTERS; i++) {
-		if (sound_emitter[i].active && sound_emitter[i].sound == sound)
-			sound_releaseEmitter(&sound_emitter[i]);
+	for (int i = 0; i < Sound::MAX_EMITTERS; i++) {
+		if (emitter_state[i].active && emitter_state[i].sound == sound)
+			releaseEmitter(&emitter_state[i]);
 	}
 
-	resource_unload(sound->wave);
+	resource::unload(sound->wave);
 	sound->wave = NULL;
 }
 
 
-SoundEmitter sound_play(const Sound *sound, const Vector3 *position, float volume_scale, float duration)
+Sound::Emitter play(const Sound *sound, const Vector3 *position, float volume_scale, float duration)
 {
-	if (!sound || !sound->wave) return SOUND_NO_EMITTER;
+	if (!sound || !sound->wave) return Sound::NO_EMITTER;
 
-	const SoundDef *def = sound->def;
+	const Sound::Def *def = sound->def;
 
-	for (int i = 0; i < SOUND_MAX_EMITTERS; i++) {
-		SoundEmitterState *emitter = &sound_emitter[i];
+	for (int i = 0; i < Sound::MAX_EMITTERS; i++) {
+		EmitterState *emitter = &emitter_state[i];
 
 		if (emitter->active) continue;
 
-		emitter->sound        = sound;
-		emitter->position     = *position;
+		emitter->sound = sound;
+		emitter->position = *position;
 		emitter->volume_scale = volume_scale;
-		emitter->duration     = duration;
-		emitter->channel      = -1;
-		emitter->active       = true;
+		emitter->duration = duration;
+		emitter->channel = -1;
+		emitter->active = true;
 
 		/* Placed straight away so the first frame already opens at the right
 		   volume instead of ramping up from wherever the channel was. */
-		Vector3 to_emitter = vector3_difference(position, &sound_listener.position);
-		float distance = vector3_magnitude(&to_emitter);
-		float gain = def->volume * volume_scale * sound_attenuation(def, distance);
+		Vector3 to_emitter = vector3::difference(position, &listener.position);
+		float distance = vector3::magnitude(&to_emitter);
+		float gain = def->volume * volume_scale * attenuation(def, distance);
 
-		if (gain > 0.0f && !sound_startEmitter(emitter, gain, sound_panning(def, &to_emitter, distance))) {
+		if (gain > 0.0f && !startEmitter(emitter, gain, panning(def, &to_emitter, distance))) {
 			emitter->active = false;
-			return SOUND_NO_EMITTER;
+			return Sound::NO_EMITTER;
 		}
 
 		/* A one-shot that starts out of range has nothing to wait for. */
 		if (gain <= 0.0f && !def->loop) {
 			emitter->active = false;
-			return SOUND_NO_EMITTER;
+			return Sound::NO_EMITTER;
 		}
 
 		return i;
 	}
 
-	return SOUND_NO_EMITTER;
+	return Sound::NO_EMITTER;
 }
 
 
-void sound_stop(SoundEmitter emitter)
+void stop(Sound::Emitter emitter)
 {
-	if (emitter < 0 || emitter >= SOUND_MAX_EMITTERS) return;
-	if (!sound_emitter[emitter].active) return;
+	if (emitter < 0 || emitter >= Sound::MAX_EMITTERS) return;
+	if (!emitter_state[emitter].active) return;
 
-	sound_releaseEmitter(&sound_emitter[emitter]);
+	releaseEmitter(&emitter_state[emitter]);
 }
 
 
-void sound_stopAll(void)
+void stopAll(void)
 {
-	for (int i = 0; i < SOUND_MAX_EMITTERS; i++) {
-		if (sound_emitter[i].active) sound_releaseEmitter(&sound_emitter[i]);
+	for (int i = 0; i < Sound::MAX_EMITTERS; i++) {
+		if (emitter_state[i].active) releaseEmitter(&emitter_state[i]);
 	}
 }
 
 
-void sound_setEmitterPosition(SoundEmitter emitter, const Vector3 *position)
+void setEmitterPosition(Sound::Emitter emitter, const Vector3 *position)
 {
-	if (emitter < 0 || emitter >= SOUND_MAX_EMITTERS) return;
-	if (!sound_emitter[emitter].active) return;
+	if (emitter < 0 || emitter >= Sound::MAX_EMITTERS) return;
+	if (!emitter_state[emitter].active) return;
 
-	sound_emitter[emitter].position = *position;
+	emitter_state[emitter].position = *position;
 }
 
 
-void sound_poll(void)
+void poll(void)
 {
 	mixer_try_play();
 }
 
 
-static SoundListenerMode sound_listener_mode = SOUND_LISTENER_PLAYER;
+static Sound::ListenerMode listener_mode = Sound::LISTENER_PLAYER;
 
-void sound_setListenerMode(SoundListenerMode mode)
+void setListenerMode(Sound::ListenerMode mode)
 {
-	sound_listener_mode = mode;
+	listener_mode = mode;
 }
 
 /* The ear rides the driven body or the camera, as the game chose. With
    nobody possessed (menus, cutscenes) the body falls back to the camera.
    The right vector is always the camera's: panning follows what the screen
    shows. */
-static void sound_updateListener(void)
+static void updateListener(void)
 {
-	const Player   *player   = player::get();
-	const Viewport *viewport = viewport_get();
+	const Player *player = player::get();
+	const Viewport *viewport = viewport::get();
 
-	bool on_player = sound_listener_mode == SOUND_LISTENER_PLAYER && player[0].entity;
+	bool on_player = listener_mode == Sound::LISTENER_PLAYER && player[0].entity;
 
 	Vector3 ear = on_player ? player[0].entity->transform.position
 	                        : viewport->camera.position;
-	Vector3 right = camera::getRight(&viewport->camera);
+	Vector3 right = camera3d::getRight(&viewport->camera);
 
-	sound_setListener(&ear, &right);
+	setListener(&ear, &right);
 }
 
 
-void sound_update(void)
+void update(void)
 {
-	sound_updateListener();
+	updateListener();
 
-	int ramp_samples = (int)(time_get()->delta * SOUND_OUTPUT_RATE);
-	if (ramp_samples < SOUND_RAMP_MIN_SAMPLES) ramp_samples = SOUND_RAMP_MIN_SAMPLES;
+	int ramp_samples = (int)(time::get()->delta * OUTPUT_RATE);
+	if (ramp_samples < RAMP_MIN_SAMPLES) ramp_samples = RAMP_MIN_SAMPLES;
 
-	for (int i = 0; i < SOUND_MAX_EMITTERS; i++) {
-		SoundEmitterState *emitter = &sound_emitter[i];
+	for (int i = 0; i < Sound::MAX_EMITTERS; i++) {
+		EmitterState *emitter = &emitter_state[i];
 
 		if (!emitter->active) continue;
 
-		const SoundDef *def = emitter->sound->def;
+		const Sound::Def *def = emitter->sound->def;
 
 		/* A one-shot that ran out, or lost its channel to a later sound,
 		   gives its slot back. A looping one keeps the emitter and asks for
 		   a new channel below. */
-		if (emitter->channel >= 0 && (!sound_ownsChannel(emitter) || !mixer_ch_playing(emitter->channel))) {
+		if (emitter->channel >= 0 && (!ownsChannel(emitter) || !mixer_ch_playing(emitter->channel))) {
 			if (!def->loop) {
-				sound_releaseEmitter(emitter);
+				releaseEmitter(emitter);
 				continue;
 			}
 
-			sound_dropChannel(emitter);
+			dropChannel(emitter);
 		}
 
-		Vector3 to_emitter = vector3_difference(&emitter->position, &sound_listener.position);
-		float distance = vector3_magnitude(&to_emitter);
-		float gain = def->volume * emitter->volume_scale * sound_attenuation(def, distance);
+		Vector3 to_emitter = vector3::difference(&emitter->position, &listener.position);
+		float distance = vector3::magnitude(&to_emitter);
+		float gain = def->volume * emitter->volume_scale * attenuation(def, distance);
 
 		if (gain <= 0.0f) {
 			/* Out of range: the channel is worth more to something audible.
 			   The emitter itself stays, waiting for the listener to come
 			   back. */
-			sound_dropChannel(emitter);
+			dropChannel(emitter);
 
 			if (!def->loop) emitter->active = false;
 			continue;
 		}
 
-		float pan = sound_panning(def, &to_emitter, distance);
+		float pan = panning(def, &to_emitter, distance);
 
 		if (emitter->channel < 0) {
 			/* A looping emitter keeps asking until the mixer has room. A
 			   one-shot that cannot get a channel has missed its moment, and
 			   holding the slot open would starve everything after it. */
-			if (!sound_startEmitter(emitter, gain, pan) && !def->loop)
+			if (!startEmitter(emitter, gain, pan) && !def->loop)
 				emitter->active = false;
 
 			continue;
 		}
 
-		sound_applyMix(emitter->channel, gain, pan, ramp_samples);
+		applyMix(emitter->channel, gain, pan, ramp_samples);
 	}
 
-	sound_poll();
+	poll();
+}
+
 }
 
 }

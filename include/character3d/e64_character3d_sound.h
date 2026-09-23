@@ -11,11 +11,7 @@ namespace e64 {
 class Character3D;
 
 #define CHARACTER3D_SOUND_MAX_VARIATIONS 8
-#define CHARACTER3D_SOUND_MAX_FOOTINGS   4
-
-
-/* Indices into the entity's sound list, the way ANIMATION_CLIPS names clips. */
-#define SOUND_CLIPS(...) ((const uint8_t[]){ __VA_ARGS__ })
+#define CHARACTER3D_SOUND_MAX_FOOTINGS 4
 
 
 namespace character3d {

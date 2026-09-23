@@ -22,18 +22,20 @@
 #include "physics/geometry/e64_raycast.h"
 
 namespace e64 {
+namespace raycast {
 
-void raycast_set(RaycastData *r, const Vector3 *start, const Vector3 *dir, float endTime)
+void set(RaycastData *r, const Vector3 *start, const Vector3 *dir, float endTime)
 {
 	r->start = *start;
-	r->dir   = *dir;
-	r->t     = endTime;
+	r->dir = *dir;
+	r->t = endTime;
 }
 
-Vector3 raycast_getImpactPoint(const RaycastData *r)
+Vector3 getImpactPoint(const RaycastData *r)
 {
-	Vector3 off = vector3_scaled(&r->dir, r->toi);
-	return vector3_sum(&r->start, &off);
+	Vector3 off = vector3::scaled(&r->dir, r->toi);
+	return vector3::sum(&r->start, &off);
 }
 
+}
 }

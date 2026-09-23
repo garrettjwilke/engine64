@@ -3,8 +3,8 @@
 
 #include "entity/e64_entity3d.h"
 #include "character3d/e64_character3d_movement.h"
-#include "control/e64_character3d_control.h"
-#include "control/e64_character2d_control.h"
+#include "character3d/e64_character3d_control.h"
+#include "character2d/e64_character2d_control.h"
 
 namespace e64 {
 
@@ -32,13 +32,13 @@ typedef struct Player {
 	   say. */
 	union {
 		struct {
-			Character3D    *character;
+			Character3D *character;
 			character3d::MovementCommand cmd;
 			const character3d::ControlBinding *control;
 		} character3d;
 
 		struct {
-			Character2D      *character;
+			Character2D *character;
 			character2d::MovementCommand cmd;
 			const character2d::ControlBinding *control;
 		} character2d;

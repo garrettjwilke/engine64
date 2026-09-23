@@ -10,6 +10,8 @@ namespace e64 {
    Range is in metres along the view axis, and only reaches what the camera
    planes already let through. */
 
+namespace fog {
+
 typedef struct {
 
 	color_t color;
@@ -17,9 +19,11 @@ typedef struct {
 	float far;
 	bool enabled;
 
-} FogDef;
+} Def;
 
-typedef struct {
+}
+
+typedef struct Fog {
 
 	color_t color;
 	float near;
@@ -29,10 +33,14 @@ typedef struct {
 } Fog;
 
 
-Fog* fog_get(void);
+namespace fog {
 
-void fog_init(const FogDef* def);
-void fog_set(Fog* fog);
+Fog *get(void);
+
+void init(const Def *def);
+void set(Fog *state);
+
+}
 
 }
 

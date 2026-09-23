@@ -4,8 +4,9 @@
 #include "graphics/e64_color.h"
 
 namespace e64 {
+namespace color {
 
-color_hsv rgb_to_hsv(color_t c)
+static HSV rgbToHsv(color_t c)
 {
 	float r = c.r / 255.0f;
 	float g = c.g / 255.0f;
@@ -15,7 +16,7 @@ color_hsv rgb_to_hsv(color_t c)
 	float min = r < g ? (r < b ? r : b) : (g < b ? g : b);
 	float d = max - min;
 
-	color_hsv out;
+	HSV out;
 	out.v = max;
 	out.s = (max == 0.0f) ? 0.0f : d / max;
 
@@ -34,7 +35,7 @@ color_hsv rgb_to_hsv(color_t c)
 	return out;
 }
 
-color_t hsv_to_rgb(color_hsv h)
+static color_t hsvToRgb(HSV h)
 {
 	float r, g, b;
 
@@ -48,12 +49,12 @@ color_t hsv_to_rgb(color_hsv h)
 		float t = h.v * (1.0f - h.s * (1.0f - f));
 
 		switch ((int)i % 6) {
-			case 0: r = h.v; g = t;   b = p;   break;
-			case 1: r = q;   g = h.v; b = p;   break;
-			case 2: r = p;   g = h.v; b = t;   break;
-			case 3: r = p;   g = q;   b = h.v; break;
-			case 4: r = t;   g = p;   b = h.v; break;
-			default:r = h.v; g = p;   b = q;   break;
+			case 0: r = h.v; g = t; b = p; break;
+			case 1: r = q; g = h.v; b = p; break;
+			case 2: r = p; g = h.v; b = t; break;
+			case 3: r = p; g = q; b = h.v; break;
+			case 4: r = t; g = p; b = h.v; break;
+			default:r = h.v; g = p; b = q; break;
 		}
 	}
 
@@ -65,19 +66,19 @@ color_t hsv_to_rgb(color_hsv h)
 	};
 }
 
-color_t color_lerp(color_t* a, color_t* b, float t)
+color_t lerp(color_t* a, color_t* b, float t)
 {
 	if (t < 0.0f) t = 0.0f;
 	if (t > 1.0f) t = 1.0f;
 
-	color_hsv ha = rgb_to_hsv(*a);
-	color_hsv hb = rgb_to_hsv(*b);
+	HSV ha = rgbToHsv(*a);
+	HSV hb = rgbToHsv(*b);
 
 	float dh = hb.h - ha.h;
 	if (dh > 0.5f) dh -= 1.0f;
 	if (dh < -0.5f) dh += 1.0f;
 
-	color_hsv h = {
+	HSV h = {
 		.h = ha.h + dh * t,
 		.s = ha.s + (hb.s - ha.s) * t,
 		.v = ha.v + (hb.v - ha.v) * t,
@@ -87,10 +88,10 @@ color_t color_lerp(color_t* a, color_t* b, float t)
 	if (h.h < 0.0f) h.h += 1.0f;
 	if (h.h > 1.0f) h.h -= 1.0f;
 
-	return hsv_to_rgb(h);
+	return hsvToRgb(h);
 }
 
-color_t color_lerpRGB(color_t *a, color_t *b, float t)
+color_t lerpRGB(color_t *a, color_t *b, float t)
 {
 	if (t < 0.0f) t = 0.0f;
 	if (t > 1.0f) t = 1.0f;
@@ -118,9 +119,9 @@ void set_RGB_colors(color_t *color, float *interpolator)
 	*interpolator += timer.delta;
 	if (*interpolator >= 3.0f) *interpolator -= 3.0f;
 
-	if (*interpolator < 1.0f) *color = color_lerp(&red, &blue, *interpolator);
-	else if (*interpolator < 2.0f) *color = color_lerp(&blue, &green, *interpolator - 1.0f);
-	else *color = color_lerp(&green, &red, *interpolator - 2.0f);
+	if (*interpolator < 1.0f) *color = color::lerp(&red, &blue, *interpolator);
+	else if (*interpolator < 2.0f) *color = color::lerp(&blue, &green, *interpolator - 1.0f);
+	else *color = color::lerp(&green, &red, *interpolator - 2.0f);
 }
 
 void change_lamp_colors()
@@ -132,4 +133,5 @@ void change_lamp_colors()
 }
 */
 
+}
 }

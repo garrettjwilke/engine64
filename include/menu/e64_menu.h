@@ -11,82 +11,126 @@
 
 #include <stdint.h>
 
-#include "control/e64_menu_control.h"
+#include "controller/e64_controller.h"
 
 namespace e64 {
 
-/* How deep submenus can nest before open is ignored. */
-#define MENU_STACK_MAX 8
+/* The menu stack: where the cursor stands on each open level, and the menu
+   that level is showing. Opening a submenu pushes a level and remembers the
+   one below. */
+class Menu {
 
-/* One line of a menu. Both fields are optional: an item with neither is a
-   label the cursor still stops on. */
-typedef struct MenuItemDef {
+public:
 
-	void (*confirm)(void);
+	/* How deep submenus can nest before open is ignored. */
+	static constexpr uint8_t STACK_MAX = 8;
 
-	/* Opened on top of this menu when the item is confirmed, with the cursor
-	   of this level kept underneath. Cancel comes back to it. */
-	const MenuDef *submenu;
+	struct Def;
 
-} MenuItemDef;
+	/* One line of a menu. Both fields are optional: an item with neither is
+	   a label the cursor still stops on. */
+	struct ItemDef {
 
+		void (*confirm)(void);
 
-struct MenuDef {
+		/* Opened on top of this menu when the item is confirmed, with the
+		   cursor of this level kept underneath. Cancel comes back to it. */
+		const Def *submenu;
 
-	const MenuItemDef *item;
-	uint8_t            item_count;
+	};
 
-	/* Cancel on the first level, where there is nothing to go back to: this is
-	   how a menu closes itself. NULL leaves it where it is. */
-	void (*cancel)(void);
+	struct Def {
+
+		const ItemDef *item;
+		uint8_t item_count;
+
+		/* Cancel on the first level, where there is nothing to go back to:
+		   this is how a menu closes itself. NULL leaves it where it is. */
+		void (*cancel)(void);
+
+	};
+
+	struct Frame {
+
+		const Def *def;
+		int8_t index;
+		int8_t item_count;
+
+	};
+
+	Frame frame[STACK_MAX];
+	uint8_t top;
+	int8_t index;
+
 };
 
 
-/* Where the cursor stands on one level, and the menu that level is showing.
-   Opening a submenu pushes a level and remembers the one below. */
-typedef struct MenuStackFrame {
+namespace menu {
 
-	const MenuDef *def;
-	int8_t         index;
-	int8_t         item_count;
+typedef struct ControlBinding {
 
-} MenuStackFrame;
+	/* Whose controller moves the cursor. There is one cursor, so the game
+	   names the player here, the way it does for the camera. */
+	PlayerID player;
 
-typedef struct {
+	/* Which menu these buttons put up and walk through. */
+	const Menu::Def *menu;
 
-	MenuStackFrame frame[MENU_STACK_MAX];
-	uint8_t        top;
-	int8_t         index;
+	ButtonID confirm;
+	ButtonID cancel;
+	ButtonID pause;
+	ButtonID up;
+	ButtonID down;
+	ButtonID left;
+	ButtonID right;
+	ButtonID tab_left;
+	ButtonID tab_right;
 
-} MenuStack;
+} ControlBinding;
+
+
+typedef struct Controls {
+
+	bool confirm;
+	bool cancel;
+	bool pause;
+	bool up;
+	bool down;
+	float up_held;
+	float down_held;
+	bool left;
+	bool right;
+	bool tab_left;
+	bool tab_right;
+
+} Controls;
 
 
 /* Empties the stack: the menu this state opens starts from nothing. */
-void menuStack_init(void);
-void menuStack_open(int8_t item_count);
-void menuStack_back(void);
-
-int8_t menuStack_getIndex(void);
-void   menuStack_setIndex(int8_t index);
-void   menuStack_moveIndex(int8_t delta, int8_t max);
-
-int8_t  menuStack_getItemCount(void);
-uint8_t menuStack_getDepth(void);
-
+void init(void);
 
 /* Shows this menu, on top of whatever is open. */
-void menu_open(const MenuDef *def);
+void open(const Menu::Def *def);
 
 /* Closes the level on top and goes back to the one under it, cursor and all. */
-void menu_back(void);
+void back(void);
 
 /* The menu the cursor is on, NULL while nothing is open. */
-const MenuDef *menu_get(void);
+const Menu::Def *get(void);
+
+int8_t getIndex(void);
+void setIndex(int8_t index);
+void moveIndex(int8_t delta, int8_t max);
+
+int8_t getItemCount(void);
+uint8_t getDepth(void);
 
 /* One step of the open menu, off the buttons this binding names: the cursor
    moves, a confirmed item runs and opens what it names, and cancel closes the
    level it is on. Call it once per frame from the state that runs the menu. */
-void menu_update(const menu::ControlBinding *binding);
+void update(const ControlBinding *binding);
+
+}
 
 }
 

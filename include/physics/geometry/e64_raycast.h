@@ -25,21 +25,25 @@
 #ifndef ENGINE64_RAYCAST_H
 #define ENGINE64_RAYCAST_H
 
-#include "physics/math/e64_vector3.h"
+#include "math/e64_vector3.h"
 
 namespace e64 {
 
 typedef struct RaycastData {
 	Vector3 start;
 	Vector3 dir;
-	float   t;
-	float   toi;
+	float t;
+	float toi;
 	Vector3 normal;
 } RaycastData;
 
 
-void    raycast_set(RaycastData *r, const Vector3 *start, const Vector3 *dir, float endTime);
-Vector3 raycast_getImpactPoint(const RaycastData *r);
+namespace raycast {
+
+void set(RaycastData *r, const Vector3 *start, const Vector3 *dir, float endTime);
+Vector3 getImpactPoint(const RaycastData *r);
+
+}
 
 }
 

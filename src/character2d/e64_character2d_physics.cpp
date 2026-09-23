@@ -2,7 +2,7 @@
 	Port of character3d::physics to the plane, which is itself Godot's
 	test_body_motion recovery and CharacterBody3D::_set_collision_direction.
 	Everything runs in Vector3 with z at zero, so the capsule against a cell
-	is aabb_closestToSegment and the floor probe is aabb_closestToPoint, the
+	is aabb::closestToSegment and the floor probe is aabb::closestToPoint, the
 	same distance code the 3D body uses against boxes.
 */
 #include <math.h>
@@ -10,39 +10,38 @@
 
 #include "character2d/e64_character2d.h"
 #include "stage2d/e64_stage2d.h"
-#include "physics/math/e64_math_common.h"
-#include "physics/math/e64_math_functions.h"
+#include "math/e64_math.h"
 #include "physics/geometry/e64_aabb.h"
 
 namespace e64 {
 
-#define CHARACTER2D_MAX_CONTACTS           16      /* contacts kept per recovery pass */
-#define CHARACTER2D_RECOVERY_ATTEMPTS      4       /* Godot: recover_attempts */
-#define CHARACTER2D_RECOVERY_MARGIN        0.05f   /* Godot's safe margin, in pixels */
-#define CHARACTER2D_MIN_CONTACT_DEPTH      (CHARACTER2D_RECOVERY_MARGIN * 0.05f)  /* Godot: TEST_MOTION_MIN_CONTACT_DEPTH_FACTOR */
-#define CHARACTER2D_RECOVERY_FACTOR        0.4f    /* Godot: fraction of the depth recovered per pass */
-#define CHARACTER2D_FLOOR_SNAP_LENGTH      2.0f    /* downward probe, pixels */
-#define CHARACTER2D_FALL_PROBE_CELLS       6       /* how far down the landing is looked for */
+#define CHARACTER2D_MAX_CONTACTS 16 /* contacts kept per recovery pass */
+#define CHARACTER2D_RECOVERY_ATTEMPTS 4 /* Godot: recover_attempts */
+#define CHARACTER2D_RECOVERY_MARGIN 0.05f /* Godot's safe margin, in pixels */
+#define CHARACTER2D_MIN_CONTACT_DEPTH (CHARACTER2D_RECOVERY_MARGIN * 0.05f) /* Godot: TEST_MOTION_MIN_CONTACT_DEPTH_FACTOR */
+#define CHARACTER2D_RECOVERY_FACTOR 0.4f /* Godot: fraction of the depth recovered per pass */
+#define CHARACTER2D_FLOOR_SNAP_LENGTH 2.0f /* downward probe, pixels */
+#define CHARACTER2D_FALL_PROBE_CELLS 6 /* how far down the landing is looked for */
 /* Walkable limit of 50 degrees plus Godot's FLOOR_ANGLE_THRESHOLD of 0.01
    rad, as a cosine: floor is decided on the cosine, never the angle. The
    argument is constant, so gcc folds the cosf at compile time. */
-#define CHARACTER2D_FLOOR_MAX_SLOPE_COS    cosf(PI / 180 * 50.0f + 0.01f)
+#define CHARACTER2D_FLOOR_MAX_SLOPE_COS cosf(PI / 180 * 50.0f + 0.01f)
 
 
 namespace character2d {
 namespace physics {
 
 typedef struct Contact {
-	Vector3 normal;   /* from the cell toward the body */
-	float   depth;
+	Vector3 normal; /* from the cell toward the body */
+	float depth;
 } Contact;
 
 typedef struct CollisionState {
-	bool    floor;
-	bool    wall;
-	bool    ceiling;
+	bool floor;
+	bool wall;
+	bool ceiling;
 	Vector3 wall_normal;
-	float   wall_depth;
+	float wall_depth;
 } CollisionState;
 
 
@@ -64,8 +63,8 @@ static void getSegment(const Character2D *character, Vector3 *a, Vector3 *b)
 static AABB cellBox(const Stage2D *stage, int32_t x, int32_t y)
 {
 	Vector2 origin = stage->entity->position;
-	float   x0 = origin.x + x * stage->cell_width;
-	float   y0 = origin.y + y * stage->cell_height;
+	float x0 = origin.x + x * stage->cell_width;
+	float y0 = origin.y + y * stage->cell_height;
 	return (AABB){
 		{ x0, y0, -1.0f },
 		{ x0 + stage->cell_width, y0 + stage->cell_height, 1.0f },
@@ -106,18 +105,18 @@ static int collectContacts(const Character2D *character, Contact *contacts)
 	int count = 0;
 	for (int32_t y = y0; y <= y1 && count < CHARACTER2D_MAX_CONTACTS; y++) {
 		for (int32_t x = x0; x <= x1 && count < CHARACTER2D_MAX_CONTACTS; x++) {
-			if (!stage2d_isSolid(stage, x, y)) continue;
+			if (!stage2d::isSolid(stage, x, y)) continue;
 
-			AABB    box     = cellBox(stage, x, y);
-			Vector3 on_box  = aabb_closestToSegment(&box, &a, &b);
-			Vector3 on_seg  = segment_closestToPoint(&a, &b, &on_box);
-			Vector3 d       = vector3_difference(&on_seg, &on_box);
-			float   dist2   = vector3_dot(&d, &d);
+			AABB box = cellBox(stage, x, y);
+			Vector3 on_box = aabb::closestToSegment(&box, &a, &b);
+			Vector3 on_seg = segment_closestToPoint(&a, &b, &on_box);
+			Vector3 d = vector3::difference(&on_seg, &on_box);
+			float dist2 = vector3::dot(&d, &d);
 			if (dist2 > reach * reach) continue;
 
 			float dist = sqrtf(dist2);
-			contacts[count].normal = (dist > 1.0e-6f) ? vector3_scaled(&d, 1.0f / dist) : vector3_create(0.0f, -1.0f, 0.0f);
-			contacts[count].depth  = radius - dist;
+			contacts[count].normal = (dist > 1.0e-6f) ? vector3::scaled(&d, 1.0f / dist) : vector3::create(0.0f, -1.0f, 0.0f);
+			contacts[count].depth = radius - dist;
 			count++;
 		}
 	}
@@ -129,20 +128,20 @@ static int collectContacts(const Character2D *character, Contact *contacts)
    wall, and the frame state accumulates them. Up is -y here. */
 static void classifyContacts(const Contact *contacts, int count, CollisionState *state)
 {
-	bool was_wall   = state->wall;
+	bool was_wall = state->wall;
 	bool pass_floor = false;
-	bool pass_wall  = false;
+	bool pass_wall = false;
 
-	int     wall_collision_count = 0;
+	int wall_collision_count = 0;
 	Vector3 combined_wall_normal = { 0.0f, 0.0f, 0.0f };
-	Vector3 tmp_wall_col         = { 0.0f, 0.0f, 0.0f };
+	Vector3 tmp_wall_col = { 0.0f, 0.0f, 0.0f };
 
 	for (int i = count - 1; i >= 0; i--) {
 		const Contact *c = &contacts[i];
 
 		/* dot(normal, up) == -normal.y; angle <= limit is cosine >= its cosine */
 		if (-c->normal.y >= CHARACTER2D_FLOOR_MAX_SLOPE_COS) {
-			pass_floor   = true;
+			pass_floor = true;
 			state->floor = true;
 			continue;
 		}
@@ -153,28 +152,28 @@ static void classifyContacts(const Contact *contacts, int count, CollisionState 
 		}
 
 		/* Collision is wall by default. */
-		pass_wall   = true;
+		pass_wall = true;
 		state->wall = true;
 
 		if (c->depth > state->wall_depth) {
-			state->wall_depth  = c->depth;
+			state->wall_depth = c->depth;
 			state->wall_normal = c->normal;
 		}
 
-		Vector3 d = vector3_difference(&c->normal, &tmp_wall_col);
-		if (vector3_dot(&d, &d) > 1.0e-6f) {
+		Vector3 d = vector3::difference(&c->normal, &tmp_wall_col);
+		if (vector3::dot(&d, &d) > 1.0e-6f) {
 			tmp_wall_col = c->normal;
-			vector3_add(&combined_wall_normal, &c->normal);
+			vector3::add(&combined_wall_normal, &c->normal);
 			wall_collision_count++;
 		}
 	}
 
 	/* Two steep walls can add up to walkable support (a wedge). */
 	if (pass_wall && wall_collision_count > 1 && !pass_floor) {
-		float magnitude = vector3_magnitude(&combined_wall_normal);
+		float magnitude = vector3::magnitude(&combined_wall_normal);
 		if (magnitude > 1.0e-6f && -combined_wall_normal.y >= CHARACTER2D_FLOOR_MAX_SLOPE_COS * magnitude) {
 			state->floor = true;
-			state->wall  = was_wall;
+			state->wall = was_wall;
 		}
 	}
 }
@@ -194,12 +193,12 @@ static void recover(Character2D *character, CollisionState *state)
 
 		Vector3 recover_motion = { 0.0f, 0.0f, 0.0f };
 		for (int i = 0; i < count; i++) {
-			float depth = contacts[i].depth - vector3_dot(&contacts[i].normal, &recover_motion);
+			float depth = contacts[i].depth - vector3::dot(&contacts[i].normal, &recover_motion);
 			if (depth > CHARACTER2D_MIN_CONTACT_DEPTH + 1.0e-5f)
-				vector3_addScaledVector(&recover_motion, &contacts[i].normal, (depth - CHARACTER2D_MIN_CONTACT_DEPTH) * CHARACTER2D_RECOVERY_FACTOR);
+				vector3::addScaledVector(&recover_motion, &contacts[i].normal, (depth - CHARACTER2D_MIN_CONTACT_DEPTH) * CHARACTER2D_RECOVERY_FACTOR);
 		}
 
-		if (vector3_dot(&recover_motion, &recover_motion) == 0.0f) break;
+		if (vector3::dot(&recover_motion, &recover_motion) == 0.0f) break;
 
 		character->position.x += recover_motion.x;
 		character->position.y += recover_motion.y;
@@ -217,7 +216,7 @@ static void setGroundResponse(Character2D *character)
 	if (data->velocity.y < 0.0f) return;
 
 	data->is_grounded = true;
-	data->velocity.y  = 0.0f;
+	data->velocity.y = 0.0f;
 
 	/* The floor is back: the next ledge gets its own coyote window. */
 	data->coyote_timer = 0.0f;
@@ -257,9 +256,9 @@ static void setWallResponse(Character2D *character, const CollisionState *state,
 
 static void respond(Character2D *character, const CollisionState *state, bool was_on_floor)
 {
-	if (state->floor)   setGroundResponse(character);
+	if (state->floor) setGroundResponse(character);
 	if (state->ceiling) setCeilingResponse(character);
-	if (state->wall)    setWallResponse(character, state, was_on_floor);
+	if (state->wall) setWallResponse(character, state, was_on_floor);
 }
 
 
@@ -269,30 +268,30 @@ static void respond(Character2D *character, const CollisionState *state, bool wa
    Answers whether there is walkable floor under the body, how deep the probe
    sinks into it and with which normal. */
 typedef struct FloorProbe {
-	bool    found;
-	float   penetration;
+	bool found;
+	float penetration;
 	Vector3 normal;
 } FloorProbe;
 
 static void floorProbe_consider(FloorProbe *probe, const Vector3 *center, float radius, const Vector3 *closest)
 {
-	Vector3 d     = vector3_difference(center, closest);
-	float   dist2 = vector3_dot(&d, &d);
+	Vector3 d = vector3::difference(center, closest);
+	float dist2 = vector3::dot(&d, &d);
 	if (dist2 > radius * radius) return;
 
 	float dist = sqrtf(dist2);
 	Vector3 normal = (dist > 1.0e-6f)
-		? vector3_scaled(&d, 1.0f / dist)
-		: vector3_create(0.0f, -1.0f, 0.0f);
+		? vector3::scaled(&d, 1.0f / dist)
+		: vector3::create(0.0f, -1.0f, 0.0f);
 
 	/* Walkable floor only. */
 	if (-normal.y < CHARACTER2D_FLOOR_MAX_SLOPE_COS) return;
 
 	float penetration = radius - dist;
 	if (!probe->found || penetration > probe->penetration) {
-		probe->found       = true;
+		probe->found = true;
 		probe->penetration = penetration;
-		probe->normal      = normal;
+		probe->normal = normal;
 	}
 }
 
@@ -306,18 +305,18 @@ static void findFloor(const Character2D *character, FloorProbe *probe)
 
 	/* Every field written up front: found gates the others, and the
 	   compiler cannot see that across the inlining. */
-	probe->found       = false;
+	probe->found = false;
 	probe->penetration = 0.0f;
-	probe->normal      = vector3_create(0.0f, -1.0f, 0.0f);
+	probe->normal = vector3::create(0.0f, -1.0f, 0.0f);
 
 	int32_t x0, y0, x1, y1;
 	cellRange(stage, center.x - radius, center.y - radius, center.x + radius, center.y + radius, &x0, &y0, &x1, &y1);
 
 	for (int32_t y = y0; y <= y1; y++)
 		for (int32_t x = x0; x <= x1; x++) {
-			if (!stage2d_isSolid(stage, x, y)) continue;
-			AABB    box     = cellBox(stage, x, y);
-			Vector3 closest = aabb_closestToPoint(&box, &center);
+			if (!stage2d::isSolid(stage, x, y)) continue;
+			AABB box = cellBox(stage, x, y);
+			Vector3 closest = aabb::closestToPoint(&box, &center);
 			floorProbe_consider(probe, &center, radius, &closest);
 		}
 }
@@ -334,9 +333,9 @@ static float floorDistance(const Character2D *character)
 	int32_t row = (int32_t)floorf((character->position.y - origin.y) / stage->cell_height);
 
 	for (int32_t y = row; y <= row + CHARACTER2D_FALL_PROBE_CELLS; y++) {
-		if (!stage2d_isSolid(stage, col, y)) continue;
+		if (!stage2d::isSolid(stage, col, y)) continue;
 		float top = origin.y + y * stage->cell_height;
-		if (top < character->position.y) continue;   /* the cell the feet are already in */
+		if (top < character->position.y) continue; /* the cell the feet are already in */
 		return top - character->position.y;
 	}
 	return -1.0f;
@@ -363,7 +362,7 @@ void collide(Character2D *character)
 	/* No stage, nothing to stand on or walk into. */
 	if (!character->stage) return;
 
-	bool was_on_floor       = data->is_grounded;
+	bool was_on_floor = data->is_grounded;
 	bool velocity_facing_up = data->velocity.y < 0.0f;
 	data->is_grounded = false;
 

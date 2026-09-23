@@ -20,67 +20,76 @@
 */
 
 /*
-	Sequential impulse constraint solver.
+	Sequential impulse constraint solver. The island's velocity buffer is read
+	through the island itself: physics::Island holds ConstraintState by pointer,
+	so this header cannot include it back.
 */
 #ifndef ENGINE64_CONTACT_SOLVER_H
 #define ENGINE64_CONTACT_SOLVER_H
 
 #include <stdint.h>
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_matrix3.h"
-#include "physics/e64_physics_settings.h"
+#include "math/e64_vector3.h"
+#include "math/e64_matrix3.h"
+#include "physics/collision/e64_contact.h"
 
 namespace e64 {
 
-struct PhysicsIsland;
-struct VelocityState;
+namespace physics { class Island; }
 
 
-typedef struct ContactState {
-	Vector3 ra;
-	Vector3 rb;
-	float   penetration;
-	float   normal_impulse;
-	float   tangent_impulse[2];
-	float   bias;
-	float   normal_mass;
-	float   tangent_mass[2];
-} ContactState;
+class Contact::Solver {
+public:
+
+	struct State {
+		Vector3 ra;
+		Vector3 rb;
+		float penetration;
+		float normal_impulse;
+		float tangent_impulse[2];
+		float bias;
+		float normal_mass;
+		float tangent_mass[2];
+	};
 
 
-typedef struct ContactConstraintState {
-	ContactState contacts[8];
-	int32_t      contact_count;
-	Vector3      tangent_vectors[2];
-	Vector3      normal;
-	Vector3      center_a;
-	Vector3      center_b;
-	Matrix3      iA;
-	Matrix3      iB;
-	float        mA;
-	float        mB;
-	float        restitution;
-	float        friction;
-	int32_t      index_a;
-	int32_t      index_b;
-} ContactConstraintState;
+	struct ConstraintState {
+		State contacts[8];
+		int32_t contact_count;
+		Vector3 tangent_vectors[2];
+		Vector3 normal;
+		Vector3 center_a;
+		Vector3 center_b;
+		Matrix3 iA;
+		Matrix3 iB;
+		float mA;
+		float mB;
+		float restitution;
+		float friction;
+		int32_t index_a;
+		int32_t index_b;
+	};
 
 
-typedef struct ContactSolver {
-	struct PhysicsIsland     *island;
-	ContactConstraintState   *contacts;
-	int32_t                   contact_count;
-	struct VelocityState     *velocities;
-	int                       enable_friction;
-} ContactSolver;
+	physics::Island *island;
+	ConstraintState *contacts;
+	int32_t contact_count;
+	int enable_friction;
+};
 
 
-void contactSolver_initialize(ContactSolver *s, struct PhysicsIsland *island);
-void contactSolver_shutdown  (ContactSolver *s);
-void contactSolver_preSolve  (ContactSolver *s, float dt);
-void contactSolver_solve     (ContactSolver *s);
+namespace contact {
 
+namespace solver {
+
+void initialize(Contact::Solver *s, physics::Island *island);
+void shutdown (Contact::Solver *s);
+void preSolve (Contact::Solver *s, float dt);
+void solve (Contact::Solver *s);
+
+}
+
+}
 
 }
 

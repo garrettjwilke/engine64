@@ -15,28 +15,27 @@
 
 namespace e64 {
 
-typedef enum {
+class Graphic {
+public:
 
-	GRAPHIC_RECTANGLE,
-	GRAPHIC_SPRITE,
-	GRAPHIC_TEXT,
+	enum Type {
+		RECTANGLE,
+		SPRITE,
+		TEXT,
+	};
 
-} GraphicType;
 
-typedef struct {
-
-	GraphicType type;
+	Type type;
 
 	union {
 		Rectangle rectangle;
-		Sprite    sprite;
-		Text      text;
+		Sprite sprite;
+		Text text;
 	};
 
 	uint8_t transparency;
-	bool    is_hidden;
-
-} Graphic;
+	bool is_hidden;
+};
 
 }
 

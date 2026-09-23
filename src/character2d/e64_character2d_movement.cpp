@@ -49,7 +49,7 @@ static const GaitSettings *getGait(const Character2D *character)
 static float getTargetSpeed(const Character2D *character, uint8_t state)
 {
 	if (state == MOVEMENT2D_STATE_WALKING) return getGait(character)->target_speed;
-	return 0.0f;   /* anything else is asking to stand still */
+	return 0.0f; /* anything else is asking to stand still */
 }
 
 static float getAccelerationRate(const Character2D *character, uint8_t state)
@@ -106,8 +106,8 @@ static void setChargingJump(Character2D *character, MovementCommand *cmd, float 
 
 	if (cmd->jump_triggered) {
 		data->jump_initial_velocity = data->velocity;
-		data->jump_timer    = 0.0f;
-		data->jump_force    = 0.0f;
+		data->jump_timer = 0.0f;
+		data->jump_force = 0.0f;
 		cmd->jump_triggered = false;
 
 		/* Snap: no crouch at all. The floor is left on this very frame with
@@ -121,7 +121,7 @@ static void setChargingJump(Character2D *character, MovementCommand *cmd, float 
 			return;
 		}
 	}
-	else if (data->jump_timer == 0.0f) return;   /* nothing being charged */
+	else if (data->jump_timer == 0.0f) return; /* nothing being charged */
 
 	data->jump_timer += dt;
 	if (cmd->jump_held) {
@@ -174,10 +174,10 @@ static void setSnappingJump(Character2D *character, MovementCommand *cmd, float 
 	   no press on the floor to have saved one. */
 	data->jump_initial_velocity = data->velocity;
 	data->velocity.x *= CHARACTER2D_JUMP_LAUNCH_VELOCITY_SCALE;
-	data->velocity.y  = -settings->jump_base_speed;
+	data->velocity.y = -settings->jump_base_speed;
 
 	/* One launch per edge: the window closes on the jump it granted. */
-	data->coyote_timer  = settings->jump_coyote_time;
+	data->coyote_timer = settings->jump_coyote_time;
 	cmd->jump_triggered = false;
 }
 
@@ -217,8 +217,8 @@ static void setRolling(Character2D *character, MovementCommand *cmd, float dt)
 	   faces. */
 	if (cmd->roll_triggered) {
 		data->roll_direction = cmd->direction != 0.0f ? cmd->direction : (character->facing_left ? -1.0f : 1.0f);
-		data->roll_timer     = 0.0f;
-		cmd->roll_triggered  = false;
+		data->roll_timer = 0.0f;
+		cmd->roll_triggered = false;
 	}
 
 	/* Rolling off a ledge drops: the state is what holds to the end of the
@@ -238,18 +238,18 @@ static void setRolling(Character2D *character, MovementCommand *cmd, float dt)
 	   at the roll's own speed, the spin holds whatever speed it reached along
 	   the body's own facing, and the grip hands the steering back to the
 	   stick. */
-	float direction     = data->roll_direction;
-	float target_speed  = settings->roll_target_speed;
+	float direction = data->roll_direction;
+	float target_speed = settings->roll_target_speed;
 	float response_rate = settings->roll_launch_response_rate;
 
 	if (data->roll_timer >= settings->roll_grip_time) {
-		direction     = cmd->direction;
-		target_speed  = data->horizontal_speed;
+		direction = cmd->direction;
+		target_speed = data->horizontal_speed;
 		response_rate = settings->roll_grip_response_rate;
 	}
 	else if (data->roll_timer >= settings->roll_ground_time) {
-		direction     = character->facing_left ? -1.0f : 1.0f;
-		target_speed  = data->horizontal_speed;
+		direction = character->facing_left ? -1.0f : 1.0f;
+		target_speed = data->horizontal_speed;
 		response_rate = settings->roll_spin_response_rate;
 	}
 
@@ -289,7 +289,7 @@ static void setFalling(Character2D *character, MovementCommand *cmd, float dt)
 }
 
 static void (*handler[MOVEMENT2D_STATE_COUNT])(Character2D *, MovementCommand *, float) = {
-	[MOVEMENT2D_STATE_IDLE]    = setLocomotion,
+	[MOVEMENT2D_STATE_IDLE] = setLocomotion,
 	[MOVEMENT2D_STATE_WALKING] = setLocomotion,
 	[MOVEMENT2D_STATE_ROLLING] = setRolling,
 	[MOVEMENT2D_STATE_FALLING] = setFalling,

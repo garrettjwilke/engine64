@@ -6,125 +6,131 @@
 
 namespace e64 {
 
-typedef struct Scene2D Scene2D;
+struct Scene2D;
 
 
-typedef enum {
+class UIAnimation {
 
-	UI_EASING_LINEAR,
+public:
 
-	UI_EASING_QUAD_IN,
-	UI_EASING_QUAD_OUT,
-	UI_EASING_QUAD_IN_OUT,
+	enum Easing {
 
-	UI_EASING_CUBIC_IN,
-	UI_EASING_CUBIC_OUT,
-	UI_EASING_CUBIC_IN_OUT,
+		EASING_LINEAR,
 
-	UI_EASING_EXPO_IN,
-	UI_EASING_EXPO_OUT,
-	UI_EASING_EXPO_IN_OUT,
+		EASING_QUAD_IN,
+		EASING_QUAD_OUT,
+		EASING_QUAD_IN_OUT,
 
-	UI_EASING_COUNT,
+		EASING_CUBIC_IN,
+		EASING_CUBIC_OUT,
+		EASING_CUBIC_IN_OUT,
 
-} UIEasing;
+		EASING_EXPO_IN,
+		EASING_EXPO_OUT,
+		EASING_EXPO_IN_OUT,
 
+		EASING_COUNT,
 
-typedef enum {
+	};
 
-	UI_ANIMATION_PLAY_ONCE,
-	UI_ANIMATION_PLAY_LOOP,
-	UI_ANIMATION_PLAY_PING_PONG,
+	enum PlayMode {
 
-} UIAnimationPlayMode;
+		PLAY_ONCE,
+		PLAY_LOOP,
+		PLAY_PING_PONG,
 
+	};
 
-/* What of an entity a track writes. The name carries the type: the first
-   block is written as a float, the next as a byte, hidden as a flag. */
-typedef enum {
+	/* What of an entity a track writes. The name carries the type: the
+	   first block is written as a float, the next as a byte, hidden as a
+	   flag. */
+	enum Field {
 
-	UI_FIELD_POSITION_X,
-	UI_FIELD_POSITION_Y,
-	UI_FIELD_SCALE_X,
-	UI_FIELD_SCALE_Y,
-	UI_FIELD_ROTATION,
+		FIELD_POSITION_X,
+		FIELD_POSITION_Y,
+		FIELD_SCALE_X,
+		FIELD_SCALE_Y,
+		FIELD_ROTATION,
 
-	UI_FIELD_TRANSPARENCY,
-	UI_FIELD_TEXT_STYLE,
-	UI_FIELD_SPRITE_FRAME,
+		FIELD_TRANSPARENCY,
+		FIELD_TEXT_STYLE,
+		FIELD_SPRITE_FRAME,
 
-	UI_FIELD_COLOR_R,
-	UI_FIELD_COLOR_G,
-	UI_FIELD_COLOR_B,
-	UI_FIELD_COLOR_A,
+		FIELD_COLOR_R,
+		FIELD_COLOR_G,
+		FIELD_COLOR_B,
+		FIELD_COLOR_A,
 
-	/* Which corner comes from the track's own corner field. */
-	UI_FIELD_GRADIENT_R,
-	UI_FIELD_GRADIENT_G,
-	UI_FIELD_GRADIENT_B,
-	UI_FIELD_GRADIENT_A,
+		/* Which corner comes from the track's own corner field. */
+		FIELD_GRADIENT_R,
+		FIELD_GRADIENT_G,
+		FIELD_GRADIENT_B,
+		FIELD_GRADIENT_A,
 
-	UI_FIELD_HIDDEN,
+		FIELD_HIDDEN,
 
-} UIField;
+	};
 
+	/* A live source drives the value instead of time: the track names it
+	   and the engine reads it fresh on every apply. */
+	enum Source {
 
-/* A live source drives the value instead of time: the track names it and
-   the engine reads it fresh on every apply. */
-typedef enum {
+		SOURCE_NONE,
+		SOURCE_MENU_INDEX, /* the menu stack cursor */
 
-	UI_SOURCE_NONE,
-	UI_SOURCE_MENU_INDEX,   /* the menu stack cursor */
+	};
 
-} UISource;
+	struct Track {
 
+		/* Which entity of the live scene, by layer and placement, and what
+		   of it. */
+		uint8_t layer;
+		uint8_t entity;
+		uint8_t field; /* Field */
+		uint8_t corner; /* gradient corner, 0..3 */
 
-typedef struct {
+		float from;
+		float to;
+		bool from_bool;
+		bool to_bool;
+		float delay;
+		float duration;
+		Easing easing;
 
-	/* Which entity of the live scene, by layer and placement, and what of it. */
-	uint8_t  layer;
-	uint8_t  entity;
-	uint8_t  field;      /* UIField */
-	uint8_t  corner;     /* gradient corner, 0..3 */
+		uint8_t source; /* Source */
+		const float *values_by_index;
 
-	float    from;
-	float    to;
-	bool     from_bool;
-	bool     to_bool;
-	float    delay;
-	float    duration;
-	UIEasing easing;
+	};
 
-	uint8_t      source;   /* UISource */
-	const float *values_by_index;
+	struct Player {
 
-} UIAnimationTrack;
+		const UIAnimation *animation;
+		PlayMode mode;
+		float time;
+		bool is_active;
+		bool is_reversed;
 
+	};
 
-typedef struct UIAnimation {
+	const Track *track;
+	uint8_t track_count;
 
-	const UIAnimationTrack *track;
-	uint8_t                 track_count;
-
-} UIAnimation;
-
-
-typedef struct {
-
-	const UIAnimation  *animation;
-	UIAnimationPlayMode mode;
-	float               time;
-	bool                is_active;
-	bool                is_reversed;
-
-} UIAnimationPlayer;
+};
 
 
-void uiAnimation_apply(Scene2D *scene2d, const UIAnimation *animation, float time);
+namespace uiAnimation {
 
-void uiAnimationPlayer_start(UIAnimationPlayer *player, Scene2D *scene2d, const UIAnimation *animation, UIAnimationPlayMode mode, bool is_reversed);
-void uiAnimationPlayer_stop(UIAnimationPlayer *player);
-void uiAnimationPlayer_update(UIAnimationPlayer *player, Scene2D *scene2d, float dt);
+namespace player {
+
+void start(UIAnimation::Player *player, Scene2D *scene, const UIAnimation *animation, UIAnimation::PlayMode mode, bool is_reversed);
+void stop(UIAnimation::Player *player);
+void update(UIAnimation::Player *player, Scene2D *scene, float dt);
+
+}
+
+void apply(Scene2D *scene, const UIAnimation *animation, float time);
+
+}
 
 }
 

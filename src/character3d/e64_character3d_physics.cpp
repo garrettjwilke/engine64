@@ -12,26 +12,28 @@
 #include <stdint.h>
 
 #include "character3d/e64_character3d.h"
-#include "physics/math/e64_math_common.h"
-#include "physics/math/e64_math_functions.h"
+#include "math/e64_math.h"
+#include "physics/e64_physics_world.h"
+#include "physics/e64_rigid_body.h"
+#include "physics/e64_buoyancy.h"
 #include "physics/collision/e64_collision.h"
-#include "physics/collision/e64_collision_mesh.h"
+#include "physics/collision/e64_mesh_collider.h"
 
 namespace e64 {
 
-#define CHARACTER3D_MAX_CONTACTS           16      /* contacts kept per recovery pass */
-#define CHARACTER3D_MAX_TRIANGLES          20      /* triangle candidates per query */
-#define CHARACTER3D_RECOVERY_ATTEMPTS      4       /* Godot: recover_attempts */
-#define CHARACTER3D_RECOVERY_MARGIN        0.001f  /* Godot: default safe margin */
-#define CHARACTER3D_MIN_CONTACT_DEPTH      (CHARACTER3D_RECOVERY_MARGIN * 0.05f)  /* Godot: TEST_MOTION_MIN_CONTACT_DEPTH_FACTOR */
-#define CHARACTER3D_RECOVERY_FACTOR        0.4f    /* Godot: fraction of the depth recovered per pass */
-#define CHARACTER3D_FLOOR_SNAP_LENGTH      0.15f    /* downward probe, metres */
-#define CHARACTER3D_FALL_PROBE_LENGTH      8.0f     /* how far down the landing is looked for */
+#define CHARACTER3D_MAX_CONTACTS 16 /* contacts kept per recovery pass */
+#define CHARACTER3D_MAX_TRIANGLES 20 /* triangle candidates per query */
+#define CHARACTER3D_RECOVERY_ATTEMPTS 4 /* Godot: recover_attempts */
+#define CHARACTER3D_RECOVERY_MARGIN 0.001f /* Godot: default safe margin */
+#define CHARACTER3D_MIN_CONTACT_DEPTH (CHARACTER3D_RECOVERY_MARGIN * 0.05f) /* Godot: TEST_MOTION_MIN_CONTACT_DEPTH_FACTOR */
+#define CHARACTER3D_RECOVERY_FACTOR 0.4f /* Godot: fraction of the depth recovered per pass */
+#define CHARACTER3D_FLOOR_SNAP_LENGTH 0.15f /* downward probe, metres */
+#define CHARACTER3D_FALL_PROBE_LENGTH 8.0f /* how far down the landing is looked for */
 /* Walkable limit of 50 degrees plus Godot's FLOOR_ANGLE_THRESHOLD of 0.01
    rad, as a cosine: floor is decided on the cosine, never the angle, because
    acosf is newlib with no fast counterpart. The argument is constant, so gcc
    folds the cosf at compile time. */
-#define CHARACTER3D_FLOOR_MAX_SLOPE_COS    cosf(PI / 180 * 50.0f + 0.01f)
+#define CHARACTER3D_FLOOR_MAX_SLOPE_COS cosf(PI / 180 * 50.0f + 0.01f)
 
 
 namespace character3d {
@@ -40,9 +42,9 @@ namespace collider {
 
 void init(Collider *collider, float radius, float half_height)
 {
-	collider->shape.radius      = radius;
+	collider->shape.radius = radius;
 	collider->shape.half_height = half_height;
-	transform_init(&collider->world);
+	transform::init(&collider->world);
 }
 
 void setVertical(Collider *collider, const Vector3 *position)
@@ -62,32 +64,32 @@ namespace physics {
 /* Registers the kinematic body in the world. Infinite mass and no gravity: the
    solver reads it to push rigid bodies and never writes back. It must not
    sleep, or the boxes resting on it would miss the moment it starts moving. */
-void createBody(Character3D *character, PhysicsWorld *world)
+void createBody(Character3D *character, e64::physics::World *world)
 {
-	RigidBodyDef def;
-	rigidBodyDef_init(&def);
+	RigidBody::Def def;
+	rigidBody::def::init(&def);
 
-	def.body_type   = BODY_KINEMATIC;
-	def.position    = character->collider.world.position;
-	def.axis        = (Vector3){ 0.0f, 0.0f, 1.0f };
-	def.angle       = 0.0f;
+	def.body_type = RigidBody::BODY_KINEMATIC;
+	def.position = character->collider.world.position;
+	def.axis = (Vector3){ 0.0f, 0.0f, 1.0f };
+	def.angle = 0.0f;
 	def.allow_sleep = 0;
 
-	RigidBody *rigid = physicsWorld_createBody(world, &def);
+	RigidBody *rigid = e64::physics::world::createBody(world, &def);
 	if (rigid == NULL) return;
 
 	rigid->owner = character->entity;
 
-	CapsuleDef shape = {
-		.radius      = character->collider.shape.radius,
+	Capsule::Def shape = {
+		.radius = character->collider.shape.radius,
 		.half_height = character->collider.shape.half_height,
-		.friction    = 0.5f,
+		.friction = 0.5f,
 		.restitution = 0.0f,
-		.density     = 0.0f,
+		.density = 0.0f,
 	};
-	transform_init(&shape.tx);
+	transform::init(&shape.tx);
 
-	rigidBody_addCapsule(rigid, &shape);
+	rigidBody::addCapsule(rigid, &shape);
 	character->body.rigid = rigid;
 }
 
@@ -99,42 +101,42 @@ void syncBody(Character3D *character)
 	RigidBody *rigid = character->body.rigid;
 	if (rigid == NULL) return;
 
-	rigidBody_setTransformPositionYaw(rigid, character->collider.world.position,
-	                                  deg_to_rad(character->body.rotation.z));
-	rigidBody_setLinearVelocity(rigid, character->body.velocity);
-	rigidBody_setToAwake(rigid);
+	rigidBody::setTransformPositionYaw(rigid, character->collider.world.position,
+	                                   deg_to_rad(character->body.rotation.z));
+	rigidBody::setLinearVelocity(rigid, character->body.velocity);
+	rigidBody::setToAwake(rigid);
 }
 
 
 /* Contact gathering: every touching manifold of the frame, not just one. */
 
-typedef struct Contact {
-	Vector3 normal;   /* unit, from the surface toward the character */
-	float   depth;    /* positive penetration */
-} Contact;
+typedef struct BodyContact {
+	Vector3 normal; /* unit, from the surface toward the character */
+	float depth; /* positive penetration */
+} BodyContact;
 
 typedef struct CollisionState {
-	bool    floor;
-	bool    wall;
-	bool    ceiling;
-	Vector3 wall_normal;   /* deepest wall contact, toward the character */
-	float   wall_depth;
+	bool floor;
+	bool wall;
+	bool ceiling;
+	Vector3 wall_normal; /* deepest wall contact, toward the character */
+	float wall_depth;
 } CollisionState;
 
 /* Only mesh and count are set up before a query: count gates the triangle
    array, whose entries are written before they are read. Zeroing the whole
    struct would cost a memset of the array on every call. */
 typedef struct TriangleQuery {
-	const CollisionMesh *mesh;
+	const MeshCollider *mesh;
 	int32_t triangle[CHARACTER3D_MAX_TRIANGLES];
-	int     count;
+	int count;
 } TriangleQuery;
 
 static int collectTriangle(void *cb, int32_t id)
 {
 	TriangleQuery *query = (TriangleQuery *)cb;
 	if (query->count >= CHARACTER3D_MAX_TRIANGLES) return 0;
-	query->triangle[query->count++] = (int32_t)(intptr_t)dynamicAABBTree_getUserData(&query->mesh->tree, id);
+	query->triangle[query->count++] = (int32_t)(intptr_t)collision::dynamicAABBTree::getUserData(&query->mesh->tree, id);
 	return 1;
 }
 
@@ -143,15 +145,15 @@ static int collectTriangle(void *cb, int32_t id)
    opposite convention: normal toward the character, positive depth. Every
    collision function hands over a unit normal, with a fallback for the
    degenerate case, so it is only flipped here, never renormalized. */
-static int appendContact(Contact *contacts, int count, const ContactManifold *m)
+static int appendContact(BodyContact *contacts, int count, const Contact::Manifold *m)
 {
 	if (count >= CHARACTER3D_MAX_CONTACTS) return count;
 
 	float depth = -m->contacts[0].penetration;
 	if (depth <= 0.0f) return count;
 
-	contacts[count].normal = vector3_inverted(&m->normal);
-	contacts[count].depth  = depth;
+	contacts[count].normal = vector3::inverted(&m->normal);
+	contacts[count].depth = depth;
 	return count + 1;
 }
 
@@ -160,44 +162,44 @@ static int appendContact(Contact *contacts, int count, const ContactManifold *m)
    of the mesh's world transform, and each contact normal is rotated back out
    to world space before it is kept. */
 static int collectMeshContacts(const Collider *collider,
-                               const CollisionMesh *mesh, const Transform *tx,
+                               const MeshCollider *mesh, const Transform *tx,
                                const Vector3 *velocity,
-                               Contact *contacts, int count)
+                               BodyContact *contacts, int count)
 {
-	Transform local          = transform_productTransposed(tx, &collider->world);
-	Vector3   local_velocity = matrix3_transformVectorTransposed(&tx->rotation, velocity);
+	Transform local = transform::productTransposed(tx, &collider->world);
+	Vector3 local_velocity = matrix3::transformVectorTransposed(&tx->rotation, velocity);
 
 	AABB aabb;
-	capsule_computeAABB(&collider->shape, &local, &aabb);
+	capsule::computeAABB(&collider->shape, &local, &aabb);
 
 	/* libdragon builds with -ftrivial-auto-var-init=pattern, which fills every
 	   local without an initializer on entry. The large ones of this hot path
 	   opt out: each is written before it is read, and the fill alone was a
 	   memset of several KB per frame. */
 	TriangleQuery query __attribute__((uninitialized));
-	query.mesh  = mesh;
+	query.mesh = mesh;
 	query.count = 0;
-	collisionMesh_queryAABB(mesh, &query, collectTriangle, aabb);
+	meshCollider::queryAABB(mesh, &query, collectTriangle, aabb);
 
 	for (int i = 0; i < query.count; i++) {
 		Triangle triangle __attribute__((uninitialized));
-		collisionMesh_getTriangle(mesh, query.triangle[i], &triangle);
+		meshCollider::getTriangle(mesh, query.triangle[i], &triangle);
 
 		/* contact_count gates the manifold: normal and contacts[0] are written
 		   by the collision function whenever it sets a contact. */
-		ContactManifold m __attribute__((uninitialized));
+		Contact::Manifold m __attribute__((uninitialized));
 		m.contact_count = 0;
-		capsuleToTriangle(&m, &collider->shape, &local, &triangle);
+		collision::capsuleToTriangle(&m, &collider->shape, &local, &triangle);
 		if (!m.contact_count) continue;
 
 		/* Contact point on the triangle: the manifold stores the point on the
 		   capsule surface, the triangle sits penetration further along the
 		   normal. Everything here is mesh-local, velocity included. */
 		Vector3 tri_point = m.contacts[0].position;
-		vector3_addScaledVector(&tri_point, &m.normal, m.contacts[0].penetration);
+		vector3::addScaledVector(&tri_point, &m.normal, m.contacts[0].penetration);
 
-		m.normal = collision_fixTriangleNormal(&triangle, &tri_point, &m.normal, &local_velocity);
-		m.normal = matrix3_transformVector(&tx->rotation, &m.normal);
+		m.normal = collision::fixTriangleNormal(&triangle, &tri_point, &m.normal, &local_velocity);
+		m.normal = matrix3::transformVector(&tx->rotation, &m.normal);
 
 		count = appendContact(contacts, count, &m);
 	}
@@ -213,36 +215,36 @@ static int collectMeshContacts(const Collider *collider,
    controllers do it: each one walks out of the other. Dynamic bodies stay
    out, they are pushed by the solver instead. */
 static int collectContacts(const Collider *collider,
-                           const PhysicsWorld *world,
+                           const e64::physics::World *world,
                            const RigidBody *self,
                            const Vector3 *velocity,
-                           Contact *contacts)
+                           BodyContact *contacts)
 {
 	int count = 0;
 
 	for (const RigidBody *body = world->body_list; body; body = body->next) {
 		if (body == self) continue;
-		if (!(body->flags & (BODY_FLAG_STATIC | BODY_FLAG_KINEMATIC))) continue;
+		if (!(body->flags & (RigidBody::BODY_FLAG_STATIC | RigidBody::BODY_FLAG_KINEMATIC))) continue;
 
-		for (const PhysicsShape *shape = body->shapes; shape; shape = shape->next) {
-			if (shape->sensor) continue;   /* volumes (water), not obstacles */
+		for (const e64::physics::Shape *shape = body->shapes; shape; shape = shape->next) {
+			if (shape->sensor) continue; /* volumes (water), not obstacles */
 
 			const Transform *tx = &shape->world;
-			ContactManifold m __attribute__((uninitialized));
+			Contact::Manifold m __attribute__((uninitialized));
 			m.contact_count = 0;
 
 			switch (shape->type) {
-				case SHAPE_MESH:
+				case e64::physics::Shape::SHAPE_MESH:
 					count = collectMeshContacts(collider, shape->mesh, tx, velocity, contacts, count);
 					continue;
-				case SHAPE_BOX:
-					capsuleToStaticBox(&m, &collider->shape, &collider->world, &shape->box, tx);
+				case e64::physics::Shape::SHAPE_BOX:
+					collision::capsuleToStaticBox(&m, &collider->shape, &collider->world, &shape->box, tx);
 					break;
-				case SHAPE_SPHERE:
-					capsuleToStaticSphere(&m, &collider->shape, &collider->world, &shape->sphere, tx);
+				case e64::physics::Shape::SHAPE_SPHERE:
+					collision::capsuleToStaticSphere(&m, &collider->shape, &collider->world, &shape->sphere, tx);
 					break;
-				case SHAPE_CAPSULE:
-					capsuleToStaticCapsule(&m, &collider->shape, &collider->world, &shape->capsule, tx);
+				case e64::physics::Shape::SHAPE_CAPSULE:
+					collision::capsuleToStaticCapsule(&m, &collider->shape, &collider->world, &shape->capsule, tx);
 					break;
 			}
 			if (!m.contact_count) continue;
@@ -259,22 +261,22 @@ static int collectContacts(const Collider *collider,
    pass is classified by its angle against the up axis — floor, ceiling or
    wall — and the frame state accumulates them. Floor detection can never be
    masked by a wall contact. */
-static void classifyContacts(const Contact *contacts, int count, CollisionState *state)
+static void classifyContacts(const BodyContact *contacts, int count, CollisionState *state)
 {
-	bool was_wall   = state->wall;
+	bool was_wall = state->wall;
 	bool pass_floor = false;
-	bool pass_wall  = false;
+	bool pass_wall = false;
 
-	int     wall_collision_count = 0;
+	int wall_collision_count = 0;
 	Vector3 combined_wall_normal = { 0.0f, 0.0f, 0.0f };
-	Vector3 tmp_wall_col         = { 0.0f, 0.0f, 0.0f };
+	Vector3 tmp_wall_col = { 0.0f, 0.0f, 0.0f };
 
 	for (int i = count - 1; i >= 0; i--) {
-		const Contact *c = &contacts[i];
+		const BodyContact *c = &contacts[i];
 
 		/* dot(normal, up) == normal.z; angle <= limit is cosine >= its cosine */
 		if (c->normal.z >= CHARACTER3D_FLOOR_MAX_SLOPE_COS) {
-			pass_floor   = true;
+			pass_floor = true;
 			state->floor = true;
 			continue;
 		}
@@ -285,19 +287,19 @@ static void classifyContacts(const Contact *contacts, int count, CollisionState 
 		}
 
 		/* Collision is wall by default. */
-		pass_wall   = true;
+		pass_wall = true;
 		state->wall = true;
 
 		if (c->depth > state->wall_depth) {
-			state->wall_depth  = c->depth;
+			state->wall_depth = c->depth;
 			state->wall_normal = c->normal;
 		}
 
 		/* Collect normal for calculating average. */
-		Vector3 d = vector3_difference(&c->normal, &tmp_wall_col);
-		if (vector3_dot(&d, &d) > 1.0e-6f) {
+		Vector3 d = vector3::difference(&c->normal, &tmp_wall_col);
+		if (vector3::dot(&d, &d) > 1.0e-6f) {
 			tmp_wall_col = c->normal;
-			vector3_add(&combined_wall_normal, &c->normal);
+			vector3::add(&combined_wall_normal, &c->normal);
 			wall_collision_count++;
 		}
 	}
@@ -305,10 +307,10 @@ static void classifyContacts(const Contact *contacts, int count, CollisionState 
 	/* Two steep walls can add up to walkable support (a wedge): their combined
 	   normal points up within the floor limit even though neither does. */
 	if (pass_wall && wall_collision_count > 1 && !pass_floor) {
-		float magnitude = vector3_magnitude(&combined_wall_normal);
+		float magnitude = vector3::magnitude(&combined_wall_normal);
 		if (magnitude > 1.0e-6f && combined_wall_normal.z >= CHARACTER3D_FLOOR_MAX_SLOPE_COS * magnitude) {
 			state->floor = true;
-			state->wall  = was_wall;
+			state->wall = was_wall;
 		}
 	}
 }
@@ -317,12 +319,12 @@ static void classifyContacts(const Contact *contacts, int count, CollisionState 
    accumulated over every contact and applied whole, up to four attempts. Each
    contact's depth is re-measured against the motion accumulated so far in the
    pass, so stacked contacts on the same plane do not over-correct. */
-static void recover(Character3D *character, const PhysicsWorld *world, CollisionState *state)
+static void recover(Character3D *character, const e64::physics::World *world, CollisionState *state)
 {
 	int recover_attempts = CHARACTER3D_RECOVERY_ATTEMPTS;
 
 	do {
-		Contact contacts[CHARACTER3D_MAX_CONTACTS] __attribute__((uninitialized));
+		BodyContact contacts[CHARACTER3D_MAX_CONTACTS] __attribute__((uninitialized));
 		int count = collectContacts(&character->collider, world, character->body.rigid,
 		                            &character->body.velocity, contacts);
 		if (!count) break;
@@ -331,14 +333,14 @@ static void recover(Character3D *character, const PhysicsWorld *world, Collision
 
 		Vector3 recover_motion = { 0.0f, 0.0f, 0.0f };
 		for (int i = 0; i < count; i++) {
-			float depth = contacts[i].depth - vector3_dot(&contacts[i].normal, &recover_motion);
+			float depth = contacts[i].depth - vector3::dot(&contacts[i].normal, &recover_motion);
 			if (depth > CHARACTER3D_MIN_CONTACT_DEPTH + 1.0e-5f)
-				vector3_addScaledVector(&recover_motion, &contacts[i].normal, (depth - CHARACTER3D_MIN_CONTACT_DEPTH) * CHARACTER3D_RECOVERY_FACTOR);
+				vector3::addScaledVector(&recover_motion, &contacts[i].normal, (depth - CHARACTER3D_MIN_CONTACT_DEPTH) * CHARACTER3D_RECOVERY_FACTOR);
 		}
 
-		if (vector3_dot(&recover_motion, &recover_motion) == 0.0f) break;
+		if (vector3::dot(&recover_motion, &recover_motion) == 0.0f) break;
 
-		vector3_add(&character->body.position, &recover_motion);
+		vector3::add(&character->body.position, &recover_motion);
 		collider::setVertical(&character->collider, &character->body.position);
 	} while (--recover_attempts);
 }
@@ -382,9 +384,9 @@ static void setWallResponse(Character3D *character, const CollisionState *state,
 		Vector3 n = state->wall_normal;
 		n.z = 0.0f;
 
-		float magnitude = vector3_magnitude(&n);
+		float magnitude = vector3::magnitude(&n);
 		if (magnitude < 1.0e-6f) return;
-		vector3_scale(&n, 1.0f / magnitude);
+		vector3::scale(&n, 1.0f / magnitude);
 
 		float t = body->velocity.x * n.x + body->velocity.y * n.y;
 		if (t < 0.0f) {
@@ -393,16 +395,16 @@ static void setWallResponse(Character3D *character, const CollisionState *state,
 		}
 	}
 	else {
-		float t = vector3_dot(&body->velocity, &state->wall_normal);
-		if (t < 0.0f) vector3_addScaledVector(&body->velocity, &state->wall_normal, -t);
+		float t = vector3::dot(&body->velocity, &state->wall_normal);
+		if (t < 0.0f) vector3::addScaledVector(&body->velocity, &state->wall_normal, -t);
 	}
 }
 
 static void respond(Character3D *character, const CollisionState *state, bool was_on_floor)
 {
-	if (state->floor)   setGroundResponse(character);
+	if (state->floor) setGroundResponse(character);
 	if (state->ceiling) setCeilingResponse(character);
-	if (state->wall)    setWallResponse(character, state, was_on_floor);
+	if (state->wall) setWallResponse(character, state, was_on_floor);
 }
 
 
@@ -412,52 +414,52 @@ static void respond(Character3D *character, const CollisionState *state, bool wa
    normal is steeper than the walkable limit (walls) are ignored. */
 
 typedef struct FloorProbe {
-	int     found;
-	float   penetration;   /* deepest floor contact, along its normal */
-	Vector3 normal;        /* from the floor toward the character */
+	int found;
+	float penetration; /* deepest floor contact, along its normal */
+	Vector3 normal; /* from the floor toward the character */
 } FloorProbe;
 
 /* closest: nearest point of the surface to the sphere center, world space. */
 static void floorProbe_consider(FloorProbe *probe, const Vector3 *center, float radius, const Vector3 *closest)
 {
-	Vector3 d     = vector3_difference(center, closest);
-	float   dist2 = vector3_dot(&d, &d);
+	Vector3 d = vector3::difference(center, closest);
+	float dist2 = vector3::dot(&d, &d);
 	if (dist2 > radius * radius) return;
 
 	float dist = sqrtf(dist2);
 	Vector3 normal = (dist > 1.0e-6f)
-		? vector3_scaled(&d, 1.0f / dist)
-		: vector3_create(0.0f, 0.0f, 1.0f);
+		? vector3::scaled(&d, 1.0f / dist)
+		: vector3::create(0.0f, 0.0f, 1.0f);
 
 	/* Walkable floor only. */
 	if (normal.z < CHARACTER3D_FLOOR_MAX_SLOPE_COS) return;
 
 	float penetration = radius - dist;
 	if (!probe->found || penetration > probe->penetration) {
-		probe->found       = 1;
+		probe->found = 1;
 		probe->penetration = penetration;
-		probe->normal      = normal;
+		probe->normal = normal;
 	}
 }
 
-static void probeFloor(const PhysicsWorld *world, const Vector3 *center, float radius, FloorProbe *probe)
+static void probeFloor(const e64::physics::World *world, const Vector3 *center, float radius, FloorProbe *probe)
 {
 	/* found gates every other field: they are written together on a hit. */
 	probe->found = 0;
 
 	for (const RigidBody *body = world->body_list; body; body = body->next) {
-	if (!(body->flags & BODY_FLAG_STATIC)) continue;
+	if (!(body->flags & RigidBody::BODY_FLAG_STATIC)) continue;
 
-	for (const PhysicsShape *shape = body->shapes; shape; shape = shape->next) {
-		if (shape->sensor) continue;   /* volumes (water), not floor */
+	for (const e64::physics::Shape *shape = body->shapes; shape; shape = shape->next) {
+		if (shape->sensor) continue; /* volumes (water), not floor */
 
 		const Transform *tx = &shape->world;
 
 		switch (shape->type) {
-			case SHAPE_MESH: {
+			case e64::physics::Shape::SHAPE_MESH: {
 				/* The tree is mesh-local: the sphere goes in through the
 				   inverse transform, the closest point comes back out. */
-				Vector3 local_center = transform_mulVectorTransposed(tx, center);
+				Vector3 local_center = transform::mulVectorTransposed(tx, center);
 
 				AABB aabb = {
 					{ local_center.x - radius, local_center.y - radius, local_center.z - radius },
@@ -465,46 +467,46 @@ static void probeFloor(const PhysicsWorld *world, const Vector3 *center, float r
 				};
 
 				TriangleQuery query __attribute__((uninitialized));
-				query.mesh  = shape->mesh;
+				query.mesh = shape->mesh;
 				query.count = 0;
-				collisionMesh_queryAABB(shape->mesh, &query, collectTriangle, aabb);
+				meshCollider::queryAABB(shape->mesh, &query, collectTriangle, aabb);
 
 				for (int t = 0; t < query.count; t++) {
 					Triangle triangle __attribute__((uninitialized));
-					collisionMesh_getTriangle(shape->mesh, query.triangle[t], &triangle);
-					Vector3 closest_local = triangle_closestToPoint(&triangle.vertices[0], &triangle.vertices[1], &triangle.vertices[2], &local_center);
-					Vector3 closest       = transform_mulVector(tx, &closest_local);
+					meshCollider::getTriangle(shape->mesh, query.triangle[t], &triangle);
+					Vector3 closest_local = triangle::closestToPoint(&triangle, &local_center);
+					Vector3 closest = transform::mulVector(tx, &closest_local);
 					floorProbe_consider(probe, center, radius, &closest);
 				}
 				break;
 			}
-			case SHAPE_BOX: {
-				Vector3 local_center = transform_mulVectorTransposed(tx, center);
+			case e64::physics::Shape::SHAPE_BOX: {
+				Vector3 local_center = transform::mulVectorTransposed(tx, center);
 
 				Vector3 e = shape->box.e;
 				AABB box_local = { { -e.x, -e.y, -e.z }, { e.x, e.y, e.z } };
-				Vector3 closest_local = aabb_closestToPoint(&box_local, &local_center);
-				Vector3 closest = transform_mulVector(tx, &closest_local);
+				Vector3 closest_local = aabb::closestToPoint(&box_local, &local_center);
+				Vector3 closest = transform::mulVector(tx, &closest_local);
 				floorProbe_consider(probe, center, radius, &closest);
 				break;
 			}
-			case SHAPE_SPHERE: {
+			case e64::physics::Shape::SHAPE_SPHERE: {
 				const Vector3 *pos = &tx->position;
-				Vector3 d = vector3_difference(center, pos);
-				Vector3 dir = vector3_normalized(&d);
+				Vector3 d = vector3::difference(center, pos);
+				Vector3 dir = vector3::normalized(&d);
 				Vector3 closest = *pos;
-				vector3_addScaledVector(&closest, &dir, shape->sphere.radius);
+				vector3::addScaledVector(&closest, &dir, shape->sphere.radius);
 				floorProbe_consider(probe, center, radius, &closest);
 				break;
 			}
-			case SHAPE_CAPSULE: {
+			case e64::physics::Shape::SHAPE_CAPSULE: {
 				Vector3 a, b;
-				capsule_getSegment(&shape->capsule, tx, &a, &b);
+				capsule::getSegment(&shape->capsule, tx, &a, &b);
 				Vector3 on_seg = segment_closestToPoint(&a, &b, center);
-				Vector3 d = vector3_difference(center, &on_seg);
-				Vector3 dir = vector3_normalized(&d);
+				Vector3 d = vector3::difference(center, &on_seg);
+				Vector3 dir = vector3::normalized(&d);
 				Vector3 closest = on_seg;
-				vector3_addScaledVector(&closest, &dir, shape->capsule.radius);
+				vector3::addScaledVector(&closest, &dir, shape->capsule.radius);
 				floorProbe_consider(probe, center, radius, &closest);
 				break;
 			}
@@ -516,32 +518,32 @@ static void probeFloor(const PhysicsWorld *world, const Vector3 *center, float r
 /* How far the floor is straight below the feet, so the animation can start the
    landing exactly one clip-to-contact away from it. Negative with nothing
    within reach. Sensors are skipped: the water is not a floor to land on. */
-static float floorDistance(const Character3D *character, const PhysicsWorld *world)
+static float floorDistance(const Character3D *character, const e64::physics::World *world)
 {
 	Vector3 down = { 0.0f, 0.0f, -1.0f };
 
 	RaycastData ray;
-	raycast_set(&ray, &character->body.position, &down, CHARACTER3D_FALL_PROBE_LENGTH);
+	raycast::set(&ray, &character->body.position, &down, CHARACTER3D_FALL_PROBE_LENGTH);
 
 	float distance = -1.0f;
 
 	for (const RigidBody *body = world->body_list; body; body = body->next) {
-		if (!(body->flags & BODY_FLAG_STATIC)) continue;
+		if (!(body->flags & RigidBody::BODY_FLAG_STATIC)) continue;
 
-		for (const PhysicsShape *shape = body->shapes; shape; shape = shape->next) {
+		for (const e64::physics::Shape *shape = body->shapes; shape; shape = shape->next) {
 			if (shape->sensor) continue;
-			if (!physicsShape_raycast(shape, &ray)) continue;
+			if (!e64::physics::shape::raycast(shape, &ray)) continue;
 
 			/* Closest wins: the ray is shortened so the rest is behind it. */
 			distance = ray.toi;
-			ray.t    = ray.toi;
+			ray.t = ray.toi;
 		}
 	}
 
 	return distance;
 }
 
-static void findFloor(const Character3D *character, const PhysicsWorld *world, FloorProbe *probe)
+static void findFloor(const Character3D *character, const e64::physics::World *world, FloorProbe *probe)
 {
 	float radius = character->collider.shape.radius;
 
@@ -577,7 +579,7 @@ static void snapToFloor(Character3D *character, const FloorProbe *floor,
    zero) and pushed back out to the distance the climb clip grips at. Boxes
    only — the frame is the point of the volume, and a sphere has no face to
    climb. */
-static void probeLadder(Character3D *character, const PhysicsWorld *world)
+static void probeLadder(Character3D *character, const e64::physics::World *world)
 {
 	MovementData *data = &character->movement.data;
 
@@ -586,22 +588,22 @@ static void probeLadder(Character3D *character, const PhysicsWorld *world)
 	const Vector3 *feet = &character->body.position;
 
 	for (const RigidBody *body = world->body_list; body; body = body->next) {
-		if (!(body->flags & BODY_FLAG_STATIC)) continue;
+		if (!(body->flags & RigidBody::BODY_FLAG_STATIC)) continue;
 
-		for (const PhysicsShape *shape = body->shapes; shape; shape = shape->next) {
-			if (shape->sensor != SENSOR_CLIMBABLE) continue;
-			if (shape->type   != SHAPE_BOX)        continue;
-			if (!physicsShape_testPoint(shape, feet)) continue;
+		for (const e64::physics::Shape *shape = body->shapes; shape; shape = shape->next) {
+			if (shape->sensor != e64::physics::Shape::SENSOR_CLIMBABLE) continue;
+			if (shape->type != e64::physics::Shape::SHAPE_BOX) continue;
+			if (!e64::physics::shape::testPoint(shape, feet)) continue;
 
-			const Transform *tx    = &shape->world;
-			Vector3          local = transform_mulVectorTransposed(tx, feet);
+			const Transform *tx = &shape->world;
+			Vector3 local = transform::mulVectorTransposed(tx, feet);
 
 			/* Only the -Y face is climbable; the back of a ladder is its
 			   back. Turn the placement 180 to serve the other side. */
 			if (local.y > 0.0f) continue;
 
-			Vector3 hold   = { 0.0f, -CHARACTER3D_LADDER_STAND_DISTANCE, local.z };
-			Vector3 anchor = transform_mulVector(tx, &hold);
+			Vector3 hold = { 0.0f, -CHARACTER3D_LADDER_STAND_DISTANCE, local.z };
+			Vector3 anchor = transform::mulVector(tx, &hold);
 
 			/* ex/ey/ez are the local axes in world space, so ey is the face
 			   normal. The heading is built the way the movement reads one off
@@ -613,11 +615,11 @@ static void probeLadder(Character3D *character, const PhysicsWorld *world)
 			   and its half-height is the whole distance. */
 			Vector3 ceiling = { 0.0f, 0.0f, shape->box.e.z };
 
-			data->on_ladder       = true;
+			data->on_ladder = true;
 			data->ladder_anchor_x = anchor.x;
 			data->ladder_anchor_y = anchor.y;
-			data->ladder_yaw      = rad_to_deg(atan2f(-into.x, -into.y));
-			data->ladder_top      = transform_mulVector(tx, &ceiling).z;
+			data->ladder_yaw = rad_to_deg(atan2f(-into.x, -into.y));
+			data->ladder_top = transform::mulVector(tx, &ceiling).z;
 			return;
 		}
 	}
@@ -627,7 +629,7 @@ static void probeLadder(Character3D *character, const PhysicsWorld *world)
    buoyancy volumes. The character is kinematic, so it never shows up in a
    sensor's contact list — it asks the volumes directly. Read by the movement
    code on the next frame, which is where the fake buoyancy lives. */
-static void probeWater(Character3D *character, const PhysicsWorld *world)
+static void probeWater(Character3D *character, const e64::physics::World *world)
 {
 	MovementData *data = &character->movement.data;
 
@@ -637,14 +639,14 @@ static void probeWater(Character3D *character, const PhysicsWorld *world)
 	Vector3 feet = character->body.position;
 
 	for (int32_t i = 0; i < world->buoyancy_count; i++) {
-		const BuoyancyVolume *volume = world->buoyancy[i];
+		const buoyancy::Volume *volume = world->buoyancy[i];
 
-		for (const PhysicsShape *shape = volume->body->shapes; shape; shape = shape->next) {
+		for (const e64::physics::Shape *shape = volume->body->shapes; shape; shape = shape->next) {
 			if (!shape->sensor) continue;
-			if (!physicsShape_testPoint(shape, &feet)) continue;
+			if (!e64::physics::shape::testPoint(shape, &feet)) continue;
 
 			float surface = volume->surface_height(volume->surface, feet.x, feet.y);
-			float height  = 2.0f * (character->collider.shape.half_height + character->collider.shape.radius);
+			float height = 2.0f * (character->collider.shape.half_height + character->collider.shape.radius);
 
 			float fraction = (surface - feet.z) / height;
 			if (fraction <= 0.0f) continue;
@@ -656,11 +658,11 @@ static void probeWater(Character3D *character, const PhysicsWorld *world)
 	}
 }
 
-void collide(Character3D *character, const PhysicsWorld *world)
+void collide(Character3D *character, const e64::physics::World *world)
 {
 	MovementData *data = &character->movement.data;
 
-	bool was_on_floor       = data->is_grounded;
+	bool was_on_floor = data->is_grounded;
 	bool velocity_facing_up = character->body.velocity.z > 0.0f;
 	data->is_grounded = 0;
 

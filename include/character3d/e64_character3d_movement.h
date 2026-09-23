@@ -25,9 +25,9 @@ class Character3D;
 #define CHARACTER3D_GRAVITY -20.0f
 #define CHARACTER3D_FALL_MAX_SPEED -15.0f
 
-#define CHARACTER3D_WATER_DRAG             4.0f    /* vertical, per second, at full submersion */
-#define CHARACTER3D_WATER_SINK_MAX_SPEED  -2.0f    /* fully reached at the fraction below */
-#define CHARACTER3D_WATER_SINK_LIMIT_FULL  0.8f    /* submersion where the sink limit saturates */
+#define CHARACTER3D_WATER_DRAG 4.0f /* vertical, per second, at full submersion */
+#define CHARACTER3D_WATER_SINK_MAX_SPEED -2.0f /* fully reached at the fraction below */
+#define CHARACTER3D_WATER_SINK_LIMIT_FULL 0.8f /* submersion where the sink limit saturates */
 
 /* Swim entry is the character's own swim equilibrium: sunk past the depth
    its buoyancy holds it at, the water is already carrying it, so it swims.
@@ -48,10 +48,10 @@ class Character3D;
 
 /* How hard the body is pulled onto the ladder's centre line and holding
    distance, per second. Fast enough that the entry snap reads as a grab. */
-#define CHARACTER3D_LADDER_ANCHOR_RATE    12.0f
+#define CHARACTER3D_LADDER_ANCHOR_RATE 12.0f
 
 /* How close the ground has to be for a descent to end on it. */
-#define CHARACTER3D_LADDER_GROUND_REACH   0.15f
+#define CHARACTER3D_LADDER_GROUND_REACH 0.15f
 
 /* Hysteresis on the top of the volume, the same trick the swim thresholds
    use. Leaving happens on losing the volume, so without it the two edges
@@ -60,17 +60,17 @@ class Character3D;
    after it let go, over and over. Grabbing on has to happen this far below
    the top, which is out of reach of anything already standing on it. Only
    the top edge moves — the foot of the ladder is nowhere near it. */
-#define CHARACTER3D_LADDER_ENTER_MARGIN   0.50f
+#define CHARACTER3D_LADDER_ENTER_MARGIN 0.50f
 
 /* Widest angle between the stick and the ladder's facing that still counts
    as asking to climb. Past it the stick is walking past the ladder. */
-#define CHARACTER3D_LADDER_ENTER_ANGLE    70.0f
+#define CHARACTER3D_LADDER_ENTER_ANGLE 70.0f
 
 /* Push toward the rungs when the climb runs off the top of the volume, so
    the body steps onto the landing instead of sliding back down the face it
    was hugging. The climbable volume is what decides where the top is: the
    climb ends where the volume does. */
-#define CHARACTER3D_LADDER_EXIT_SPEED     1.6f
+#define CHARACTER3D_LADDER_EXIT_SPEED 1.6f
 
 enum {
 	CHARACTER3D_SWIM_GAIT_IDLE,
@@ -125,13 +125,13 @@ typedef struct {
 	   none above it to step to, so the fraction is the share of that one
 	   speed being asked for, straight off how far the stick is held. */
 	float gait;
-	uint8_t swim_gait;   /* CHARACTER3D_SWIM_GAIT_*, from the stick while swimming */
+	uint8_t swim_gait; /* CHARACTER3D_SWIM_GAIT_*, from the stick while swimming */
 
 	/* Stick along the ladder: +1 climbs, -1 descends, 0 holds. The stick is
 	   read in the ladder's own frame, so pushing at the rungs always climbs
 	   whichever way the camera happens to look. */
 	float climb;
-	bool  climb_release;   /* jump button: let go and drop */
+	bool climb_release; /* jump button: let go and drop */
 } MovementCommand;
 
 
@@ -240,16 +240,16 @@ typedef struct {
 	float floor_distance;
 
 	bool in_water;
-	float submerged_fraction;   /* 0..1 of the capsule under the surface */
+	float submerged_fraction; /* 0..1 of the capsule under the surface */
 
 	/* Written by the ladder probe of the collision pass. The anchor is where
 	   the body has to stand to reach the rungs: the ladder's centre line,
 	   pulled out to the clip's holding distance on the side the body is on. */
-	bool  on_ladder;
-	float ladder_yaw;      /* body rotation.z that faces the rungs */
+	bool on_ladder;
+	float ladder_yaw; /* body rotation.z that faces the rungs */
 	float ladder_anchor_x;
 	float ladder_anchor_y;
-	float ladder_top;      /* world z of the climbable volume's ceiling */
+	float ladder_top; /* world z of the climbable volume's ceiling */
 
 	uint8_t rotation_mode;
 	bool strafe;

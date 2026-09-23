@@ -8,10 +8,10 @@
 #include <fmath.h>
 
 #include "character3d/e64_character3d_spring_bone.h"
-#include "character3d/e64_character3d_skeleton.h"
+#include "model/e64_skeleton.h"
 #include "engine/e64_common.h"
-#include "physics/math/e64_math_common.h"
-#include "physics/math/e64_matrix3.h"
+#include "math/e64_math.h"
+#include "math/e64_matrix3.h"
 #include "time/e64_time.h"
 
 namespace e64 {
@@ -22,11 +22,11 @@ uint8_t springBones_resolveChain(const T3DSkeleton *skeleton, const SpringBonesD
                                  int16_t *joints, uint8_t max)
 {
 	int16_t root = (int16_t)t3d_skeleton_find_bone((T3DSkeleton *)skeleton, (char *)def->root_bone);
-	int16_t end  = (int16_t)t3d_skeleton_find_bone((T3DSkeleton *)skeleton, (char *)def->end_bone);
+	int16_t end = (int16_t)t3d_skeleton_find_bone((T3DSkeleton *)skeleton, (char *)def->end_bone);
 	if (root < 0 || end < 0) return 0;
 
 	int16_t chain[16];
-	int     depth = 0;
+	int depth = 0;
 
 	uint16_t idx = (uint16_t)end;
 	while (idx != 0xFFFF && depth < 16) {
@@ -48,19 +48,19 @@ uint8_t springBones_resolveChain(const T3DSkeleton *skeleton, const SpringBonesD
    rest offset; the end bone has no child and extends by the def's length
    along its own axis. */
 bool springBone_init(SpringBone *spring_bone, const T3DSkeleton *skeleton, int16_t bone,
-                     uint8_t joint_index, const SpringBonesDef *def, const RenderTransform *world)
+                     uint8_t joint_index, const SpringBonesDef *def, const Render::Transform *world)
 {
 	int16_t index = bone;
 	if (index < 0) return false;
 
 	*spring_bone = (SpringBone){};
-	spring_bone->bone  = index;
-	spring_bone->def   = def;
+	spring_bone->bone = index;
+	spring_bone->def = def;
 	spring_bone->world = world;
 
 	spring_bone->forward_vector = (Vector3){ 0.0f, 1.0f, 0.0f };
-	spring_bone->length         = def->end_bone_length * RENDER_SCALE;
-	spring_bone->current_rot    = (Quaternion){ 0.0f, 0.0f, 0.0f, 1.0f };
+	spring_bone->length = def->end_bone_length * RENDER_SCALE;
+	spring_bone->current_rot = (Quaternion){ 0.0f, 0.0f, 0.0f, 1.0f };
 
 	const T3DChunkSkeleton *ref = skeleton->skeletonRef;
 	for (uint16_t i = 0; i < ref->boneCount; i++) {
@@ -70,8 +70,8 @@ bool springBone_init(SpringBone *spring_bone, const T3DSkeleton *skeleton, int16
 		                 ref->bones[i].position.v[1],
 		                 ref->bones[i].position.v[2] };
 
-		spring_bone->length = vector3_magnitude(&axis);
-		vector3_normalize(&axis);
+		spring_bone->length = vector3::magnitude(&axis);
+		vector3::normalize(&axis);
 		spring_bone->forward_vector = axis;
 		break;
 	}
@@ -87,12 +87,12 @@ bool springBone_init(SpringBone *spring_bone, const T3DSkeleton *skeleton, int16
 		if (collider_bone < 0) continue;
 
 		uint8_t n = spring_bone->collider_count++;
-		spring_bone->collider[n].shape    = collider->shape;
-		spring_bone->collider[n].bone     = collider_bone;
-		spring_bone->collider[n].position = vector3_scaled(&collider->position, RENDER_SCALE);
-		spring_bone->collider[n].radius   = collider->radius * RENDER_SCALE;
-		spring_bone->collider[n].height   = collider->height * RENDER_SCALE;
-		spring_bone->collider[n].inside   = collider->inside;
+		spring_bone->collider[n].shape = collider->shape;
+		spring_bone->collider[n].bone = collider_bone;
+		spring_bone->collider[n].position = vector3::scaled(&collider->position, RENDER_SCALE);
+		spring_bone->collider[n].radius = collider->radius * RENDER_SCALE;
+		spring_bone->collider[n].height = collider->height * RENDER_SCALE;
+		spring_bone->collider[n].inside = collider->inside;
 
 		T3DMat4 mat;
 		t3d_mat4_from_srt_euler(&mat,
@@ -115,12 +115,12 @@ bool springBone_init(SpringBone *spring_bone, const T3DSkeleton *skeleton, int16
    instruction, and a contact can park the tail on top of the origin. */
 static Vector3 springBone_limitLength(const Vector3 *origin, const Vector3 *destination, float length)
 {
-	Vector3 dir = vector3_difference(destination, origin);
-	float   mag = vector3_magnitude(&dir);
+	Vector3 dir = vector3::difference(destination, origin);
+	float mag = vector3::magnitude(&dir);
 	if (mag < 1e-6f) return *destination;
 
-	vector3_scale(&dir, length / mag);
-	return vector3_sum(origin, &dir);
+	vector3::scale(&dir, length / mag);
+	return vector3::sum(origin, &dir);
 }
 
 /* SkeletonModifier3D::get_from_to_rotation; from and to are unit vectors.
@@ -128,19 +128,19 @@ static Vector3 springBone_limitLength(const Vector3 *origin, const Vector3 *dest
    preventing to glitch". */
 static Quaternion springBone_fromToRotation(const Vector3 *from, const Vector3 *to, const Quaternion *prev_rot)
 {
-	float dot = vector3_dot(from, to);
+	float dot = vector3::dot(from, to);
 	if (dot < -0.999999f)
 		return *prev_rot;
 
-	Vector3 axis = vector3_cross(from, to);
-	if (vector3_squaredMagnitude(&axis) < 1e-12f)
+	Vector3 axis = vector3::cross(from, to);
+	if (vector3::squaredMagnitude(&axis) < 1e-12f)
 		return *prev_rot;
 
 	if (dot > 1.0f) dot = 1.0f;
 	float angle = acosf(dot);
 
-	vector3_normalize(&axis);
-	return quaternion_fromAxisAngle(&axis, angle);
+	vector3::normalize(&axis);
+	return quaternion::fromAxisAngle(&axis, angle);
 }
 
 /* SpringBoneCollisionSphere3D::_collide_sphere */
@@ -149,8 +149,8 @@ static Vector3 springBoneCollision_collideSphere(const Vector3 *origin, float ra
 {
 	(void)bone_length;
 
-	Vector3 diff = vector3_difference(current, origin);
-	float length = vector3_magnitude(&diff);
+	Vector3 diff = vector3::difference(current, origin);
+	float length = vector3::magnitude(&diff);
 	float r = inside ? radius - bone_radius : bone_radius + radius;
 	float distance = inside ? r - length : length - r;
 
@@ -160,9 +160,9 @@ static Vector3 springBoneCollision_collideSphere(const Vector3 *origin, float ra
 	/* normalized() of a zero vector is zero in Godot; the epsilon also keeps
 	   r / length from blowing up into the FPU's software-trap range. */
 	if (length > 1e-6f)
-		vector3_scale(&diff, r / length);
+		vector3::scale(&diff, r / length);
 
-	return vector3_sum(origin, &diff);
+	return vector3::sum(origin, &diff);
 }
 
 /* SpringBoneCollisionCapsule3D::_collide; the segment ends come from
@@ -172,30 +172,30 @@ static Vector3 springBoneCollision_collideCapsule(const Vector3 *origin, const M
                                                   float bone_radius, float bone_length, const Vector3 *current)
 {
 	Vector3 up = { 0.0f, height * 0.5f - radius, 0.0f };
-	up = matrix3_transformVector(basis, &up);
+	up = matrix3::transformVector(basis, &up);
 
-	Vector3 head = vector3_sum(origin, &up);
-	Vector3 tail = vector3_difference(origin, &up);
+	Vector3 head = vector3::sum(origin, &up);
+	Vector3 tail = vector3::difference(origin, &up);
 
-	Vector3 p = vector3_difference(&tail, &head);
-	Vector3 q = vector3_difference(current, &head);
+	Vector3 p = vector3::difference(&tail, &head);
+	Vector3 q = vector3::difference(current, &head);
 
-	float dot = vector3_dot(&p, &q);
+	float dot = vector3::dot(&p, &q);
 	if (dot <= 0.0f)
 		return springBoneCollision_collideSphere(&head, radius, inside, bone_radius, bone_length, current);
 
-	float pls = vector3_squaredMagnitude(&p);
+	float pls = vector3::squaredMagnitude(&p);
 	if (pls < 1e-12f)
 		return *current;
 
 	if (pls <= dot) {
-		Vector3 end = vector3_sum(&head, &p);
+		Vector3 end = vector3::sum(&head, &p);
 		return springBoneCollision_collideSphere(&end, radius, inside, bone_radius, bone_length, current);
 	}
 
 	Vector3 at = p;
-	vector3_scale(&at, dot / pls);
-	vector3_add(&at, &head);
+	vector3::scale(&at, dot / pls);
+	vector3::add(&at, &head);
 	return springBoneCollision_collideSphere(&at, radius, inside, bone_radius, bone_length, current);
 }
 
@@ -204,17 +204,17 @@ static Vector3 springBoneCollision_collideCapsule(const Vector3 *origin, const M
 static Vector3 springBoneCollision_collidePlane(const Vector3 *origin, const Matrix3 *basis,
                                                 float bone_radius, const Vector3 *current)
 {
-	Vector3 up     = { 0.0f, 1.0f, 0.0f };
-	Vector3 normal = matrix3_transformVector(basis, &up);
+	Vector3 up = { 0.0f, 1.0f, 0.0f };
+	Vector3 normal = matrix3::transformVector(basis, &up);
 
-	Vector3 to_vec = vector3_difference(current, origin);
-	float distance = vector3_dot(&to_vec, &normal) - bone_radius;
+	Vector3 to_vec = vector3::difference(current, origin);
+	float distance = vector3::dot(&to_vec, &normal) - bone_radius;
 
 	if (distance > 0.0f)
 		return *current;
 
-	Vector3 push = vector3_scaled(&normal, -distance);
-	return vector3_sum(current, &push);
+	Vector3 push = vector3::scaled(&normal, -distance);
+	return vector3::sum(current, &push);
 }
 
 /* The center's position, in the units the chain works in. Everything else the
@@ -222,14 +222,14 @@ static Vector3 springBoneCollision_collidePlane(const Vector3 *origin, const Mat
    thing it reads live, and it is in metres like everything the game declares,
    while the chain lives in the skeleton's space, which is the model's, at
    RENDER_SCALE units per metre. */
-static Vector3 springBone_centerPosition(const RenderTransform *world)
+static Vector3 springBone_centerPosition(const Render::Transform *world)
 {
-	return vector3_scaled(&world->position, RENDER_SCALE);
+	return vector3::scaled(&world->position, RENDER_SCALE);
 }
 
 /* The center's rotation: same euler convention as the renderer, whatever
    axes the owner rotates on. */
-static Matrix3 springBone_centerMatrix(const RenderTransform *world)
+static Matrix3 springBone_centerMatrix(const Render::Transform *world)
 {
 	T3DMat4 mat;
 	t3d_mat4_from_srt_euler(&mat,
@@ -250,7 +250,7 @@ void springBone_apply(T3DSkeleton *skeleton, void *context)
 	SpringBone *joint = (SpringBone *)context;
 	const SpringBonesDef *setting = joint->def;
 
-	float delta = time_get()->delta;
+	float delta = time::get()->delta;
 	if (delta <= 0.0f) return;
 
 	/* No clip has a channel for a spring bone, so nothing writes it back
@@ -267,58 +267,58 @@ void springBone_apply(T3DSkeleton *skeleton, void *context)
 	   center, so no center transform is left to apply. */
 	T3DVec3 pose_position;
 	T3DQuat pose_rotation;
-	skeleton_getBonePose(skeleton, joint->bone, &pose_position, &pose_rotation);
+	skeleton::getBonePose(skeleton, joint->bone, &pose_position, &pose_rotation);
 
-	Vector3    current_origin = { pose_position.v[0], pose_position.v[1], pose_position.v[2] };
-	Quaternion current_rot    = { pose_rotation.v[0], pose_rotation.v[1], pose_rotation.v[2], pose_rotation.v[3] };
-	Matrix3    current_mat    = quaternion_toMatrix3(&current_rot);
+	Vector3 current_origin = { pose_position.v[0], pose_position.v[1], pose_position.v[2] };
+	Quaternion current_rot = { pose_rotation.v[0], pose_rotation.v[1], pose_rotation.v[2], pose_rotation.v[3] };
+	Matrix3 current_mat = quaternion::toMatrix3(&current_rot);
 
 	/* Vector3 external = inverted_center_rotation.xform(gravity_direction *
 	   gravity * delta): gravity lives in the world, the center rotates. */
-	Matrix3 center_rot   = springBone_centerMatrix(joint->world);
-	Matrix3 center_rot_t = matrix3_transposed(&center_rot);
-	Vector3 external     = matrix3_transformVector(&center_rot_t, &setting->gravity_direction);
-	vector3_scale(&external, setting->gravity * RENDER_SCALE * delta);
+	Matrix3 center_rot = springBone_centerMatrix(joint->world);
+	Matrix3 center_rot_t = matrix3::transposed(&center_rot);
+	Vector3 external = matrix3::transformVector(&center_rot_t, &setting->gravity_direction);
+	vector3::scale(&external, setting->gravity * RENDER_SCALE * delta);
 
-	Vector3 forward = matrix3_transformVector(&current_mat, &joint->forward_vector);
+	Vector3 forward = matrix3::transformVector(&current_mat, &joint->forward_vector);
 
 	if (!joint->primed) {
-		Vector3 rest_tail = vector3_scaled(&forward, joint->length);
-		vector3_add(&rest_tail, &current_origin);
-		joint->current_tail      = rest_tail;
-		joint->prev_tail         = rest_tail;
+		Vector3 rest_tail = vector3::scaled(&forward, joint->length);
+		vector3::add(&rest_tail, &current_origin);
+		joint->current_tail = rest_tail;
+		joint->prev_tail = rest_tail;
 		joint->pre_skel_comp_pos = springBone_centerPosition(joint->world);
 		joint->pre_skel_comp_rot = center_rot;
-		joint->primed            = true;
+		joint->primed = true;
 	}
 	else {
 		/* KawaiiPhysics UpdateSkelCompMove: the owner's transform delta,
 		   expressed in the current frame. Past the teleport thresholds the
 		   frame is a teleport and none of it is reflected. */
-		Vector3 center_position       = springBone_centerPosition(joint->world);
-		Vector3 rel                   = vector3_difference(&joint->pre_skel_comp_pos, &center_position);
-		Vector3 skel_comp_move_vector = matrix3_transformVector(&center_rot_t, &rel);
-		Matrix3 skel_comp_move_rot    = matrix3_product(&center_rot_t, &joint->pre_skel_comp_rot);
+		Vector3 center_position = springBone_centerPosition(joint->world);
+		Vector3 rel = vector3::difference(&joint->pre_skel_comp_pos, &center_position);
+		Vector3 skel_comp_move_vector = matrix3::transformVector(&center_rot_t, &rel);
+		Matrix3 skel_comp_move_rot = matrix3::product(&center_rot_t, &joint->pre_skel_comp_rot);
 
-		float dist_max  = setting->teleport_distance_threshold * RENDER_SCALE;
-		float trace     = skel_comp_move_rot.ex.x + skel_comp_move_rot.ey.y + skel_comp_move_rot.ez.z;
+		float dist_max = setting->teleport_distance_threshold * RENDER_SCALE;
+		float trace = skel_comp_move_rot.ex.x + skel_comp_move_rot.ey.y + skel_comp_move_rot.ez.z;
 		float cos_angle = (trace - 1.0f) * 0.5f;
 
 		bool teleport =
 			(setting->teleport_distance_threshold > 0.0f &&
-			 vector3_squaredMagnitude(&skel_comp_move_vector) > dist_max * dist_max) ||
+			 vector3::squaredMagnitude(&skel_comp_move_vector) > dist_max * dist_max) ||
 			(setting->teleport_rotation_threshold > 0.0f &&
 			 cos_angle < cosf(setting->teleport_rotation_threshold));
 
 		if (!teleport) {
 			/* Follow Translation */
-			vector3_addScaledVector(&joint->current_tail, &skel_comp_move_vector,
+			vector3::addScaledVector(&joint->current_tail, &skel_comp_move_vector,
 			                        1.0f - setting->world_damping_location);
 
 			/* Follow Rotation */
-			Vector3 rotated = matrix3_transformVector(&skel_comp_move_rot, &joint->prev_tail);
-			vector3_sub(&rotated, &joint->prev_tail);
-			vector3_addScaledVector(&joint->current_tail, &rotated,
+			Vector3 rotated = matrix3::transformVector(&skel_comp_move_rot, &joint->prev_tail);
+			vector3::sub(&rotated, &joint->prev_tail);
+			vector3::addScaledVector(&joint->current_tail, &rotated,
 			                        1.0f - setting->world_damping_rotation);
 		}
 
@@ -328,10 +328,10 @@ void springBone_apply(T3DSkeleton *skeleton, void *context)
 
 	/* Integration of velocity by verlet. */
 	Vector3 next_tail = joint->current_tail;
-	Vector3 velocity  = vector3_difference(&joint->current_tail, &joint->prev_tail);
-	vector3_addScaledVector(&next_tail, &velocity, 1.0f - setting->drag);
-	vector3_addScaledVector(&next_tail, &forward, setting->stiffness * RENDER_SCALE * delta);
-	vector3_add(&next_tail, &external);
+	Vector3 velocity = vector3::difference(&joint->current_tail, &joint->prev_tail);
+	vector3::addScaledVector(&next_tail, &velocity, 1.0f - setting->drag);
+	vector3::addScaledVector(&next_tail, &forward, setting->stiffness * RENDER_SCALE * delta);
+	vector3::add(&next_tail, &external);
 
 	/* Limit bone length. */
 	next_tail = springBone_limitLength(&current_origin, &next_tail, joint->length);
@@ -341,17 +341,17 @@ void springBone_apply(T3DSkeleton *skeleton, void *context)
 		/* get_transform_from_skeleton: the collider rides its bone. */
 		T3DVec3 collider_position;
 		T3DQuat collider_rotation;
-		skeleton_getBonePose(skeleton, joint->collider[i].bone, &collider_position, &collider_rotation);
+		skeleton::getBonePose(skeleton, joint->collider[i].bone, &collider_position, &collider_rotation);
 
 		Quaternion bone_rot = { collider_rotation.v[0], collider_rotation.v[1], collider_rotation.v[2], collider_rotation.v[3] };
-		Matrix3 bone_mat = quaternion_toMatrix3(&bone_rot);
+		Matrix3 bone_mat = quaternion::toMatrix3(&bone_rot);
 
-		Vector3 origin = matrix3_transformVector(&bone_mat, &joint->collider[i].position);
+		Vector3 origin = matrix3::transformVector(&bone_mat, &joint->collider[i].position);
 		origin.x += collider_position.v[0];
 		origin.y += collider_position.v[1];
 		origin.z += collider_position.v[2];
 
-		Matrix3 basis = matrix3_product(&bone_mat, &joint->collider[i].rotation);
+		Matrix3 basis = matrix3::product(&bone_mat, &joint->collider[i].rotation);
 
 		switch (joint->collider[i].shape) {
 			case SPRING_BONE_COLLISION_SPHERE:
@@ -372,45 +372,45 @@ void springBone_apply(T3DSkeleton *skeleton, void *context)
 	}
 
 	/* Store current tails for next process. */
-	joint->prev_tail    = joint->current_tail;
+	joint->prev_tail = joint->current_tail;
 	joint->current_tail = next_tail;
 
 	/* Flush-to-zero: as the spring settles the implied velocity decays into
 	   denormal range, and every op on a denormal traps the N64 FPU into a
 	   software handler. Below a hair's width the pair snaps together. */
-	Vector3 settle = vector3_difference(&joint->current_tail, &joint->prev_tail);
-	if (vector3_squaredMagnitude(&settle) < 1e-8f)
+	Vector3 settle = vector3::difference(&joint->current_tail, &joint->prev_tail);
+	if (vector3::squaredMagnitude(&settle) < 1e-8f)
 		joint->prev_tail = joint->current_tail;
 
 	/* Convert position to rotation. */
 	Vector3 from = forward;
-	Vector3 to   = vector3_difference(&next_tail, &current_origin);
-	vector3_normalize(&to);
+	Vector3 to = vector3::difference(&next_tail, &current_origin);
+	vector3::normalize(&to);
 
 	Quaternion from_to = springBone_fromToRotation(&from, &to, &joint->current_rot);
 	joint->current_rot = from_to;
 
 	/* Apply rotation: from_to *= current_rot, then back to local pose. */
-	Matrix3 from_to_mat = quaternion_toMatrix3(&from_to);
-	Matrix3 global_mat  = matrix3_product(&from_to_mat, &current_mat);
+	Matrix3 from_to_mat = quaternion::toMatrix3(&from_to);
+	Matrix3 global_mat = matrix3::product(&from_to_mat, &current_mat);
 
-	Matrix3  parent_t = matrix3_identity();
-	uint16_t parent   = skeleton->skeletonRef->bones[joint->bone].parentIdx;
+	Matrix3 parent_t = matrix3::identity();
+	uint16_t parent = skeleton->skeletonRef->bones[joint->bone].parentIdx;
 	if (parent != 0xFFFF) {
 		T3DVec3 parent_position;
 		T3DQuat parent_rotation;
-		skeleton_getBonePose(skeleton, (int16_t)parent, &parent_position, &parent_rotation);
+		skeleton::getBonePose(skeleton, (int16_t)parent, &parent_position, &parent_rotation);
 
 		Quaternion parent_rot = { parent_rotation.v[0], parent_rotation.v[1], parent_rotation.v[2], parent_rotation.v[3] };
-		Matrix3 parent_mat = quaternion_toMatrix3(&parent_rot);
-		parent_t = matrix3_transposed(&parent_mat);
+		Matrix3 parent_mat = quaternion::toMatrix3(&parent_rot);
+		parent_t = matrix3::transposed(&parent_mat);
 	}
 
-	Matrix3    local_mat = matrix3_product(&parent_t, &global_mat);
-	Quaternion local     = quaternion_fromMatrix3(&local_mat);
+	Matrix3 local_mat = matrix3::product(&parent_t, &global_mat);
+	Quaternion local = quaternion::fromMatrix3(&local_mat);
 
 	T3DBone *bone = &skeleton->bones[joint->bone];
-	bone->rotation   = (T3DQuat){{ local.x, local.y, local.z, local.w }};
+	bone->rotation = (T3DQuat){{ local.x, local.y, local.z, local.w }};
 	bone->hasChanged = 1;
 }
 

@@ -1,5 +1,5 @@
 #include "character3d/e64_character3d.h"
-#include "physics/math/e64_math_functions.h"
+#include "math/e64_math.h"
 
 namespace e64 {
 

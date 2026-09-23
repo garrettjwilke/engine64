@@ -16,7 +16,7 @@
 namespace e64 {
 
 class Character3D;
-typedef struct Camera    Camera;
+typedef struct Camera Camera;
 
 #define CHARACTER3D_AIM_MAX_BONES 4
 
@@ -25,9 +25,9 @@ namespace character3d {
 
 typedef struct AimingSettings {
 
-	const char *const *bone;   /* spine chain, root to tip */
+	const char *const *bone; /* spine chain, root to tip */
 	uint8_t count;
-	float pitch_scale;         /* spine degrees per camera degree, sign included */
+	float pitch_scale; /* spine degrees per camera degree, sign included */
 
 } AimingSettings;
 
@@ -38,7 +38,7 @@ typedef struct Aiming {
 
 	int16_t bone[CHARACTER3D_AIM_MAX_BONES];
 	uint8_t count;
-	float   pitch_scale;
+	float pitch_scale;
 
 } Aiming;
 
@@ -47,7 +47,7 @@ namespace aim {
 
 void init(Character3D *character, const AimingSettings *settings);
 
-/* SkeletonModifierFn; context is the Character3D. Weighted by the aim blend,
+/* skeleton::Modifiers::Fn; context is the Character3D. Weighted by the aim blend,
    so the torso straightens on its own when the mode fades. */
 void apply(T3DSkeleton *skeleton, void *context);
 

@@ -10,7 +10,7 @@
 
 #include <stdbool.h>
 
-#include "physics/math/e64_vector2.h"
+#include "math/e64_vector2.h"
 
 namespace e64 {
 
@@ -54,8 +54,8 @@ typedef struct FollowSettings {
 	   as a fraction of half the screen. Each axis is enabled on its own: with
 	   the drag off, the offset below places the centre instead. */
 	float drag_margin[CAMERA2D_SIDE_COUNT];
-	bool  drag_horizontal;
-	bool  drag_vertical;
+	bool drag_horizontal;
+	bool drag_vertical;
 
 	/* Where the target sits inside the margins when the drag is off, -1 to 1.
 	   Written as the body turns, this is the look ahead. */
@@ -82,7 +82,7 @@ typedef struct FollowData {
 	   first frame plants both on the target: easing in from wherever the
 	   camera was declared would sweep the whole world once. */
 	Vector2 target_position;
-	bool    settled;
+	bool settled;
 
 	float rotation;
 	float target_rotation;
@@ -97,7 +97,7 @@ typedef struct Def {
 	/* World pixels: where it starts looking, and what the anchor above says
 	   that point is on the screen. */
 	Vector2 position;
-	Anchor  anchor;
+	Anchor anchor;
 
 	/* World pixels to a screen pixel: above 1 the view closes in and shows
 	   less. Zero means 1. */
@@ -110,7 +110,7 @@ typedef struct Def {
 	/* The world's edges in world pixels, left, top, right, bottom. The view
 	   is pushed inside them; a world narrower than the screen centres on
 	   that axis. Off leaves the camera free. */
-	bool  limit_enabled;
+	bool limit_enabled;
 	float limit[CAMERA2D_SIDE_COUNT];
 
 	/* Turning the view costs a rotated blit, so it stays off unless asked. */
@@ -125,18 +125,18 @@ typedef struct Def {
 
 typedef struct Camera2D {
 
-	camera2d::Type   type;
+	camera2d::Type type;
 	camera2d::Anchor anchor;
 
 	/* World pixels, at the anchor. */
 	Vector2 position;
-	float   zoom;
+	float zoom;
 	Vector2 offset;
 
-	bool  limit_enabled;
+	bool limit_enabled;
 	float limit[CAMERA2D_SIDE_COUNT];
 
-	bool  rotate;
+	bool rotate;
 	float rotation;
 
 	/* Half the screen in world pixels: what carries the anchor to the corner
@@ -145,7 +145,7 @@ typedef struct Camera2D {
 	Vector2 extent;
 
 	camera2d::FollowSettings settings;
-	camera2d::FollowData     data;
+	camera2d::FollowData data;
 
 } Camera2D;
 

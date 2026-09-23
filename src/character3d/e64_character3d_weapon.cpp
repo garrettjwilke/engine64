@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <t3d/t3dskeleton.h>
 
-#include "physics/math/e64_quaternion.h"
+#include "math/e64_quaternion.h"
 
 #include "entity/e64_entity3d.h"
 #include "character3d/e64_character3d.h"
@@ -21,22 +21,22 @@ void equip(Character3D *character, uint8_t slot_id, const WeaponDef *weapon)
 	assert(slot_id < WEAPON_SLOT_COUNT);
 
 	Weapons *weapons = &character->weapons;
-	T3DSkeleton *skeleton = &character->animation.main;
+	T3DSkeleton *skeleton = &character->animation.graph.main;
 
-	uint8_t part = mesh_findPart(character->entity->mesh, weapon->mesh);
-	assert(part);   /* weapon mesh must exist in the character model */
+	uint8_t part = mesh::part::find(character->entity->mesh, weapon->mesh);
+	assert(part); /* weapon mesh must exist in the character model */
 
 	weapons->slot[slot_id] = (WeaponSlot){
-		.weapon       = weapon,
-		.rounds       = weapon->magazine_size,
-		.integrity    = weapon->max_integrity,
-		.part         = part,
-		.bone         = (int16_t)t3d_skeleton_find_bone(skeleton, (char *)weapon->bone),
+		.weapon = weapon,
+		.rounds = weapon->magazine_size,
+		.integrity = weapon->max_integrity,
+		.part = part,
+		.bone = (int16_t)t3d_skeleton_find_bone(skeleton, (char *)weapon->bone),
 		.holster_bone = (int16_t)t3d_skeleton_find_bone(skeleton, (char *)weapon->holster_bone),
-		.hand_bone    = (int16_t)t3d_skeleton_find_bone(skeleton, (char *)weapon->hand_bone),
+		.hand_bone = (int16_t)t3d_skeleton_find_bone(skeleton, (char *)weapon->hand_bone),
 	};
 
-	mesh_setPartVisible(character->entity->mesh, part, true);
+	mesh::part::setVisible(character->entity->mesh, part, true);
 }
 
 void unequip(Character3D *character, uint8_t slot_id)
@@ -46,7 +46,7 @@ void unequip(Character3D *character, uint8_t slot_id)
 	WeaponSlot *slot = &character->weapons.slot[slot_id];
 	if (!slot->weapon) return;
 
-	mesh_setPartVisible(character->entity->mesh, slot->part, false);
+	mesh::part::setVisible(character->entity->mesh, slot->part, false);
 	if (character->weapons.drawn == slot_id)
 		character->weapons.drawn = CHARACTER3D_WEAPON_DRAWN_NONE;
 
@@ -72,7 +72,7 @@ void cycle(Character3D *character, int8_t dir)
 	for (int i = 0; i < WEAPON_SLOT_COUNT + 1; i++) {
 		pos += dir;
 		if (pos > WEAPON_SLOT_COUNT - 1) pos = -1;
-		if (pos < -1)                    pos = WEAPON_SLOT_COUNT - 1;
+		if (pos < -1) pos = WEAPON_SLOT_COUNT - 1;
 		if (pos == -1) break;
 		if (weapons->slot[pos].weapon) break;
 	}
@@ -83,24 +83,24 @@ void cycle(Character3D *character, int8_t dir)
 void setBones(Character3D *character)
 {
 	Weapons *weapons = &character->weapons;
-	T3DSkeleton *skeleton = &character->animation.main;
+	T3DSkeleton *skeleton = &character->animation.graph.main;
 
 	for (int s = 0; s < WEAPON_SLOT_COUNT; s++) {
 		WeaponSlot *slot = &weapons->slot[s];
 		if (!slot->weapon || slot->bone < 0) continue;
 
 		bool drawn = (weapons->drawn == s);
-		int16_t reference     = drawn ? slot->hand_bone : slot->holster_bone;
+		int16_t reference = drawn ? slot->hand_bone : slot->holster_bone;
 		const T3DVec3 *offset_pos = drawn ? &slot->weapon->holding_position : &slot->weapon->holster_position;
 		const T3DQuat *offset_rot = drawn ? &slot->weapon->holding_rotation : &slot->weapon->holster_rotation;
 		if (reference < 0) continue;
 
 		T3DVec3 ref_pos;
 		T3DQuat ref_rot;
-		getBonePose(skeleton, reference, &ref_pos, &ref_rot);
+		skeleton::getBonePose(skeleton, reference, &ref_pos, &ref_rot);
 
 		/* T3DQuat and T3DVec3 are laid out like the math module's types. */
-		Vector3 step = quaternion_rotateVector((const Quaternion *)&ref_rot, (const Vector3 *)offset_pos);
+		Vector3 step = quaternion::rotateVector((const Quaternion *)&ref_rot, (const Vector3 *)offset_pos);
 
 		T3DBone *bone = &skeleton->bones[slot->bone];
 		bone->position = (T3DVec3){{

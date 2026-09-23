@@ -21,28 +21,33 @@
 
 /*
 	Manifold and constraint implementation. Dispatches narrowphase through
-	collide().
+	collision::collide().
 */
 #include "physics/collision/e64_contact.h"
-
-
 #include "physics/collision/e64_collision.h"
 
 namespace e64 {
+namespace contact {
 
-void contactManifold_setPair(ContactManifold *m, PhysicsShape *a, PhysicsShape *b)
+namespace manifold {
+
+void setPair(Contact::Manifold *m, physics::Shape *a, physics::Shape *b)
 {
 	m->A = a;
 	m->B = b;
 	m->sensor = a->sensor || b->sensor;
 }
 
+}
 
-void contactConstraint_solveCollision(ContactConstraint *c)
+
+namespace constraint {
+
+void solveCollision(Contact::Constraint *c)
 {
 	c->manifold.contact_count = 0;
 
-	collision(&c->manifold, c->A, c->B);
+	collision::collide(&c->manifold, c->A, c->B);
 
 	if (c->manifold.contact_count > 0) {
 		if (c->flags & CONSTRAINT_COLLIDING) {
@@ -60,4 +65,7 @@ void contactConstraint_solveCollision(ContactConstraint *c)
 	}
 }
 
+}
+
+}
 }

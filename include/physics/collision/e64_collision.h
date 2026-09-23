@@ -22,7 +22,7 @@
 /*
 	Narrowphase dispatcher.
 
-	collision() takes a manifold and two shapes and dispatches on
+	collide() takes a manifold and two shapes and dispatches on
 	(A->type, B->type) to the right pairwise function. The manifold normal
 	always points from A to B.
 */
@@ -35,36 +35,39 @@
 
 namespace e64 {
 
-void collision(ContactManifold *m, PhysicsShape *a, PhysicsShape *b);
+namespace collision {
 
-void boxToBox        (ContactManifold *m, PhysicsShape *a, PhysicsShape *b);
-void sphereToSphere  (ContactManifold *m, PhysicsShape *a, PhysicsShape *b);
-void sphereToBox     (ContactManifold *m, PhysicsShape *sphere, PhysicsShape *box);
-void sphereToCapsule (ContactManifold *m, PhysicsShape *sphere, PhysicsShape *capsule);
-void capsuleToCapsule(ContactManifold *m, PhysicsShape *a, PhysicsShape *b);
-void capsuleToBox    (ContactManifold *m, PhysicsShape *capsule, PhysicsShape *box);
+void collide(Contact::Manifold *m, physics::Shape *a, physics::Shape *b);
+
+void boxToBox (Contact::Manifold *m, physics::Shape *a, physics::Shape *b);
+void sphereToSphere (Contact::Manifold *m, physics::Shape *a, physics::Shape *b);
+void sphereToBox (Contact::Manifold *m, physics::Shape *sphere, physics::Shape *box);
+void sphereToCapsule (Contact::Manifold *m, physics::Shape *sphere, physics::Shape *capsule);
+void capsuleToCapsule(Contact::Manifold *m, physics::Shape *a, physics::Shape *b);
+void capsuleToBox (Contact::Manifold *m, physics::Shape *capsule, physics::Shape *box);
 
 /* Contact normal correction on inactive triangle edges (port of Jolt's
    ActiveEdges::FixNormal). normal and the result follow the manifold
    convention: unit, from the capsule toward the surface. point is the
    contact point on the triangle, in the triangle's space.
    movement_direction may be zero. */
-Vector3 collision_fixTriangleNormal(const Triangle *triangle, const Vector3 *point,
-                                    const Vector3 *normal, const Vector3 *movement_direction);
+Vector3 fixTriangleNormal(const Triangle *triangle, const Vector3 *point,
+                          const Vector3 *normal, const Vector3 *movement_direction);
 
-/* Triangles come raw from a collision mesh, without a RigidBody, so this
+/* Triangles come raw from a mesh collider, without a RigidBody, so this
    pair takes the capsule shape and its world transform directly. */
-void capsuleToTriangle(ContactManifold *m, const Capsule *capsule, const Transform *world,
+void capsuleToTriangle(Contact::Manifold *m, const Capsule *capsule, const Transform *world,
                        const Triangle *triangle);
 
 /* Static geometry placed by a world transform, without a RigidBody. */
-void capsuleToStaticBox(ContactManifold *m, const Capsule *capsule, const Transform *capsule_world,
+void capsuleToStaticBox(Contact::Manifold *m, const Capsule *capsule, const Transform *capsule_world,
                         const Box *box, const Transform *box_world);
-void capsuleToStaticSphere(ContactManifold *m, const Capsule *capsule, const Transform *capsule_world,
+void capsuleToStaticSphere(Contact::Manifold *m, const Capsule *capsule, const Transform *capsule_world,
                            const Sphere *sphere, const Transform *sphere_world);
-void capsuleToStaticCapsule(ContactManifold *m, const Capsule *capsule, const Transform *capsule_world,
+void capsuleToStaticCapsule(Contact::Manifold *m, const Capsule *capsule, const Transform *capsule_world,
                             const Capsule *other, const Transform *other_world);
 
+}
 
 }
 

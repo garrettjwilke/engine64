@@ -13,7 +13,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "physics/math/e64_vector2.h"
+#include "math/e64_vector2.h"
 
 namespace e64 {
 
@@ -24,12 +24,12 @@ typedef struct Character2D Character2D;
    tell an idle from a walk. Pixels per second. */
 #define CHARACTER2D_LOCOMOTION_MIN_SPEED 1.0f
 
-#define CHARACTER2D_JUMP_HOLD_VELOCITY_SCALE   0.96f
+#define CHARACTER2D_JUMP_HOLD_VELOCITY_SCALE 0.96f
 #define CHARACTER2D_JUMP_LAUNCH_VELOCITY_SCALE 0.8f
 
 /* Pixels per second squared, positive: down the screen axis. */
-#define CHARACTER2D_GRAVITY         900.0f
-#define CHARACTER2D_FALL_MAX_SPEED  600.0f
+#define CHARACTER2D_GRAVITY 900.0f
+#define CHARACTER2D_FALL_MAX_SPEED 600.0f
 
 
 namespace character2d {
@@ -59,14 +59,14 @@ typedef enum {
 /* What the control asks of the body this frame. */
 typedef struct MovementCommand {
 
-	float direction;        /* -1 left, +1 right, 0 none */
+	float direction; /* -1 left, +1 right, 0 none */
 
-	bool  jump_held;
-	bool  jump_triggered;
-	bool  roll_triggered;
+	bool jump_held;
+	bool jump_triggered;
+	bool roll_triggered;
 
 	uint8_t gait;
-	float   speed_scale;    /* 1.0 normal, lower while tired */
+	float speed_scale; /* 1.0 normal, lower while tired */
 
 } MovementCommand;
 
@@ -89,7 +89,7 @@ typedef struct MovementSettings {
 	float idle_response_rate;
 
 	const GaitSettings *gait;
-	uint8_t             gait_count;
+	uint8_t gait_count;
 
 	/* The roll, three phases off one timer: the launch drives the direction
 	   it was asked with at the roll's own speed, the spin holds whatever
@@ -131,15 +131,15 @@ typedef struct MovementSettings {
 
 typedef struct MovementData {
 
-	Vector2 velocity;        /* pixels per second, y downward */
-	float   horizontal_speed;
+	Vector2 velocity; /* pixels per second, y downward */
+	float horizontal_speed;
 
 	Vector2 jump_initial_velocity;
-	float   jump_force;
-	float   jump_timer;
+	float jump_force;
+	float jump_timer;
 
 	float roll_timer;
-	float roll_direction;    /* -1 or +1, taken on the trigger and held until grip */
+	float roll_direction; /* -1 or +1, taken on the trigger and held until grip */
 
 	/* Time since the floor was lost, counted only while the coyote window is
 	   still open. Reset on every landing. */
@@ -149,7 +149,7 @@ typedef struct MovementData {
 	   where that floor is in pixels, and how far above it the feet are,
 	   which the animation reads to start the landing one clip-to-contact
 	   early. */
-	bool  is_grounded;
+	bool is_grounded;
 	float grounding_height;
 	float floor_distance;
 
@@ -161,7 +161,7 @@ typedef struct MovementData {
 typedef struct Movement {
 
 	const MovementSettings *settings;
-	MovementData            data;
+	MovementData data;
 
 	uint8_t current;
 	uint8_t locomotion;

@@ -7,51 +7,43 @@
 
 namespace e64 {
 
-typedef struct {
-
-	const char  *path;    /* NULL = free slot */
-	void        *data;
-	ResourceType type;
-	uint8_t      users;
-
-} Resource;
-
+namespace resource {
 
 /* The table. Loads and unloads come in any order, so a slot is free when its
    path is NULL rather than past a count. */
-static Resource resource_table[RESOURCE_MAX];
+static Resource table[Resource::MAX];
 
 
-static void *resource_open(const char *path, ResourceType type, const void *parms)
+static void *open(const char *path, Resource::Type type, const void *parms)
 {
 	switch (type) {
-		case RESOURCE_MODEL:  return t3d_model_load(path);
-		case RESOURCE_SPRITE: return sprite_load(path);
-		case RESOURCE_FONT:   return rdpq_font_load(path);
-		case RESOURCE_WAVE:   return wav64_load(path, (wav64_loadparms_t *)parms);
+		case Resource::MODEL: return t3d_model_load(path);
+		case Resource::SPRITE: return sprite_load(path);
+		case Resource::FONT: return rdpq_font_load(path);
+		case Resource::WAVE: return wav64_load(path, (wav64_loadparms_t *)parms);
 	}
 	return NULL;
 }
 
-static void resource_close(Resource *resource)
+static void close(Resource *resource)
 {
 	switch (resource->type) {
-		case RESOURCE_MODEL:  t3d_model_free((T3DModel *)resource->data);      break;
-		case RESOURCE_SPRITE: sprite_free((sprite_t *)resource->data);         break;
-		case RESOURCE_FONT:   rdpq_font_free((rdpq_font_t *)resource->data);   break;
-		case RESOURCE_WAVE:   wav64_close((wav64_t *)resource->data);          break;
+		case Resource::MODEL: t3d_model_free((T3DModel *)resource->data); break;
+		case Resource::SPRITE: sprite_free((sprite_t *)resource->data); break;
+		case Resource::FONT: rdpq_font_free((rdpq_font_t *)resource->data); break;
+		case Resource::WAVE: wav64_close((wav64_t *)resource->data); break;
 	}
 }
 
 
-void *resource_load(const char *path, ResourceType type, const void *parms)
+void *load(const char *path, Resource::Type type, const void *parms)
 {
 	assert(path);
 
 	Resource *free_slot = NULL;
 
-	for (int i = 0; i < RESOURCE_MAX; i++) {
-		Resource *resource = &resource_table[i];
+	for (int i = 0; i < Resource::MAX; i++) {
+		Resource *resource = &table[i];
 
 		if (resource->path == NULL) {
 			if (free_slot == NULL) free_slot = resource;
@@ -66,27 +58,27 @@ void *resource_load(const char *path, ResourceType type, const void *parms)
 
 	assert(free_slot);
 
-	free_slot->data = resource_open(path, type, parms);
+	free_slot->data = open(path, type, parms);
 	assert(free_slot->data);
 
-	free_slot->path  = path;
-	free_slot->type  = type;
+	free_slot->path = path;
+	free_slot->type = type;
 	free_slot->users = 1;
 
 	return free_slot->data;
 }
 
-void resource_unload(void *data)
+void unload(void *data)
 {
 	if (data == NULL) return;
 
-	for (int i = 0; i < RESOURCE_MAX; i++) {
-		Resource *resource = &resource_table[i];
+	for (int i = 0; i < Resource::MAX; i++) {
+		Resource *resource = &table[i];
 
 		if (resource->data != data) continue;
 
 		if (--resource->users == 0) {
-			resource_close(resource);
+			close(resource);
 			resource->path = NULL;
 			resource->data = NULL;
 		}
@@ -95,6 +87,8 @@ void resource_unload(void *data)
 
 	/* A pointer nobody handed out. */
 	assert(false);
+}
+
 }
 
 }

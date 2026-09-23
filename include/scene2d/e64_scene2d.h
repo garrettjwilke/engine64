@@ -10,102 +10,115 @@
 
 namespace e64 {
 
-#define SCENE2D_MAX_LAYER      8
-#define SCENE2D_MAX_ENTITY    64
-#define SCENE2D_MAX_CHARACTER  4
-#define SCENE2D_MAX_STAGE      4
-#define SCENE2D_MAX_FONT       8
+namespace controls { struct Def; }
+
+namespace scene2d {
+
+constexpr int MAX_LAYER = 8;
+constexpr int MAX_ENTITY = 64;
+constexpr int MAX_CHARACTER = 4;
+constexpr int MAX_STAGE = 4;
+constexpr int MAX_FONT = 8;
 
 
-/* One prefab placed in a layer. The load turns it into an entity of the
-   live scene, in placement order. A zero scale means identity. */
-typedef struct Scene2DPrefab {
+/* An entity of a layer as declared: which prefab and where. The load builds
+   the live entity of the same index. A zero scale means identity. */
+typedef struct Entity {
 
 	const Prefab2D *prefab;
-	Vector2         position;
-	Vector2         scale;
-	float           rotation;
+	Vector2 position;
+	Vector2 scale;
+	float rotation;
 
-} Scene2DPrefab;
+} Entity;
 
 /* A layer groups what it draws under one order and one scissor, the
    CanvasLayer of Godot. */
-typedef struct Scene2DLayer {
+typedef struct Layer {
 
-	const Scene2DPrefab *prefab;
-	uint8_t              prefab_count;
+	const Entity *entity;
+	uint8_t entity_count;
 
-	bool               has_scissor;
-	float              scissor_x;
-	float              scissor_y;
-	float              scissor_w;
-	float              scissor_h;
+	bool has_scissor;
+	float scissor_x;
+	float scissor_y;
+	float scissor_w;
+	float scissor_h;
 
-} Scene2DLayer;
+} Layer;
 
-typedef struct Scene2DDef {
+typedef struct Def {
 
 	const camera2d::Def *camera;
 
-	const Scene2DLayer *layer;
-	uint8_t             layer_count;
+	const Layer *layer;
+	uint8_t layer_count;
 
 	/* What the frame is cleared to under this scene: the sky behind the
 	   tiles. Left at zero alpha the render keeps its own clear. */
 	color_t background;
 
-} Scene2DDef;
+} Def;
+
+}
 
 
 /* The live scene: the entities flat, in placement order, with where each
    layer's begin. */
 typedef struct Scene2D {
 
-	const Scene2DDef *def;
+	const scene2d::Def *def;
 
 	Camera2D camera;
 
-	Entity2D *entity[SCENE2D_MAX_ENTITY];
-	uint8_t   entity_count;
+	Entity2D *entity[scene2d::MAX_ENTITY];
+	uint8_t entity_count;
 
-	Character2D *character[SCENE2D_MAX_CHARACTER];
-	uint8_t      character2d_count;
+	Character2D *character[scene2d::MAX_CHARACTER];
+	uint8_t character2d_count;
 
-	Stage2D *stage[SCENE2D_MAX_STAGE];
-	uint8_t  stage_count;
+	Stage2D *stage[scene2d::MAX_STAGE];
+	uint8_t stage_count;
 
 	/* The font ids its texts name, each loaded once for the scene. */
-	uint8_t   font[SCENE2D_MAX_FONT];
-	uint8_t   font_count;
+	uint8_t font[scene2d::MAX_FONT];
+	uint8_t font_count;
 
-	uint8_t   layer_start[SCENE2D_MAX_LAYER];
+	uint8_t layer_start[scene2d::MAX_LAYER];
 
 } Scene2D;
 
 
-Scene2D *scene2d_get(void);
+namespace scene2d {
 
-void scene2d_load(const Scene2DDef *def);
-void scene2d_unload(void);
+Scene2D *get(void);
+
+/* The controls are the state's. A character built from a prefab its binding
+   names is seated on that binding's player as it is created. NULL drives
+   nothing. */
+void load(const Def *def, const controls::Def *controls);
+void unload(void);
 
 /* Advances every character's animation and carries the frame to what
    draws it. */
-void scene2d_updateCharacters(float dt);
+void updateCharacters(float dt);
 
 /* Moves the camera to where the character it follows stands. */
-void scene2d_updateCamera(const Character2D *character, float dt);
+void updateCamera(const Character2D *character, float dt);
 
 /* A layer's entity by its placement index in the definition. */
-Entity2D *scene2d_getEntity(Scene2D *scene2d, uint8_t layer, uint8_t prefab);
+Entity2D *getEntity(Scene2D *scene, uint8_t layer, uint8_t index);
 
-Character2D *scene2d_getCharacter2D(uint8_t index);
+Character2D *getCharacter2D(uint8_t index);
 
-Stage2D *scene2d_getStage(uint8_t index);
+Stage2D *getStage(uint8_t index);
 
 /* Pushes one section per layer into the frame's context, with the layer's
-   scissor and one Element2D per entity in it. A stage entity contributes
-   its own elements instead, those the camera can see. */
-void scene2d_setRenderContext(const Scene2D *scene, RenderContext *ctx);
+   scissor and one Render::Element2D per entity in it. A stage entity
+   contributes its own elements instead, those the camera can see. */
+void setRenderContext(const Scene2D *scene, Render::Context *ctx);
+
+}
 
 }
 

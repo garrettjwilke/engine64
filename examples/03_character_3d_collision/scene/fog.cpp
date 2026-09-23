@@ -11,13 +11,11 @@
 */
 #include "scene3d/e64_fog.h"
 
-using namespace e64;
 
+extern const e64::fog::Def fog = {
 
-extern const FogDef fog = {
-
-	.color   = { 70, 80, 100, 0xFF },
-	.near    = 15.0f,
-	.far     = 45.0f,
+	.color = { 70, 80, 100, 0xFF },
+	.near = 15.0f,
+	.far = 45.0f,
 	.enabled = true,
 };

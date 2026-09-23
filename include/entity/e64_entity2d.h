@@ -10,7 +10,7 @@
 #ifndef ENGINE64_ENTITY2D_H
 #define ENGINE64_ENTITY2D_H
 
-#include "physics/math/e64_vector2.h"
+#include "math/e64_vector2.h"
 #include "graphics/e64_graphic.h"
 #include "sound/e64_sound.h"
 
@@ -23,15 +23,15 @@ public:
 	   snaps to whole pixels when it matters. */
 	Vector2 position;
 	Vector2 scale;
-	float   rotation;
+	float rotation;
 
 	Graphic *graphic;
 
 	/* The prefab's sounds, open: one per entry, in the same order, from
 	   create to delete. The looping ones play for as long as the entity
 	   exists; the rest wait for whoever fires them. */
-	Sound   *sound;
-	uint8_t  sound_count;
+	Sound *sound;
+	uint8_t sound_count;
 
 };
 
@@ -44,18 +44,18 @@ namespace entity2d {
 typedef struct Def {
 
 	const Graphic *graphic;
-	const SoundDef *const *sound;
-	uint8_t                sound_count;
+	const Sound::Def *const *sound;
+	uint8_t sound_count;
 
 	Vector2 position;
 	Vector2 scale;
-	float   rotation;
+	float rotation;
 
 } Def;
 
 
 Entity2D *create(const Def *def);
-void      destroy(Entity2D *entity);
+void destroy(Entity2D *entity);
 
 }
 

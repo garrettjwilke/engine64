@@ -8,63 +8,73 @@
 
 namespace e64 {
 
-/* tpx stores particles interleaved in pairs, so a buffer always holds an even
-   count. S8 keeps local coords in one byte (16 bytes per pair) for local
-   effects; S16 covers a larger range (24 bytes per pair) for world placement. */
-typedef enum {
+class Particle {
 
-	PARTICLE_S8,
-	PARTICLE_S16,
+public:
 
-} ParticleType;
+	static constexpr uint8_t MAX = 8;
 
-typedef struct {
+	/* tpx stores particles interleaved in pairs, so a buffer always holds an
+	   even count. S8 keeps local coords in one byte (16 bytes per pair) for
+	   local effects; S16 covers a larger range (24 bytes per pair) for world
+	   placement. */
+	enum Type {
 
-	ParticleType type;
-	uint32_t count;
+		S8,
+		S16,
 
-	union {
-		TPXParticleS8  *s8;
-		TPXParticleS16 *s16;
 	};
 
-	T3DMat4FP *matrix;   /* one per framebuffer */
+	struct Buffer {
 
-} ParticleBuffer;
+		Type type;
+		uint32_t count;
 
+		union {
+			TPXParticleS8 *s8;
+			TPXParticleS16 *s16;
+		};
 
-typedef struct Particle Particle;
+		T3DMat4FP *matrix; /* one per framebuffer */
 
-/* Dedicated input function: reads whatever drives the effect and fills
-   visibility and this frame's matrix. Reaches what it reads itself. */
-typedef void (*ParticleUpdate)(Particle *particle, uint8_t fb_index);
+	};
 
-/* rdpq state (combiner, textures) set right before the buffer is drawn. */
-typedef void (*ParticleSetRenderState)(void);
+	/* Dedicated input function: reads whatever drives the effect and fills
+	   visibility and this frame's matrix. Reaches what it reads itself. */
+	typedef void (*Update)(Particle *particle, uint8_t fb_index);
 
-struct Particle {
+	/* rdpq state (combiner, textures) set right before the buffer is drawn. */
+	typedef void (*SetRenderState)(void);
 
-	ParticleBuffer buffer;
-	ParticleUpdate update;
-	ParticleSetRenderState set_render_state;
+	Buffer buffer;
+	Update update;
+	SetRenderState set_render_state;
 	bool textured;
 	bool visible;
-	const T3DMat4FP *matrix;   /* the one written this frame */
+	const T3DMat4FP *matrix; /* the one written this frame */
 
 };
 
 
-void particles_init(void);
+namespace particles {
 
-Particle *particles_add(const Particle *def);
-void particles_update(uint8_t fb_index);
-void particles_draw(void);
+namespace buffer {
 
-ParticleBuffer particleBuffer_create(ParticleType type, uint32_t count);
-void particleBuffer_delete(ParticleBuffer *buffer);
-void particleBuffer_setMatrix(ParticleBuffer *buffer, const float scale[3], const float rotation[3], const float position[3], uint8_t fb_index);
-void particleBuffer_draw(const ParticleBuffer *buffer, const T3DMat4FP *matrix);
-void particleBuffer_drawTextured(const ParticleBuffer *buffer, const T3DMat4FP *matrix);
+Particle::Buffer create(Particle::Type type, uint32_t count);
+void destroy(Particle::Buffer *buffer);
+void setMatrix(Particle::Buffer *buffer, const float scale[3], const float rotation[3], const float position[3], uint8_t fb_index);
+void draw(const Particle::Buffer *buffer, const T3DMat4FP *matrix);
+void drawTextured(const Particle::Buffer *buffer, const T3DMat4FP *matrix);
+
+}
+
+void init(void);
+
+Particle *add(const Particle *def);
+void update(uint8_t fb_index);
+void draw(void);
+
+}
 
 }
 

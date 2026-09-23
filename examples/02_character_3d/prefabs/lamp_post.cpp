@@ -21,8 +21,6 @@
 */
 #include "prefab/e64_prefab3d.h"
 
-using namespace e64;
-
 
 /* Both objects were modelled sitting at the origin, one inside the other. A
    part can be drawn somewhere other than where it was modelled, and that is
@@ -37,20 +35,22 @@ using namespace e64;
    matrix instead of getting one of its own. */
 #define LAMP_HEIGHT 625.2f
 
-extern const Prefab3D lamp_post = {
+static const char *const lamp_post_parts[] = {
+	"post",
+	"lamp",
+};
 
-	.type  = PREFAB3D_PROP,
+static const e64::Vector3 lamp_post_part_positions[] = {
+	{ 0.0f, 0.0f, 0.0f },
+	{ 0.0f, 0.0f, LAMP_HEIGHT },
+};
+
+extern const e64::Prefab3D lamp_post = {
+
+	.type = e64::prefab3d::PREFAB3D_PROP,
 	.model = "rom:/models/lamp_post.t3dm",
 
-	.part = MESH_PARTS(
-		"post",
-		"lamp"
-	),
-
-	.part_position = MESH_PART_POSITIONS(
-		{ 0.0f, 0.0f, 0.0f        },
-		{ 0.0f, 0.0f, LAMP_HEIGHT }
-	),
-
+	.part = lamp_post_parts,
+	.part_position = lamp_post_part_positions,
 	.part_count = 2,
 };

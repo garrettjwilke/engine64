@@ -8,206 +8,217 @@
 #include <malloc.h>
 
 #include "scene2d/e64_scene2d.h"
+#include "controller/e64_controls.h"
+#include "player/e64_player.h"
 #include "viewport/e64_viewport.h"
 
 namespace e64 {
+namespace scene2d {
 
-static Scene2D scene2d;
+static Scene2D scene;
 
 
-Scene2D *scene2d_get(void) { return &scene2d; }
+Scene2D *get(void) { return &scene; }
 
 /* A font is shared by every text that names it: loaded the first time the
    scene meets the id, freed once at unload. */
-static void scene2d_loadFont(uint8_t id)
+static void loadFont(uint8_t id)
 {
-	for (int i = 0; i < scene2d.font_count; i++)
-		if (scene2d.font[i] == id) return;
+	for (int i = 0; i < scene.font_count; i++)
+		if (scene.font[i] == id) return;
 
-	assert(scene2d.font_count < SCENE2D_MAX_FONT);
-	font_loadAsset(id);
-	scene2d.font[scene2d.font_count++] = id;
+	assert(scene.font_count < MAX_FONT);
+	font::loadAsset(id);
+	scene.font[scene.font_count++] = id;
 }
 
-void scene2d_load(const Scene2DDef *def)
+void load(const Def *def, const controls::Def *controls)
 {
-	assert(def && def->layer_count <= SCENE2D_MAX_LAYER);
+	assert(def && def->layer_count <= MAX_LAYER);
+
+	const character2d::ControlBinding *binding = controls ? controls->character2d : NULL;
 
 	/* A scene may be loaded over another (an overlay taking the screen):
 	   what the one leaving created goes first. */
-	scene2d_unload();
+	unload();
 
-	scene2d.def = def;
+	scene.def = def;
 
 	/* A scene with nothing but widgets declares no camera: the zeroed one is
 	   of no type and moves nothing. */
-	if (def->camera) camera2d::init(&scene2d.camera, def->camera);
+	if (def->camera) camera2d::init(&scene.camera, def->camera);
 
 	for (int i = 0; i < def->layer_count; i++) {
-		const Scene2DLayer *layer = &def->layer[i];
+		const Layer *layer = &def->layer[i];
 
-		scene2d.layer_start[i] = scene2d.entity_count;
+		scene.layer_start[i] = scene.entity_count;
 
-		for (int p = 0; p < layer->prefab_count; p++) {
-			const Scene2DPrefab *placed = &layer->prefab[p];
-			const Prefab2D      *prefab = placed->prefab;
+		for (int p = 0; p < layer->entity_count; p++) {
+			const Entity *placed = &layer->entity[p];
+			const Prefab2D *prefab = placed->prefab;
 
-			if (prefab->graphic.type == GRAPHIC_TEXT)
-				scene2d_loadFont(prefab->graphic.text.font);
+			if (prefab->graphic.type == Graphic::TEXT)
+				loadFont(prefab->graphic.text.font);
 
 			/* Filled from the prefab and its placement, the way the 3D load
 			   fills its entity3d::Def, and gone after the load. */
 			entity2d::Def entity_def = {
-				.graphic     = &prefab->graphic,
-				.sound       = prefab->sound,
+				.graphic = &prefab->graphic,
+				.sound = prefab->sound,
 				.sound_count = prefab->sound_count,
 				.position = placed->position,
-				.scale    = placed->scale,
+				.scale = placed->scale,
 				.rotation = placed->rotation,
 			};
 
-			assert(scene2d.entity_count < SCENE2D_MAX_ENTITY);
+			assert(scene.entity_count < MAX_ENTITY);
 			Entity2D *entity = entity2d::create(&entity_def);
-			scene2d.entity[scene2d.entity_count++] = entity;
+			scene.entity[scene.entity_count++] = entity;
 
-			if (prefab->type == PREFAB2D_CHARACTER) {
-				assert(scene2d.character2d_count < SCENE2D_MAX_CHARACTER);
-				scene2d.character[scene2d.character2d_count++] = character2d::create(prefab->character, entity);
+			if (prefab->type == prefab2d::PREFAB2D_CHARACTER) {
+				assert(scene.character2d_count < MAX_CHARACTER);
+				Character2D *character = character2d::create(prefab->character, entity);
+				scene.character[scene.character2d_count++] = character;
+
+				/* The binding names this placement: its player takes the body. */
+				if (binding && binding->character == placed)
+					player::setCharacter2D(character, binding);
 			}
 
 			/* The stage draws through its own elements; the entity only
 			   says where it stands. */
-			if (prefab->type == PREFAB2D_STAGE) {
-				assert(scene2d.stage_count < SCENE2D_MAX_STAGE);
+			if (prefab->type == prefab2d::PREFAB2D_STAGE) {
+				assert(scene.stage_count < MAX_STAGE);
 				entity->graphic->is_hidden = true;
-				scene2d.stage[scene2d.stage_count++] = stage2d_create(prefab->stage, entity);
+				scene.stage[scene.stage_count++] = stage2d::create(prefab->stage, entity);
 			}
 		}
 	}
 
 	/* The bodies collide with the last stage placed: the level, drawn over
 	   whatever backdrops came before it. */
-	if (scene2d.stage_count)
-		for (int i = 0; i < scene2d.character2d_count; i++)
-			scene2d.character[i]->stage = scene2d.stage[scene2d.stage_count - 1];
+	if (scene.stage_count)
+		for (int i = 0; i < scene.character2d_count; i++)
+			scene.character[i]->stage = scene.stage[scene.stage_count - 1];
 }
 
-void scene2d_unload(void)
+void unload(void)
 {
-	for (int i = 0; i < scene2d.character2d_count; i++)
-		character2d::destroy(scene2d.character[i]);
+	for (int i = 0; i < scene.character2d_count; i++)
+		character2d::destroy(scene.character[i]);
 
-	for (int i = 0; i < scene2d.stage_count; i++)
-		stage2d_delete(scene2d.stage[i]);
+	for (int i = 0; i < scene.stage_count; i++)
+		stage2d::destroy(scene.stage[i]);
 
-	for (int i = 0; i < scene2d.entity_count; i++)
-		entity2d::destroy(scene2d.entity[i]);
+	for (int i = 0; i < scene.entity_count; i++)
+		entity2d::destroy(scene.entity[i]);
 
-	for (int i = 0; i < scene2d.font_count; i++)
-		font_unloadAsset(scene2d.font[i]);
+	for (int i = 0; i < scene.font_count; i++)
+		font::unloadAsset(scene.font[i]);
 
-	scene2d = (Scene2D){};
+	scene = (Scene2D){};
 }
 
-void scene2d_updateCharacters(float dt)
+void updateCharacters(float dt)
 {
-	for (int i = 0; i < scene2d.character2d_count; i++)
-		character2d::update(scene2d.character[i], dt);
+	for (int i = 0; i < scene.character2d_count; i++)
+		character2d::update(scene.character[i], dt);
 }
 
-void scene2d_updateCamera(const Character2D *character, float dt)
+void updateCamera(const Character2D *character, float dt)
 {
 	if (!character) return;
 
-	camera2d::update(&scene2d.camera, character->position,
+	camera2d::update(&scene.camera, character->position,
 	                character->facing_left ? -1.0f : 1.0f, dt);
 }
 
-Entity2D *scene2d_getEntity(Scene2D *scene, uint8_t layer, uint8_t prefab)
+Entity2D *getEntity(Scene2D *s, uint8_t layer, uint8_t index)
 {
-	assert(scene->def && layer < scene->def->layer_count);
-	assert(prefab < scene->def->layer[layer].prefab_count);
+	assert(s->def && layer < s->def->layer_count);
+	assert(index < s->def->layer[layer].entity_count);
 
-	return scene->entity[scene->layer_start[layer] + prefab];
+	return s->entity[s->layer_start[layer] + index];
 }
 
-Character2D *scene2d_getCharacter2D(uint8_t index)
+Character2D *getCharacter2D(uint8_t index)
 {
-	if (index >= scene2d.character2d_count) return NULL;
-	return scene2d.character[index];
+	if (index >= scene.character2d_count) return NULL;
+	return scene.character[index];
 }
 
-Stage2D *scene2d_getStage(uint8_t index)
+Stage2D *getStage(uint8_t index)
 {
-	if (index >= scene2d.stage_count) return NULL;
-	return scene2d.stage[index];
+	if (index >= scene.stage_count) return NULL;
+	return scene.stage[index];
 }
 
-void scene2d_setRenderContext(const Scene2D *scene, RenderContext *ctx)
+void setRenderContext(const Scene2D *s, Render::Context *ctx)
 {
-	if (!scene->def) return;
+	if (!s->def) return;
 
 	/* The stages first, one section for all of them: the world the layers
 	   of prefabs are drawn over. */
-	if (scene->stage_count) {
-		assert(ctx->section_count < RENDER_MAX_SECTIONS);
-		RenderSection *section = &ctx->section[ctx->section_count++];
-		*section = (RenderSection){ .element_start = ctx->element_count };
+	if (s->stage_count) {
+		assert(ctx->section_count < Render::MAX_SECTIONS);
+		Render::Section *section = &ctx->section[ctx->section_count++];
+		*section = (Render::Section){ .element_start = ctx->element2d_count };
 
-		for (int i = 0; i < scene->stage_count; i++)
-			stage2d_setRenderContext(scene->stage[i], &scene->camera, ctx);
+		for (int i = 0; i < s->stage_count; i++)
+			stage2d::setRenderContext(s->stage[i], &s->camera, ctx);
 
-		section->element_count = ctx->element_count - section->element_start;
+		section->element_count = ctx->element2d_count - section->element_start;
 	}
 
-	for (int i = 0; i < scene->def->layer_count; i++) {
-		const Scene2DLayer *layer = &scene->def->layer[i];
+	for (int i = 0; i < s->def->layer_count; i++) {
+		const Layer *layer = &s->def->layer[i];
 
-		assert(ctx->section_count < RENDER_MAX_SECTIONS);
-		RenderSection *section = &ctx->section[ctx->section_count++];
-		section->element_start = ctx->element_count;
+		assert(ctx->section_count < Render::MAX_SECTIONS);
+		Render::Section *section = &ctx->section[ctx->section_count++];
+		section->element_start = ctx->element2d_count;
 
-		for (int p = 0; p < layer->prefab_count; p++) {
-			const Entity2D *entity = scene->entity[scene->layer_start[i] + p];
+		for (int p = 0; p < layer->entity_count; p++) {
+			const Entity2D *entity = s->entity[s->layer_start[i] + p];
 
 			/* A stage's entity only says where the stage stands; the stage
 			   itself went above. */
-			if (layer->prefab[p].prefab->type == PREFAB2D_STAGE) continue;
+			if (layer->entity[p].prefab->type == prefab2d::PREFAB2D_STAGE) continue;
 
 			/* Where the entity stands is world; what the camera takes of it
 			   is the prefab's parallax, and a widget's zero leaves the
 			   position it was placed at untouched. */
-			float parallax = layer->prefab[p].prefab->parallax;
+			float parallax = layer->entity[p].prefab->parallax;
 
 			/* Under a camera the zoom scales what is drawn as well as where
 			   it lands; a scene with no camera draws at the placed size. On
 			   top of it goes what a world pixel measures on this screen. */
-			float   zoom  = scene->camera.type == camera2d::CAMERA2D_TYPE_NONE ? 1.0f : scene->camera.zoom;
-			Vector2 scale = viewport_getScale();
+			float zoom = s->camera.type == camera2d::CAMERA2D_TYPE_NONE ? 1.0f : s->camera.zoom;
+			Vector2 scale = viewport::getScale();
 
 			/* Whole screen pixels, like the stage's tiles, so a sprite
 			   standing on one never lands between texels. Rounded here and
 			   nowhere else: the world position keeps its fractions, and a
 			   second rounding before the camera would hold the body still
 			   for a frame and move it two the next. */
-			Vector2 screen = camera2d::toScreen(&scene->camera, entity->position, parallax);
+			Vector2 screen = camera2d::toScreen(&s->camera, entity->position, parallax);
 
-			assert(ctx->element_count < RENDER_MAX_2D_ELEMENTS);
-			ctx->element[ctx->element_count++] = (Element2D){
-				.graphic  = entity->graphic,
+			assert(ctx->element2d_count < Render::MAX_2D_ELEMENTS);
+			ctx->element2d[ctx->element2d_count++] = (Render::Element2D){
+				.graphic = entity->graphic,
 				.position = { floorf(screen.x), floorf(screen.y) },
-				.scale    = { entity->scale.x * zoom * scale.x, entity->scale.y * zoom * scale.y },
+				.scale = { entity->scale.x * zoom * scale.x, entity->scale.y * zoom * scale.y },
 				.rotation = entity->rotation,
 			};
 		}
 
-		section->element_count = ctx->element_count - section->element_start;
-		section->has_scissor   = layer->has_scissor;
-		section->scissor_x     = layer->scissor_x;
-		section->scissor_y     = layer->scissor_y;
-		section->scissor_w     = layer->scissor_w;
-		section->scissor_h     = layer->scissor_h;
+		section->element_count = ctx->element2d_count - section->element_start;
+		section->has_scissor = layer->has_scissor;
+		section->scissor_x = layer->scissor_x;
+		section->scissor_y = layer->scissor_y;
+		section->scissor_w = layer->scissor_w;
+		section->scissor_h = layer->scissor_h;
 	}
 }
 
+}
 }

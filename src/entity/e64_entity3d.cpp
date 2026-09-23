@@ -7,11 +7,11 @@
 
 #include "entity/e64_entity3d.h"
 #include "resource/e64_resource.h"
-#include "shaders/e64_mesh_deform.h"
+#include "model/e64_mesh_deform.h"
 #include "character3d/e64_character3d_animation.h"
 #include "viewport/e64_viewport.h"
-#include "physics/math/e64_math_common.h"
-#include "physics/world/e64_physics_world.h"
+#include "math/e64_math.h"
+#include "physics/e64_physics_world.h"
 
 namespace e64 {
 
@@ -20,11 +20,11 @@ namespace entity3d {
 void init(Entity3D *entity, const Def *def)
 {
 	*entity = (Entity3D){};
-	renderTransform_init(&entity->transform);
+	render::transform::init(&entity->transform);
 	entity->transform.position = def->position;
 	entity->transform.rotation = def->rotation;
-	entity->transform.scale    = def->scale;
-	entity->cull               = def->cull;
+	entity->transform.scale = def->scale;
+	entity->cull = def->cull;
 
 }
 
@@ -41,9 +41,9 @@ Entity3D *create(const Def *def)
 		entity->sound = (Sound *)malloc(def->sound_count * sizeof(Sound));
 		assert(entity->sound);
 		for (int i = 0; i < def->sound_count; i++) {
-			entity->sound[i] = sound_load(def->sound[i]);
+			entity->sound[i] = sound::load(def->sound[i]);
 			if (def->sound[i]->loop)
-				sound_play(&entity->sound[i], &entity->transform.position, 1.0f, 0.0f);
+				sound::play(&entity->sound[i], &entity->transform.position, 1.0f, 0.0f);
 		}
 		entity->sound_count = def->sound_count;
 	}
@@ -55,15 +55,15 @@ Entity3D *create(const Def *def)
 	   frees every pointer it finds. */
 	entity->mesh = (Mesh *)calloc(1, sizeof(Mesh));
 	assert(entity->mesh);
-	entity->mesh->model = (T3DModel *)resource_load(def->model_path, RESOURCE_MODEL, NULL);
-	entity->mesh->matrix_buffer = (T3DMat4FP *)malloc_uncached(sizeof(T3DMat4FP) * FB_COUNT);
+	entity->mesh->model = (T3DModel *)resource::load(def->model_path, Resource::MODEL, NULL);
+	entity->mesh->matrix_buffer = (T3DMat4FP *)malloc_uncached(sizeof(T3DMat4FP) * Viewport::FB_COUNT);
 	assert(entity->mesh->matrix_buffer);
 	t3d_mat4fp_identity(entity->mesh->matrix_buffer);
 
-	entity->mesh->skeleton  = NULL;
-	entity->mesh->deform    = NULL;
+	entity->mesh->skeleton = NULL;
+	entity->mesh->deform = NULL;
 	entity->mesh->texture_scroll = NULL;
-	mesh_initBounds(entity->mesh);
+	mesh::initBounds(entity->mesh);
 
 	if (def->character) {
 		/* character3d_create records the model with its skeleton segment. */
@@ -71,7 +71,7 @@ Entity3D *create(const Def *def)
 		/* The model is static, so it records with no skeleton segment, and
 		   every part starts on screen: a prop shows whole until the game
 		   decides to hide something. */
-		mesh_record(entity->mesh, def->part, def->part_count, NULL);
+		mesh::record(entity->mesh, def->part, def->part_count, NULL);
 		entity->mesh->visible = (uint8_t)((2u << entity->mesh->part_count) - 1);
 
 		/* A part declared away from where it was modelled gets its offset here,
@@ -81,8 +81,8 @@ Entity3D *create(const Def *def)
 			if (position->x == 0.0f && position->y == 0.0f && position->z == 0.0f)
 				continue;
 
-			RenderTransform offset = { .position = *position, .scale = { 1.0f, 1.0f, 1.0f } };
-			mesh_setPartOffset(entity->mesh, 1 + i, &offset);
+			Render::Transform offset = { .position = *position, .scale = { 1.0f, 1.0f, 1.0f } };
+			mesh::part::setOffset(entity->mesh, 1 + i, &offset);
 		}
 	}
 
@@ -93,37 +93,34 @@ void setPartVisible(Entity3D *entity, const char *name, bool visible)
 {
 	if (!entity->mesh) return;
 
-	uint8_t part = mesh_findPart(entity->mesh, name);
+	uint8_t part = mesh::part::find(entity->mesh, name);
 	if (!part) return;
 
-	mesh_setPartVisible(entity->mesh, part, visible);
+	mesh::part::setVisible(entity->mesh, part, visible);
 }
 
-void setPartOffset(Entity3D *entity, const char *name, const RenderTransform *offset)
+void setPartOffset(Entity3D *entity, const char *name, const Render::Transform *offset)
 {
 	if (!entity->mesh) return;
 
-	uint8_t part = mesh_findPart(entity->mesh, name);
+	uint8_t part = mesh::part::find(entity->mesh, name);
 	if (!part) return;
 
-	mesh_setPartOffset(entity->mesh, part, offset);
+	mesh::part::setOffset(entity->mesh, part, offset);
 }
 
 void destroy(Entity3D *entity)
 {
 	if (entity->mesh) {
-		mesh_release(entity->mesh);
-		if (entity->mesh->deform) {
-			meshDeform_delete(entity->mesh->deform);
-			free(entity->mesh->deform);
-		}
+		mesh::release(entity->mesh);
+		mesh::deform::destroy(entity->mesh);
 		free_uncached(entity->mesh->matrix_buffer);
-		resource_unload(entity->mesh->model);
+		resource::unload(entity->mesh->model);
 		free(entity->mesh);
 	}
 
 	for (int i = 0; i < entity->sound_count; i++)
-		sound_unload(&entity->sound[i]);
+		sound::unload(&entity->sound[i]);
 	free(entity->sound);
 
 	free(entity);
@@ -133,11 +130,11 @@ void playSound(const Entity3D *entity, uint8_t trigger, const Vector3 *position,
 {
 	/* The candidates are the entity's sounds tagged with this trigger; the
 	   loops are already playing and never fire. */
-	uint8_t candidate[SOUND_MAX_EMITTERS];
+	uint8_t candidate[Sound::MAX_EMITTERS];
 	uint8_t count = 0;
 
-	for (uint8_t i = 0; i < entity->sound_count && count < SOUND_MAX_EMITTERS; i++) {
-		const SoundDef *def = entity->sound[i].def;
+	for (uint8_t i = 0; i < entity->sound_count && count < Sound::MAX_EMITTERS; i++) {
+		const Sound::Def *def = entity->sound[i].def;
 		if (def->loop || def->trigger != trigger) continue;
 		candidate[count++] = i;
 	}
@@ -146,11 +143,11 @@ void playSound(const Entity3D *entity, uint8_t trigger, const Vector3 *position,
 	Vector3 here;
 	if (position == NULL) {
 		if (entity->body) here = entity->body->tx.position;
-		else               here = entity->transform.position;
+		else here = entity->transform.position;
 		position = &here;
 	}
 
-	sound_play(&entity->sound[candidate[rand() % count]], position, volume_scale, 0.0f);
+	sound::play(&entity->sound[candidate[rand() % count]], position, volume_scale, 0.0f);
 }
 
 void setTransform(Entity3D *entity, const character3d::KinematicBody *body)
@@ -161,7 +158,7 @@ void setTransform(Entity3D *entity, const character3d::KinematicBody *body)
 
 void setMatrix(Entity3D *entity, uint8_t fb_index)
 {
-	mesh_setMatrix(entity->mesh, &entity->transform, fb_index);
+	mesh::setMatrix(entity->mesh, &entity->transform, fb_index);
 }
 
 /* For entities the solver moves: their placement lives in the body, not in the
@@ -169,10 +166,10 @@ void setMatrix(Entity3D *entity, uint8_t fb_index)
    euler angles the transform carries. No-op for anything else. */
 void setMatrixFromBody(Entity3D *entity, uint8_t fb_index)
 {
-	if (entity->body == NULL || !(entity->body->flags & BODY_FLAG_DYNAMIC)) return;
+	if (entity->body == NULL || !(entity->body->flags & RigidBody::BODY_FLAG_DYNAMIC)) return;
 
-	mesh_setMatrixFromBody(entity->mesh, &entity->body->tx.position, &entity->body->q,
-	                       &entity->transform.scale, fb_index);
+	mesh::setMatrixFromBody(entity->mesh, &entity->body->tx.position, &entity->body->q,
+	                        &entity->transform.scale, fb_index);
 }
 
 
@@ -199,25 +196,25 @@ Transform colliderTransform(const Def *def)
 
 /* Copies the body-def override bits on top of the freshly-initialised body
    (position, orientation) and then attaches the entity's shape to it. */
-RigidBody *attachPhysics(Entity3D *entity, const Def *def, PhysicsWorld *world)
+RigidBody *attachPhysics(Entity3D *entity, const Def *def, physics::World *world)
 {
-	RigidBodyDef body_def;
-	rigidBodyDef_init(&body_def);
+	RigidBody::Def body_def;
+	rigidBody::def::init(&body_def);
 
 	if (def->body) {
-		/* The user-supplied RigidBodyDef describes only the body properties,
+		/* The user-supplied RigidBody::Def describes only the body properties,
 		   not the world position. Position/rotation come from the entity. */
-		body_def.body_type       = def->body->body_type;
-		body_def.gravity_scale   = def->body->gravity_scale;
-		body_def.layers          = def->body->layers ? def->body->layers : 1;
-		body_def.linear_damping  = def->body->linear_damping;
+		body_def.body_type = def->body->body_type;
+		body_def.gravity_scale = def->body->gravity_scale;
+		body_def.layers = def->body->layers ? def->body->layers : 1;
+		body_def.linear_damping = def->body->linear_damping;
 		body_def.angular_damping = def->body->angular_damping;
-		body_def.allow_sleep     = def->body->allow_sleep;
-		body_def.awake           = def->body->awake;
-		body_def.active          = def->body->active;
-		body_def.lock_axis_x     = def->body->lock_axis_x;
-		body_def.lock_axis_y     = def->body->lock_axis_y;
-		body_def.lock_axis_z     = def->body->lock_axis_z;
+		body_def.allow_sleep = def->body->allow_sleep;
+		body_def.awake = def->body->awake;
+		body_def.active = def->body->active;
+		body_def.lock_axis_x = def->body->lock_axis_x;
+		body_def.lock_axis_y = def->body->lock_axis_y;
+		body_def.lock_axis_z = def->body->lock_axis_z;
 	}
 
 	/* Position in metres and rotation through the renderer's euler convention,
@@ -226,20 +223,20 @@ RigidBody *attachPhysics(Entity3D *entity, const Def *def, PhysicsWorld *world)
 	Transform collider = colliderTransform(def);
 	body_def.position = collider.position;
 
-	Quaternion rotation = quaternion_fromMatrix3(&collider.rotation);
-	quaternion_toAxisAngle(&rotation, &body_def.axis, &body_def.angle);
+	Quaternion rotation = quaternion::fromMatrix3(&collider.rotation);
+	quaternion::toAxisAngle(&rotation, &body_def.axis, &body_def.angle);
 
 	/* Identity degenerates to a zero axis; any axis stands for no rotation. */
-	if (vector3_squaredMagnitude(&body_def.axis) == 0.0f)
+	if (vector3::squaredMagnitude(&body_def.axis) == 0.0f)
 		body_def.axis = (Vector3){ 0.0f, 0.0f, 1.0f };
 
-	RigidBody *body = physicsWorld_createBody(world, &body_def);
-	body->owner   = entity;
-	entity->body  = body;
+	RigidBody *body = physics::world::createBody(world, &body_def);
+	body->owner = entity;
+	entity->body = body;
 
 	if (def->collider) {
 		for (uint8_t i = 0; i < def->collider->count; i++)
-			rigidBody_addShape(body, &def->collider->shape[i], def->scale);
+			rigidBody::addShape(body, &def->collider->shape[i], def->scale);
 	}
 
 	return body;

@@ -1,108 +1,104 @@
 #include "menu/e64_menu.h"
-#include "control/e64_controller.h"
+#include "menu/e64_menu_control.h"
+#include "controller/e64_controller.h"
 
 namespace e64 {
 
-static MenuStack menuStack;
+namespace menu {
+
+static Menu stack;
 
 
-int8_t  menuStack_getIndex(void)         { return menuStack.index; }
-void    menuStack_setIndex(int8_t index) { menuStack.index = index; }
-uint8_t menuStack_getDepth(void)         { return menuStack.top; }
+int8_t getIndex(void) { return stack.index; }
+void setIndex(int8_t index) { stack.index = index; }
+uint8_t getDepth(void) { return stack.top; }
 
-int8_t menuStack_getItemCount(void)
+int8_t getItemCount(void)
 {
-	if (menuStack.top == 0) return 0;
-	return menuStack.frame[menuStack.top - 1].item_count;
+	if (stack.top == 0) return 0;
+	return stack.frame[stack.top - 1].item_count;
 }
 
-void menuStack_moveIndex(int8_t delta, int8_t max)
+void moveIndex(int8_t delta, int8_t max)
 {
-	menuStack.index += delta;
-	if (menuStack.index < 0)   menuStack.index = max;
-	if (menuStack.index > max) menuStack.index = 0;
+	stack.index += delta;
+	if (stack.index < 0) stack.index = max;
+	if (stack.index > max) stack.index = 0;
 }
 
-void menuStack_init(void)
+void init(void)
 {
-	menuStack.index = 0;
-	menuStack.top   = 0;
+	stack.index = 0;
+	stack.top = 0;
 }
 
-void menuStack_open(int8_t item_count)
-{
-	if (menuStack.top >= MENU_STACK_MAX) return;
-
-	if (menuStack.top > 0)
-		menuStack.frame[menuStack.top - 1].index = menuStack.index;
-
-	menuStack.frame[menuStack.top++] = (MenuStackFrame){
-		.index      = 0,
-		.item_count = item_count,
-	};
-	menuStack.index = 0;
-}
-
-void menuStack_back(void)
-{
-	if (menuStack.top == 0) return;
-
-	menuStack.top--;
-	menuStack.index = (menuStack.top > 0)
-		? menuStack.frame[menuStack.top - 1].index
-		: 0;
-}
-
-
-void menu_open(const MenuDef *def)
+void open(const Menu::Def *def)
 {
 	if (def == NULL) return;
 
-	menuStack_open((int8_t)def->item_count);
+	/* The push is refused when the stack is full: nothing to write the menu
+	   into. */
+	if (stack.top >= Menu::STACK_MAX) return;
 
-	/* The push can be refused when the stack is full, and then there is no
-	   frame of ours to write the menu into. */
-	if (menuStack.top > 0) menuStack.frame[menuStack.top - 1].def = def;
+	if (stack.top > 0)
+		stack.frame[stack.top - 1].index = stack.index;
+
+	stack.frame[stack.top++] = (Menu::Frame){
+		.def = def,
+		.index = 0,
+		.item_count = (int8_t)def->item_count,
+	};
+	stack.index = 0;
 }
 
-void menu_back(void) { menuStack_back(); }
-
-const MenuDef *menu_get(void)
+void back(void)
 {
-	if (menuStack.top == 0) return NULL;
-	return menuStack.frame[menuStack.top - 1].def;
+	if (stack.top == 0) return;
+
+	stack.top--;
+	stack.index = (stack.top > 0)
+		? stack.frame[stack.top - 1].index
+		: 0;
 }
 
-void menu_update(const menu::ControlBinding *binding)
+const Menu::Def *get(void)
 {
-	const MenuDef *def = menu_get();
+	if (stack.top == 0) return NULL;
+	return stack.frame[stack.top - 1].def;
+}
+
+void update(const ControlBinding *binding)
+{
+	const Menu::Def *def = get();
 	if (def == NULL || binding == NULL) return;
 
-	menu::Controls controls;
-	menu::control::read(&controls, &controller::get()[binding->player], binding);
+	Controls controls;
+	control::read(&controls, &controller::get()[binding->player], binding);
 
 	if (def->item_count > 0) {
-		if (controls.up)   menuStack_moveIndex(-1, (int8_t)def->item_count - 1);
-		if (controls.down) menuStack_moveIndex( 1, (int8_t)def->item_count - 1);
+		if (controls.up) moveIndex(-1, (int8_t)def->item_count - 1);
+		if (controls.down) moveIndex( 1, (int8_t)def->item_count - 1);
 	}
 
 	/* Confirm ends the step: a press that opens a submenu must not reach the
 	   cancel below as well. */
 	if (controls.confirm && def->item_count > 0) {
 
-		const MenuItemDef *item = &def->item[menuStack_getIndex()];
+		const Menu::ItemDef *item = &def->item[getIndex()];
 
 		if (item->confirm) item->confirm();
-		if (item->submenu) menu_open(item->submenu);
+		if (item->submenu) open(item->submenu);
 		return;
 	}
 
 	if (controls.cancel) {
 		/* Deeper than the first level there is always somewhere to go back to;
 		   on the first one, closing is the menu's own to decide. */
-		if (menuStack.top > 1)   menu_back();
-		else if (def->cancel)    def->cancel();
+		if (stack.top > 1) back();
+		else if (def->cancel) def->cancel();
 	}
+}
+
 }
 
 }

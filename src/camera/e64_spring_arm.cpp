@@ -1,13 +1,13 @@
 #include <math.h>
 #include <fmath.h>
 
-#include "physics/math/e64_math_common.h"
-#include "camera/e64_camera.h"
+#include "math/e64_math.h"
+#include "camera/e64_camera3d.h"
 #include "camera/e64_spring_arm.h"
 
 namespace e64 {
 
-namespace camera {
+namespace camera3d {
 namespace springArm {
 
 float getPitch(const Camera *camera)
@@ -47,23 +47,23 @@ static void setPosition(Camera *camera, Vector3 *center, float dt)
 	const SpringArmSettings *settings = &camera->spring_arm.settings;
 
 	data->pitch += data->velocity.y * dt;
-	data->yaw   += data->velocity.x * dt;
+	data->yaw += data->velocity.x * dt;
 
 	data->yaw = angle_wrap(data->yaw);
 
 	if (data->pitch > settings->max_pitch) data->pitch = settings->max_pitch;
 	if (data->pitch < settings->min_pitch) data->pitch = settings->min_pitch;
 
-	float yaw   = deg_to_rad(data->yaw);
+	float yaw = deg_to_rad(data->yaw);
 	float pitch = deg_to_rad(data->pitch);
 
 	float sin_yaw, cos_yaw, sin_pitch, cos_pitch;
-	fm_sincosf(yaw,   &sin_yaw,   &cos_yaw);
+	fm_sincosf(yaw, &sin_yaw, &cos_yaw);
 	fm_sincosf(pitch, &sin_pitch, &cos_pitch);
 
 	/* forward points from the camera toward the pivot; right is its horizontal perpendicular */
 	Vector3 forward = { cos_pitch * sin_yaw, cos_pitch * cos_yaw, -sin_pitch };
-	Vector3 right   = { cos_yaw, -sin_yaw, 0.0f };
+	Vector3 right = { cos_yaw, -sin_yaw, 0.0f };
 
 	Vector3 pivot = { center->x, center->y, center->z + data->height_offset };
 
@@ -81,14 +81,14 @@ void init(Camera *camera, const SpringArmDef *def)
 {
 	camera->type = CAMERA_TYPE_SPRING_ARM;
 	camera->spring_arm.settings = def->settings;
-	camera->spring_arm.data     = (SpringArmData){
-		.target_arm_length  = def->arm_length,
-		.arm_length         = def->arm_length,
+	camera->spring_arm.data = (SpringArmData){
+		.target_arm_length = def->arm_length,
+		.arm_length = def->arm_length,
 		.target_side_offset = def->side_offset,
-		.side_offset        = def->side_offset,
-		.yaw               = def->yaw,
-		.pitch             = def->pitch,
-		.height_offset      = def->height_offset,
+		.side_offset = def->side_offset,
+		.yaw = def->yaw,
+		.pitch = def->pitch,
+		.height_offset = def->height_offset,
 	};
 }
 

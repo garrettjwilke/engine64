@@ -15,14 +15,12 @@
 */
 #include "prefab/e64_prefab3d.h"
 
-using namespace e64;
-
 
 /* A prop is the simplest kind there is: it gets drawn and nothing else. This
    one declares no collider, so nothing can bump into it, and no body, so it
    never moves. Example 03 gives props both. */
-extern const Prefab3D room = {
+extern const e64::Prefab3D room = {
 
-	.type  = PREFAB3D_PROP,
+	.type = e64::prefab3d::PREFAB3D_PROP,
 	.model = "rom:/models/room.t3dm",
 };

@@ -3,15 +3,15 @@
 
 #include <stdbool.h>
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_transform.h"
+#include "math/e64_vector3.h"
+#include "math/e64_transform.h"
 #include "physics/shapes/e64_physics_shape.h"
 
 namespace e64 {
 
 class Character3D;
-typedef struct CollisionMesh CollisionMesh;
-typedef struct PhysicsWorld PhysicsWorld;
+class RigidBody;
+namespace physics { class World; }
 
 
 namespace character3d {
@@ -25,7 +25,7 @@ typedef struct KinematicBody {
 	/* Its standing in the physics world. The solver never moves it — the fields
 	   above do — but registering it is what makes the broadphase pair it with
 	   rigid bodies, so the character can shove them. */
-	struct RigidBody *rigid;
+	RigidBody *rigid;
 } KinematicBody;
 
 
@@ -36,14 +36,14 @@ typedef struct ColliderSettings {
 
 
 typedef struct Collider {
-	Capsule   shape;
-	Transform world;    /* vertical capsule, position at the capsule center */
+	Capsule shape;
+	Transform world; /* vertical capsule, position at the capsule center */
 } Collider;
 
 
 namespace collider {
 
-void init       (Collider *collider, float radius, float half_height);
+void init (Collider *collider, float radius, float half_height);
 void setVertical(Collider *collider, const Vector3 *position);
 
 }
@@ -56,13 +56,13 @@ namespace physics {
    floor. Runs after the movement update, before the render sync. The character
    is not simulated by the solver: it reads those shapes and resolves on its
    own. */
-void collide(Character3D *character, const PhysicsWorld *world);
+void collide(Character3D *character, const e64::physics::World *world);
 
 /* The character's standing in the world: created once, written every frame
    after collide, so the solver sees where it ended up and how fast it got
    there. Without this the character passes through every rigid body. */
-void createBody(Character3D *character, PhysicsWorld *world);
-void syncBody  (Character3D *character);
+void createBody(Character3D *character, e64::physics::World *world);
+void syncBody (Character3D *character);
 
 }
 

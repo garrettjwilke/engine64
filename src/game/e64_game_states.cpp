@@ -1,6 +1,6 @@
 /*
 	State machinery only: the table itself is the game's, handed over at
-	game_start. The engine loads, unloads and switches whatever it is given.
+	game::state::start. The engine loads, unloads and switches whatever it is given.
 */
 #include <assert.h>
 #include <libdragon.h>
@@ -9,117 +9,127 @@
 #include "scene3d/e64_scene3d.h"
 #include "scene2d/e64_scene2d.h"
 #include "player/e64_player.h"
-#include "control/e64_player_control.h"
+#include "controller/e64_controls.h"
 #include "viewport/e64_viewport.h"
 #include "game/e64_game.h"
 #include "game/e64_game_states.h"
 
 namespace e64 {
 
-static const GameStateDef *game_state;
-static uint8_t             game_state_count;
+namespace game {
 
+namespace state {
 
-const GameStateDef *gameState_get(GameState id)
+const Game::State::Def *get(Game::State::ID id)
 {
-	assert(id < game_state_count);
-	return &game_state[id];
+	Game::State *s = &game::get()->state;
+
+	assert(id < s->count);
+	return &s->table[id];
 }
 
-static void gameState_load(GameState id)
+static void load(Game::State::ID id)
 {
+	const Game::State::Def *def = get(id);
+
 	/* The screen first: the scenes below place cameras against it. */
-	if (game_state[id].viewport) viewport_setMode(game_state[id].viewport);
+	if (def->viewport) viewport::setMode(def->viewport);
 
-	if (game_state[id].scene3d) scene3d_load(game_state[id].scene3d);
-	if (game_state[id].scene2d) scene2d_load(game_state[id].scene2d);
+	/* The scenes take the state's controls: each seats the players and
+	   points the camera as it builds what the bindings name. */
+	if (def->scene3d) scene3d::load(def->scene3d, def->controls);
+	if (def->scene2d) scene2d::load(def->scene2d, def->controls);
 
-	/* After the scenes: the bodies the controls name exist from here on. */
-	controls::bind(game_state[id].controls, game_state[id].scene3d);
-	controls::bind2D(game_state[id].controls, game_state[id].scene2d);
-
-	if (game_state[id].onEnter) game_state[id].onEnter();
+	if (def->onEnter) def->onEnter();
 }
 
-static void gameState_unload(GameState id)
+static void unload(Game::State::ID id)
 {
-	if (game_state[id].onExit) game_state[id].onExit();
-	if (game_state[id].scene2d) scene2d_unload();
-	if (game_state[id].scene3d) {
+	const Game::State::Def *def = get(id);
+
+	if (def->onExit) def->onExit();
+	if (def->scene2d) scene2d::unload();
+	if (def->scene3d) {
 		player::init();
-		scene3d_unload();
+		scene3d::unload();
 	}
 }
 
-static bool gameState_isOverlayPair(GameState prev, GameState next)
+static bool isOverlayPair(Game::State::ID prev, Game::State::ID next)
 {
-	return game_state[next].overlay_of == &game_state[prev]
-	    || game_state[prev].overlay_of == &game_state[next];
+	return get(next)->overlay_of == get(prev)
+	    || get(prev)->overlay_of == get(next);
 }
 
-/* Asking to leave is not leaving: the state names where it goes, and the
-   switch happens as soon as it lets go. */
-void game_setState(Game *game, GameState new_state)
+static void settle(Game::State *s)
 {
-	assert(new_state < game_state_count);
-	game->next = new_state;
-}
+	if (s->next == s->current) return;
 
-static void gameState_settle(Game *game)
-{
-	if (game->next == game->state) return;
-
-	const GameStateDef *leaving = &game_state[game->state];
+	const Game::State::Def *leaving = get(s->current);
 	if (leaving->canLeave && !leaving->canLeave()) return;
 
-	GameState prev      = game->state;
-	GameState new_state = game->next;
+	Game::State::ID prev = s->current;
+	Game::State::ID new_state = s->next;
 
 	/* An overlay rides its base: the 3D world stays untouched and dropping
 	   back does not re-enter the base. Only the 2D scene changes hands, and
 	   it comes back the way its definition declares it. */
-	if (gameState_isOverlayPair(prev, new_state)) {
-		game->state = new_state;
-		if (game_state[new_state].scene2d) scene2d_load(game_state[new_state].scene2d);
-		if (game_state[new_state].overlay_of == &game_state[prev] && game_state[new_state].onEnter)
-			game_state[new_state].onEnter();
+	if (isOverlayPair(prev, new_state)) {
+		const Game::State::Def *def = get(new_state);
+		s->current = new_state;
+		if (def->scene2d) scene2d::load(def->scene2d, def->controls);
+		if (def->overlay_of == get(prev) && def->onEnter) def->onEnter();
 		return;
 	}
 
 	rspq_wait();
-	gameState_unload(prev);
+	unload(prev);
 	/* An abandoned overlay takes its base state down with it. */
-	if (game_state[prev].overlay_of)
-		gameState_unload(game_state[prev].overlay_of - game_state);
-	game->state = new_state;
-	gameState_load(new_state);
+	if (get(prev)->overlay_of)
+		unload(get(prev)->overlay_of - s->table);
+	s->current = new_state;
+	load(new_state);
 
 	/* The load blocked for as long as it took: none of it counts as a
 	   played frame, or the enter animations would swallow it as one. */
-	time_reset();
+	time::reset();
 }
 
-void game_start(const GameStateDef *states, uint8_t count, GameState initial)
+
+/* Asking to leave is not leaving: the state names where it goes, and the
+   switch happens as soon as it lets go. */
+void set(Game::State::ID new_state)
 {
-	assert(states && initial < count);
+	Game::State *s = &game::get()->state;
 
-	game_state       = states;
-	game_state_count = count;
-
-	Game *game = game_get();
-	game->state = initial;
-	game->next  = initial;
-
-	gameState_load(initial);
-	time_reset();
+	assert(new_state < s->count);
+	s->next = new_state;
 }
 
-void game_updateState(void)
+void start(const Game::State::Def *table, uint8_t count, Game::State::ID initial)
 {
-	Game *game = game_get();
+	assert(table && initial < count);
 
-	game_state[game->state].update();
-	gameState_settle(game);
+	Game::State *s = &game::get()->state;
+	s->table = table;
+	s->count = count;
+	s->current = initial;
+	s->next = initial;
+
+	load(initial);
+	time::reset();
+}
+
+void update(void)
+{
+	Game::State *s = &game::get()->state;
+
+	get(s->current)->update();
+	settle(s);
+}
+
+}
+
 }
 
 }

@@ -5,7 +5,7 @@
 #include <fgeom.h>
 #include <t3d/t3dmodel.h>
 
-#include "physics/math/e64_quaternion.h"
+#include "math/e64_quaternion.h"
 #include "entity/e64_entity3d.h"
 #include "character3d/e64_character3d.h"
 #include "character3d/e64_character3d_animation.h"
@@ -14,7 +14,7 @@ namespace e64 {
 
 namespace character3d {
 
-/* SkeletonModifierFn: the weapon posing; context is the Character3D. */
+/* skeleton::Modifiers::Fn: the weapon posing; context is the Character3D. */
 static void weaponModifier(T3DSkeleton *skeleton, void *context)
 {
 	(void)skeleton;
@@ -34,15 +34,15 @@ Character3D *create(const Def *def, Entity3D *entity)
 	assert(character);
 
 	*character = (Character3D){
-		.entity    = entity,
-		.body      = (KinematicBody){ .position = entity->transform.position, .rotation = entity->transform.rotation },
-		.movement  = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT_STATE_IDLE },
+		.entity = entity,
+		.body = (KinematicBody){ .position = entity->transform.position, .rotation = entity->transform.rotation },
+		.movement = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT_STATE_IDLE },
 		.animation = { .def = def->animation_def },
-		.weapons   = (Weapons){ .def = def->weapons_def, .drawn = CHARACTER3D_WEAPON_DRAWN_NONE },
+		.weapons = (Weapons){ .def = def->weapons_def, .drawn = CHARACTER3D_WEAPON_DRAWN_NONE },
 		/* No previous frame to compare against yet: a cycle of -1 crosses
 		   nothing, and the body starts standing on the floor. */
-		.sound     = (Sound){ .def = def->sound_def, .previous_cycle = -1.0f, .previous_grounded = true },
-		.stats     = (Stats){ .settings = def->stats_settings, .stamina = 1.0f },
+		.sound = (Sound){ .def = def->sound_def, .previous_cycle = -1.0f, .previous_grounded = true },
+		.stats = (Stats){ .settings = def->stats_settings, .stamina = 1.0f },
 	};
 
 	collider::init(&character->collider,
@@ -53,17 +53,17 @@ Character3D *create(const Def *def, Entity3D *entity)
 	/* A def without animations (a vehicle) skips the whole graph: the mesh
 	   keeps a NULL skeleton and draws through the model object path. */
 	if (def->animation_def) {
-		character->animation.initGraph(*character);
-		entity->mesh->skeleton = &character->animation.main;
+		character->animation.init(entity->mesh->model);
+		entity->mesh->skeleton = &character->animation.graph.main;
 	}
 
 	/* Aim before the weapons: the bow has to follow a spine already bent. */
 	if (def->aiming_settings) {
 		aim::init(character, def->aiming_settings);
-		skeletonModifiers_add(&character->skeleton_modifiers, aim::apply, character);
+		skeleton::modifiers::add(&character->skeleton_modifiers, aim::apply, character);
 	}
 
-	skeletonModifiers_add(&character->skeleton_modifiers, weaponModifier, character);
+	skeleton::modifiers::add(&character->skeleton_modifiers, weaponModifier, character);
 
 	if (spring_bones > 0) {
 		SpringBone *spring_bone = (SpringBone *)(character + 1);
@@ -73,15 +73,15 @@ Character3D *create(const Def *def, Entity3D *entity)
 		   so each modifier runs after the one it hangs from. */
 		for (const SpringBonesDef *set = def->spring_bones; set->count; set++) {
 			int16_t joint[16];
-			uint8_t count = springBones_resolveChain(&character->animation.main, set, joint, 16);
+			uint8_t count = springBones_resolveChain(&character->animation.graph.main, set, joint, 16);
 			if (count > set->count) count = set->count;
 
 			for (uint8_t i = 0; i < count; i++) {
-				if (!springBone_init(&spring_bone[n], &character->animation.main, joint[i],
+				if (!springBone_init(&spring_bone[n], &character->animation.graph.main, joint[i],
 				                     i, set, &entity->transform))
 					continue;
 
-				skeletonModifiers_add(&character->skeleton_modifiers, springBone_apply, &spring_bone[n]);
+				skeleton::modifiers::add(&character->skeleton_modifiers, springBone_apply, &spring_bone[n]);
 				n++;
 			}
 		}
@@ -97,92 +97,18 @@ Character3D *create(const Def *def, Entity3D *entity)
 	                       : NULL;
 
 	if (def->weapons_def)
-		mesh_record(entity->mesh, def->weapons_def->mesh, def->weapons_def->mesh_count, bones);
+		mesh::record(entity->mesh, def->weapons_def->mesh, def->weapons_def->mesh_count, bones);
 	else
-		mesh_record(entity->mesh, NULL, 0, bones);
+		mesh::record(entity->mesh, NULL, 0, bones);
 
 	return character;
 }
 
-void getBoneModelSpacePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation)
-{
-	uint16_t chain[16];
-	int depth = 0;
-
-	uint16_t idx = (uint16_t)bone;
-	while (idx != 0xFFFF && depth < 16) {
-		chain[depth++] = idx;
-		idx = skeleton->skeletonRef->bones[idx].parentIdx;
-	}
-
-	*position = (T3DVec3){{ 0.0f, 0.0f, 0.0f }};
-	*rotation = (T3DQuat){{ 0.0f, 0.0f, 0.0f, 1.0f }};
-
-	for (int i = depth - 1; i >= 0; i--) {
-		const T3DBone *b = &skeleton->bones[chain[i]];
-
-		/* T3DQuat and T3DVec3 are laid out like the math module's types. */
-		Vector3 step = quaternion_rotateVector((const Quaternion *)rotation, (const Vector3 *)&b->position);
-		position->v[0] += step.x;
-		position->v[1] += step.y;
-		position->v[2] += step.z;
-
-		T3DQuat next;
-		t3d_quat_mul(&next, rotation, (T3DQuat *)&b->rotation);
-		*rotation = next;
-	}
-}
-
-/* Model-space pose of a bone, composed from the local TRS chain so it is
-   current-frame (bone->matrix would lag one skeleton update behind). */
-void getBonePose(const T3DSkeleton *skeleton, int16_t bone, T3DVec3 *position, T3DQuat *rotation)
-{
-	uint16_t chain[16];
-	int depth = 0;
-
-	uint16_t idx = (uint16_t)bone;
-	while (idx != 0xFFFF && depth < 16) {
-		chain[depth++] = idx;
-		idx = skeleton->skeletonRef->bones[idx].parentIdx;
-	}
-
-	*position = (T3DVec3){{ 0.0f, 0.0f, 0.0f }};
-	*rotation = (T3DQuat){{ 0.0f, 0.0f, 0.0f, 1.0f }};
-
-	for (int i = depth - 1; i >= 0; i--) {
-		const T3DBone *b = &skeleton->bones[chain[i]];
-
-		Vector3 step = quaternion_rotateVector((const Quaternion *)rotation, (const Vector3 *)&b->position);
-		position->v[0] += step.x;
-		position->v[1] += step.y;
-		position->v[2] += step.z;
-
-		T3DQuat next;
-		t3d_quat_mul(&next, rotation, (T3DQuat *)&b->rotation);
-		*rotation = next;
-	}
-}
-
 void destroy(Character3D *character)
 {
-	Animation *animation = &character->animation;
+	if (character->animation.def)
+		character->animation.destroy();
 
-	if (animation->def) {
-		for (int i = 0; i < animation->def->clip_count; i++) {
-			t3d_anim_destroy(&animation->clip[i]);
-			if (animation->clip_data[i]) free(animation->clip_data[i]);
-		}
-		for (int i = 0; i < animation->def->buffer_count; i++)
-			t3d_skeleton_destroy(&animation->buffer[i]);
-		t3d_skeleton_destroy(&animation->main);
-	}
-
-	free(animation->clip);
-	free(animation->clip_data);
-	free(animation->clip_cooldown);
-	free(animation->buffer);
-	free(animation->node_state);
-	free(animation->node_active);
 	free(character);
 }
 

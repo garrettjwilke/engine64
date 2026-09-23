@@ -6,17 +6,15 @@
 	Seven slots, shared between kinds. Declared in order and cut at the first
 	empty one, so the six left over cost nothing.
 */
-#include "scene3d/e64_lighting.h"
-
-using namespace e64;
+#include "scene3d/e64_light.h"
 
 
-extern const LightDef light = {
+extern const e64::light::Def light = {
 
 	.ambient_color = { 60, 60, 70, 0xFF },
 
 	.source = {
-		{ .type  = LIGHT_POINT,
+		{ .type = e64::light::LIGHT_POINT,
 		  .color = { 255, 245, 220, 0xFF },
 		  .point = { .position = {{ 0.0f, 0.0f, 12.0f }}, .size = 40.0f } },
 	},

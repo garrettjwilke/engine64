@@ -20,44 +20,51 @@
 */
 
 /*
-	Owns the list of ContactConstraints and the BroadPhase.
+	Owns the list of Contact::Constraint and the BroadPhase.
 */
 #ifndef ENGINE64_CONTACT_MANAGER_H
 #define ENGINE64_CONTACT_MANAGER_H
 
 #include <stdint.h>
 
-#include "physics/broadphase/e64_broad_phase.h"
-#include "physics/memory/e64_physics_paged_allocator.h"
+#include "physics/collision/e64_contact.h"
+#include "physics/collision/e64_broad_phase.h"
+#include "memory/e64_paged_allocator.h"
 
 namespace e64 {
 
-struct ContactConstraint;
-struct PhysicsShape;
-struct RigidBody;
-struct PhysicsStack;
+namespace memory { class Stack; }
 
 
-typedef struct ContactManager {
-	struct ContactConstraint *contact_list;
-	int32_t                   contact_count;
-	struct PhysicsStack      *stack;
-	PhysicsPagedAllocator     allocator;
-	BroadPhase                broadphase;
-	void                     *contact_listener;
-} ContactManager;
+class Contact::Manager {
+public:
+
+	Constraint *contact_list;
+	int32_t contact_count;
+	memory::Stack *stack;
+	memory::PagedAllocator allocator;
+	BroadPhase broadphase;
+	void *contact_listener;
+};
 
 
-void contactManager_init    (ContactManager *m, struct PhysicsStack *stack);
-void contactManager_shutdown(ContactManager *m);
+namespace contact {
 
-void contactManager_addContact          (ContactManager *m, struct PhysicsShape *A, struct PhysicsShape *B);
-void contactManager_findNewContacts     (ContactManager *m);
-void contactManager_removeContact       (ContactManager *m, struct ContactConstraint *contact);
-void contactManager_removeContactsFromBody(ContactManager *m, struct RigidBody *body);
-void contactManager_removeFromBroadphase(ContactManager *m, struct RigidBody *body);
-void contactManager_testCollisions      (ContactManager *m);
+namespace manager {
 
+void init (Contact::Manager *m, memory::Stack *stack);
+void shutdown(Contact::Manager *m);
+
+void addContact (Contact::Manager *m, physics::Shape *A, physics::Shape *B);
+void findNewContacts (Contact::Manager *m);
+void removeContact (Contact::Manager *m, Contact::Constraint *contact);
+void removeContactsFromBody(Contact::Manager *m, RigidBody *body);
+void removeFromBroadphase(Contact::Manager *m, RigidBody *body);
+void testCollisions (Contact::Manager *m);
+
+}
+
+}
 
 }
 

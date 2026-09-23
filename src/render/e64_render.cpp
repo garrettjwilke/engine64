@@ -5,11 +5,11 @@
 #include <t3d/t3dmath.h>
 #include <t3d/t3dskeleton.h>
 
-#include "scene3d/e64_lighting.h"
+#include "scene3d/e64_light.h"
 #include "scene3d/e64_fog.h"
 #include "viewport/e64_viewport.h"
 #include "graphics/e64_font.h"
-#include "graphics/e64_mesh.h"
+#include "model/e64_mesh.h"
 #include "graphics/e64_sprites.h"
 #include "graphics/e64_shapes.h"
 #include "particles/e64_particles.h"
@@ -23,65 +23,75 @@
 
 namespace e64 {
 
+namespace render {
+
 /* The frame's draw list. Filled by the scenes and consumed here, every
    frame; nobody outside sees it. */
-static RenderContext render_context;
+static Render::Context frame_context;
 
 
-void renderTransform_init(RenderTransform *t)
+namespace transform {
+
+void init(Render::Transform *t)
 {
-	*t = (RenderTransform){
+	*t = (Render::Transform){
 		.position = {0.0f, 0.0f, 0.0f},
 		.rotation = {0.0f, 0.0f, 0.0f},
-		.scale    = {1.0f, 1.0f, 1.0f},
+		.scale = {1.0f, 1.0f, 1.0f},
 	};
 }
 
-void render_initContext(RenderContext *ctx)
+}
+
+namespace context {
+
+void init(Render::Context *ctx)
 {
 	/* Only the counts matter: entries are fully written before being read,
 	   and zeroing the whole struct wipes the entire 8 KB dcache. */
-	ctx->element_count = 0;
+	ctx->element2d_count = 0;
 	ctx->section_count = 0;
-	ctx->piece_count   = 0;
+	ctx->element3d_count = 0;
+}
+
 }
 
 
-static void render_start(int *fb_index)
+static void start(int *fb_index)
 {
-	*fb_index = (*fb_index + 1) % FB_COUNT;
+	*fb_index = (*fb_index + 1) % Viewport::FB_COUNT;
 
 	/* Geometry fades toward the fog color, so the background must be it. A
 	   2D scene that declares a sky paints that instead. */
-	Fog *fog = fog_get();
-	color_t clear = fog->enabled ? fog->color : RGBA32(0, 0, 0, 0xFF);
+	Fog *fog_state = fog::get();
+	color_t clear = fog_state->enabled ? fog_state->color : RGBA32(0, 0, 0, 0xFF);
 
-	const Scene2D *scene2d = scene2d_get();
-	if (scene2d->def && scene2d->def->background.a) clear = scene2d->def->background;
+	const Scene2D *scene = scene2d::get();
+	if (scene->def && scene->def->background.a) clear = scene->def->background;
 
-	viewport_attach();
+	viewport::attach();
 
 	/* The 3D pipeline is only up while a 3D scene is, and it starts its own
 	   frame: the render state it leaves is the one the clear and everything
 	   after it run under, which is why it goes first. */
-	if (viewport_has3D()) {
+	if (viewport::has3D()) {
 		t3d_frame_start();
-		t3d_viewport_attach(&viewport_get()->t3d_viewport);
+		t3d_viewport_attach(&viewport::get()->t3d_viewport);
 	}
 
-	viewport_clear(clear);
+	viewport::clear(clear);
 
 	/* Only the 3D pipeline writes depth. */
-	if (viewport_has3D()) t3d_screen_clear_depth();
+	if (viewport::has3D()) t3d_screen_clear_depth();
 }
 
-static void render_end(void)
+static void end(void)
 {
-	viewport_detach();
+	viewport::detach();
 }
 
 /* No transparency a sprite could carry: the RDP is not on a sprite mode. */
-#define SPRITE_MODE_UNSET (-1)
+static constexpr int SPRITE_MODE_UNSET = -1;
 
 /* The whole RDP state a sprite draws under, in one batch: the mode API
    calls between begin and end are programmed as a single change instead of
@@ -91,7 +101,7 @@ static void render_end(void)
 
    A run of sprites sharing a transparency sets this once: a stage's tiles
    are hundreds of elements under the very same state. */
-static void render_setSpriteMode(uint8_t transparency)
+static void setSpriteMode(uint8_t transparency)
 {
 	rdpq_mode_begin();
 		rdpq_set_mode_standard();
@@ -108,7 +118,7 @@ static void render_setSpriteMode(uint8_t transparency)
    translate; the scroll goes on top by reissuing SET_TILE_SIZE, the one
    command that carries it, with the same extents rdpq wrote: translate to
    translate plus the texture size, in 10.2. */
-static void render_scrollTexture(const T3DMaterial *material, const Vector2 *scroll)
+static void scrollTexture(const T3DMaterial *material, const Vector2 *scroll)
 {
 	const T3DMaterialTexture *texture[2] = { &material->textureA, &material->textureB };
 
@@ -125,111 +135,111 @@ static void render_scrollTexture(const T3DMaterial *material, const Vector2 *scr
 
 /* The counting sort bucket of a material id: the ids in order, and the
    objects without material last. */
-static inline int render_materialBucket(uint8_t material)
+static inline int materialBucket(uint8_t material)
 {
-	return material == MESH_MATERIAL_NONE ? MESH_MAX_MATERIALS : material;
+	return material == Mesh::MATERIAL_NONE ? Mesh::MAX_MATERIALS : material;
 }
 
-/* Runs pieces in the given order: each material once, ahead of the run of
-   pieces that use it; skeleton and matrix only when they change, popping
-   only when another matrix takes over. bound and pushed carry that state
-   across calls. Returns whether any material ran with a vertex FX. */
-static bool render_runPieces(const RenderContext *ctx, const uint16_t *order, uint16_t count,
-                             const T3DSkeleton **bound, const T3DMat4FP **pushed)
+/* Runs 3D elements in the given order: each material once, ahead of the run
+   of elements that use it; skeleton and matrix only when they change,
+   popping only when another matrix takes over. bound and pushed carry that
+   state across calls. Returns whether any material ran with a vertex FX. */
+static bool runElements(const Render::Context *ctx, const uint16_t *order, uint16_t count,
+                        const T3DSkeleton **bound, const T3DMat4FP **pushed)
 {
 	static const Vector2 no_scroll[2] = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
 
-	int         current   = -1;    /* the material the RDP is set for */
-	const Mesh *scrolled  = NULL;  /* the mesh whose scroll the tiles carry */
-	bool        vertex_fx = false;
+	int current = -1; /* the material the RDP is set for */
+	const Mesh *scrolled = NULL; /* the mesh whose scroll the tiles carry */
+	bool vertex_fx = false;
 
 	for (uint16_t i = 0; i < count; i++) {
-		const RenderPiece *piece = &ctx->piece[order[i]];
+		const Render::Element3D *element = &ctx->element3d[order[i]];
 
-		if (piece->material != current) {
-			rspq_block_t *block = mesh_materialBlock(piece->material);
+		if (element->material != current) {
+			rspq_block_t *block = mesh::material::block(element->material);
 			if (block) rspq_block_run(block);
-			if (mesh_materialHasVertexFx(piece->material)) vertex_fx = true;
-			current  = piece->material;
-			scrolled = NULL;   /* the block wrote the file's own tile translate */
+			if (mesh::material::hasVertexFx(element->material)) vertex_fx = true;
+			current = element->material;
+			scrolled = NULL; /* the block wrote the file's own tile translate */
 		}
 
 		/* The scroll rides on top of the shared material: reissued when a
 		   scrolling mesh takes the tiles over, put back to the file's when a
 		   mesh without one follows under the same material. */
-		if (piece->object->material) {
-			if (piece->mesh->texture_scroll) {
-				if (piece->mesh != scrolled) {
-					render_scrollTexture(piece->object->material, piece->mesh->texture_scroll);
-					scrolled = piece->mesh;
+		if (element->object->material) {
+			if (element->mesh->texture_scroll) {
+				if (element->mesh != scrolled) {
+					scrollTexture(element->object->material, element->mesh->texture_scroll);
+					scrolled = element->mesh;
 				}
 			} else if (scrolled) {
-				render_scrollTexture(piece->object->material, no_scroll);
+				scrollTexture(element->object->material, no_scroll);
 				scrolled = NULL;
 			}
 		}
 
-		if (piece->skeleton && piece->skeleton != *bound) {
-			t3d_skeleton_use(piece->skeleton);
-			*bound = piece->skeleton;
+		if (element->skeleton && element->skeleton != *bound) {
+			t3d_skeleton_use(element->skeleton);
+			*bound = element->skeleton;
 		}
 
-		if (piece->matrix != *pushed) {
+		if (element->matrix != *pushed) {
 			if (*pushed) t3d_matrix_pop(1);
-			if (piece->matrix) t3d_matrix_push(piece->matrix);
-			*pushed = piece->matrix;
+			if (element->matrix) t3d_matrix_push(element->matrix);
+			*pushed = element->matrix;
 		}
 
-		rspq_block_run(piece->object->userBlock);
+		rspq_block_run(element->object->userBlock);
 	}
 
 	return vertex_fx;
 }
 
-void render(void)
+void draw(void)
 {
-	RenderContext *ctx = &render_context;
-	Viewport *viewport = viewport_get();
+	Render::Context *ctx = &frame_context;
+	Viewport *viewport = viewport::get();
 
-	render_initContext(ctx);
-	scene3d_setRenderContext(scene3d_get(), ctx, viewport);
-	scene2d_setRenderContext(scene2d_get(), ctx);
+	context::init(ctx);
+	scene3d::setRenderContext(scene3d::get(), ctx, viewport);
+	scene2d::setRenderContext(scene2d::get(), ctx);
 
-	render_start(&viewport->fb_index);
+	start(&viewport->fb_index);
 
-	if (ctx->piece_count > 0) {
-		light_set(light_get());
-		fog_set(fog_get());
+	if (ctx->element3d_count > 0) {
+		light::set(light::get());
+		fog::set(fog::get());
 
-		/* The pieces grouped by material: a counting sort over the table
-		   ids, stable, so the pieces of one entity stay together inside a
+		/* The elements grouped by material: a counting sort over the table
+		   ids, stable, so the elements of one entity stay together inside a
 		   material and the matrix changes as little as it can. A material
 		   that reads what is already drawn (blending, decal) keeps its scene
 		   order instead, after everything opaque. */
-		uint16_t start[MESH_MAX_MATERIALS + 2] = {0};
-		uint16_t order[RENDER_MAX_3D_PIECES];
-		uint16_t deferred[RENDER_MAX_3D_PIECES];
+		uint16_t start[Mesh::MAX_MATERIALS + 2] = {0};
+		uint16_t order[Render::MAX_3D_ELEMENTS];
+		uint16_t deferred[Render::MAX_3D_ELEMENTS];
 		uint16_t sorted_count = 0, deferred_count = 0;
 
-		for (uint16_t i = 0; i < ctx->piece_count; i++) {
-			uint8_t m = ctx->piece[i].material;
-			if (mesh_materialIsDeferred(m)) deferred[deferred_count++] = i;
-			else                            start[render_materialBucket(m) + 1]++;
+		for (uint16_t i = 0; i < ctx->element3d_count; i++) {
+			uint8_t m = ctx->element3d[i].material;
+			if (mesh::material::isDeferred(m)) deferred[deferred_count++] = i;
+			else start[materialBucket(m) + 1]++;
 		}
-		for (int b = 1; b <= MESH_MAX_MATERIALS + 1; b++) start[b] += start[b - 1];
-		for (uint16_t i = 0; i < ctx->piece_count; i++) {
-			uint8_t m = ctx->piece[i].material;
-			if (mesh_materialIsDeferred(m)) continue;
-			order[start[render_materialBucket(m)]++] = i;
+		for (int b = 1; b <= Mesh::MAX_MATERIALS + 1; b++) start[b] += start[b - 1];
+		for (uint16_t i = 0; i < ctx->element3d_count; i++) {
+			uint8_t m = ctx->element3d[i].material;
+			if (mesh::material::isDeferred(m)) continue;
+			order[start[materialBucket(m)]++] = i;
 			sorted_count++;
 		}
 
-		const T3DSkeleton *bound     = NULL;
-		const T3DMat4FP   *pushed    = NULL;
-		bool               vertex_fx = false;
+		const T3DSkeleton *bound = NULL;
+		const T3DMat4FP *pushed = NULL;
+		bool vertex_fx = false;
 
-		vertex_fx |= render_runPieces(ctx, order,    sorted_count,   &bound, &pushed);
-		vertex_fx |= render_runPieces(ctx, deferred, deferred_count, &bound, &pushed);
+		vertex_fx |= runElements(ctx, order, sorted_count, &bound, &pushed);
+		vertex_fx |= runElements(ctx, deferred, deferred_count, &bound, &pushed);
 
 		if (pushed) t3d_matrix_pop(1);
 
@@ -238,16 +248,16 @@ void render(void)
 		if (vertex_fx) t3d_state_set_vertex_fx(T3D_VERTEX_FX_NONE, 0, 0);
 	}
 
-	particles_draw();
+	particles::draw();
 
 	for (int s = 0; s < ctx->section_count; s++) {
-		RenderSection *section = &ctx->section[s];
+		Render::Section *section = &ctx->section[s];
 
 		/* Nothing on screen, nothing on the wire: a fully hidden section
 		   must not emit a single command, scissor setup included. */
 		bool any_visible = false;
 		for (int i = 0; i < section->element_count; i++) {
-			if (!ctx->element[section->element_start + i].graphic->is_hidden) {
+			if (!ctx->element2d[section->element_start + i].graphic->is_hidden) {
 				any_visible = true;
 				break;
 			}
@@ -273,37 +283,37 @@ void render(void)
 		const sprite_t *loaded = NULL;
 
 		for (int i = 0; i < section->element_count; i++) {
-			Element2D *element = &ctx->element[section->element_start + i];
+			Render::Element2D *element = &ctx->element2d[section->element_start + i];
 			const Graphic *graphic = element->graphic;
 			if (graphic->is_hidden) continue;
 			switch (graphic->type) {
-				case GRAPHIC_RECTANGLE:
-					shape_drawRectangle(&graphic->rectangle, element->position, element->scale);
+				case Graphic::RECTANGLE:
+					rectangle::draw(&graphic->rectangle, element->position, element->scale);
 					sprite_mode = SPRITE_MODE_UNSET;
-					loaded      = NULL;
+					loaded = NULL;
 					break;
-				case GRAPHIC_TEXT:
-					text_draw(&graphic->text, element->position);
+				case Graphic::TEXT:
+					text::draw(&graphic->text, element->position);
 					sprite_mode = SPRITE_MODE_UNSET;
-					loaded      = NULL;
+					loaded = NULL;
 					break;
-				case GRAPHIC_SPRITE:
+				case Graphic::SPRITE:
 					if (sprite_mode != graphic->transparency) {
-						render_setSpriteMode(graphic->transparency);
+						setSpriteMode(graphic->transparency);
 						sprite_mode = graphic->transparency;
 					}
 
-					if (sprite_isLoadable(&graphic->sprite, element->rotation)) {
+					if (sprite::isLoadable(&graphic->sprite, element->rotation)) {
 						if (graphic->sprite.asset != loaded) {
-							sprite_loadTexture(&graphic->sprite);
+							sprite::loadTexture(&graphic->sprite);
 							loaded = graphic->sprite.asset;
 						}
-						sprite_drawLoaded(&graphic->sprite, element->position, element->scale);
+						sprite::drawLoaded(&graphic->sprite, element->position, element->scale);
 						break;
 					}
 
-					if (graphic->sprite.tiled) sprite_drawTiled(&graphic->sprite, element->position, element->scale);
-					else                       sprite_draw(&graphic->sprite, element->position, element->scale, element->rotation);
+					if (graphic->sprite.tiled) sprite::drawTiled(&graphic->sprite, element->position, element->scale);
+					else sprite::draw(&graphic->sprite, element->position, element->scale, element->rotation);
 					loaded = NULL;
 					break;
 			}
@@ -314,9 +324,11 @@ void render(void)
 			rdpq_set_scissor(0, 0, display_get_width(), display_get_height());
 	}
 
-	debugUI_draw();
+	debug::ui::draw();
 
-	render_end();
+	end();
+}
+
 }
 
 }

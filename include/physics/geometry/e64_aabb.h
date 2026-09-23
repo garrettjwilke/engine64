@@ -25,7 +25,7 @@
 #ifndef ENGINE64_AABB_H
 #define ENGINE64_AABB_H
 
-#include "physics/math/e64_vector3.h"
+#include "math/e64_vector3.h"
 
 namespace e64 {
 
@@ -35,15 +35,18 @@ typedef struct AABB {
 } AABB;
 
 
-int   aabb_containsAABB(const AABB *a, const AABB *other);
-int   aabb_containsPoint(const AABB *a, const Vector3 *p);
-float aabb_surfaceArea(const AABB *a);
-int   aabb_overlaps(const AABB *a, const AABB *b);
-AABB  aabb_combine(const AABB *a, const AABB *b);
+namespace aabb {
 
-Vector3 aabb_closestToPoint  (const AABB *a, const Vector3 *p);
-Vector3 aabb_closestToSegment(const AABB *a, const Vector3 *p, const Vector3 *q);
+int containsAABB(const AABB *a, const AABB *other);
+int containsPoint(const AABB *a, const Vector3 *p);
+float surfaceArea(const AABB *a);
+int overlaps(const AABB *a, const AABB *b);
+AABB combine(const AABB *a, const AABB *b);
 
+Vector3 closestToPoint (const AABB *a, const Vector3 *p);
+Vector3 closestToSegment(const AABB *a, const Vector3 *p, const Vector3 *q);
+
+}
 
 }
 

@@ -21,27 +21,27 @@
 */
 #include <libdragon.h>
 
-#include "game/e64_game.h"               /* init, state table, frame step    */
-#include "scene3d/e64_scene3d.h"         /* scene declaration and live scene */
-#include "entity/e64_entity3d.h"         /* one prefab placed in the world   */
-#include "viewport/e64_viewport.h"       /* screen modes and the live camera */
-#include "player/e64_player.h"           /* the seat a controller drives     */
-#include "control/e64_controller.h"      /* controller state and buttons     */
-#include "control/e64_camera_control.h"  /* buttons wired to camera motion   */
-#include "control/e64_character3d_control.h"  /* buttons wired to a body     */
-#include "control/e64_player_control.h"  /* reading a seat's buttons         */
-#include "camera/e64_spring_arm.h"       /* reading the arm back for debug   */
-#include "time/e64_time.h"               /* frame delta                      */
-#include "debug/e64_debug.h"             /* on-screen debug lines            */
-
-using namespace e64;
+#include "game/e64_game.h" /* init, state table, frame step */
+#include "game/e64_game_states.h"
+#include "scene3d/e64_scene3d.h" /* scene declaration and live scene */
+#include "entity/e64_entity3d.h" /* one prefab placed in the world */
+#include "viewport/e64_viewport.h" /* screen modes and the live camera */
+#include "player/e64_player.h" /* the seat a controller drives */
+#include "controller/e64_controller.h" /* controller state and buttons */
+#include "camera/e64_camera3d_control.h" /* buttons wired to camera motion */
+#include "character3d/e64_character3d_control.h" /* buttons wired to a body */
+#include "player/e64_player_control.h" /* reading a seat's buttons */
+#include "controller/e64_controls.h" /* the controls a state declares */
+#include "camera/e64_spring_arm.h" /* reading the arm back for debug */
+#include "time/e64_time.h" /* frame delta */
+#include "debug/e64_debug.h" /* on-screen debug lines */
 
 
 /* Light, fog and camera are declared in scene/, one file each, and referenced
    here to build the scene. The placement table is further down. */
-extern const LightDef  light;
-extern const FogDef    fog;
-extern const camera::Def camera;
+extern const e64::light::Def light;
+extern const e64::fog::Def fog;
+extern const e64::camera3d::Def camera;
 
 
 /* --- the room --------------------------------------------------------------
@@ -57,17 +57,17 @@ extern const camera::Def camera;
 /* A collider is an array of shapes, each with its own offset. SHAPE_MESH is
    triangle geometry and is static only: it collides but is never simulated,
    which is what level geometry wants. */
-static const PhysicsShapeDef room_shapes[] = {
+static const e64::physics::Shape::Def room_shapes[] = {
 
-	{ .type = SHAPE_MESH, .mesh = { .path = "rom:/collision/room.collision" }},
+	{ .type = e64::physics::Shape::SHAPE_MESH, .mesh = { .path = "rom:/collision/room.collision" }},
 };
 
-static const entity3d::ColliderDef room_collider = { room_shapes, 1 };
+static const e64::collider::Def room_collider = { room_shapes, 1 };
 
-static const Prefab3D room = {
+static const e64::Prefab3D room = {
 
-	.type     = PREFAB3D_PROP,
-	.model    = "rom:/models/room.t3dm",
+	.type = e64::prefab3d::PREFAB3D_PROP,
+	.model = "rom:/models/room.t3dm",
 	.collider = &room_collider,
 };
 
@@ -90,27 +90,27 @@ static const Prefab3D room = {
    speeds, dropping the proportional reading: the stick selects a gait by
    crossing its threshold, and the body accelerates towards that gait's speed at
    its response rate. */
-static const character3d::GaitSettings gait[] = {
+static const e64::character3d::GaitSettings gait[] = {
 
 	{ .target_speed = 7.0f, .response_rate = 8.0f, .rotation_response_rate = 12.0f },
 };
 
-static const character3d::MovementSettings movement = {
+static const e64::character3d::MovementSettings movement = {
 
 	/* How fast the body sheds speed and settles its facing with no input. */
-	.idle_response_rate          = 12.0f,
+	.idle_response_rate = 12.0f,
 	.idle_rotation_response_rate = 10.0f,
 
-	.gait       = gait,
+	.gait = gait,
 	.gait_count = E64_ARRAY_COUNT(gait),
 
 	/* Two ways a button becomes height. JUMP_SNAP leaves the floor on the
 	   frame the button goes down and keeps rising while it is held; JUMP_CHARGE
 	   crouches first and launches on release, with the crouch deciding the
 	   height. */
-	.jump_mode               = character3d::JUMP_SNAP,
-	.jump_response_rate      = 10.0f,
-	.jump_base_speed         =  9.0f,
+	.jump_mode = e64::character3d::JUMP_SNAP,
+	.jump_response_rate = 10.0f,
+	.jump_base_speed = 9.0f,
 
 	/* Snap only: the fraction of gravity paid while the button stays down, and
 	   only on the way up. Lower jumps higher, 1.0 makes holding do nothing.
@@ -118,7 +118,7 @@ static const character3d::MovementSettings movement = {
 
 	   .jump_coyote_time belongs here too, and is left at zero: the jump stops
 	   answering the moment the floor is gone. */
-	.jump_hold_gravity_scale =  0.7f,
+	.jump_hold_gravity_scale = 0.7f,
 
 	/* How much of the ground's steering the body keeps in the air, 0 to 1. At
 	   zero a jump holds the heading and speed it launched with and the stick
@@ -128,7 +128,7 @@ static const character3d::MovementSettings movement = {
 
 /* The capsule the body collides with, standing upright. Radius and height in
    metres, height being the whole capsule end to end. */
-static const character3d::ColliderSettings collider = {
+static const e64::character3d::ColliderSettings collider = {
 
 	.radius = 0.35f,
 	.height = 1.80f,
@@ -137,7 +137,7 @@ static const character3d::ColliderSettings collider = {
 /* A character is assembled from independent blocks of settings, and only the
    ones it needs. Animation, weapons, aiming, sound, stats and spring bones are
    all optional and left out here: this body walks and jumps, nothing else. */
-static const character3d::Def character3d_def = {
+static const e64::character3d::Def character3d_def = {
 
 	.movement_settings = &movement,
 	.collider_settings = &collider
@@ -146,10 +146,10 @@ static const character3d::Def character3d_def = {
 /* The prefab a scene can place: the model drawn for it, plus the character
    built on top. PREFAB3D_CHARACTER is what makes the engine create a
    Character3D for this entity instead of leaving it as scenery. */
-static const Prefab3D character = {
+static const e64::Prefab3D character = {
 
-	.type      = PREFAB3D_CHARACTER,
-	.model     = "rom:/models/capsule.t3dm",
+	.type = e64::prefab3d::PREFAB3D_CHARACTER,
+	.model = "rom:/models/capsule.t3dm",
 	.character = &character3d_def,
 };
 
@@ -166,73 +166,68 @@ static const Prefab3D character = {
 
 /* Naming a player here also decides what the camera follows: it tracks the
    body seated in that slot, with no target passed in from the game. */
-static const camera::ControlBinding camera_binding = {
+static const e64::camera3d::ControlBinding camera_binding = {
 
-	.player = PLAYER_1,
+	.player = e64::PLAYER_1,
+	.camera = &camera,
 
-	/* The engine has a namespace of this name (camera::), so with `using
-	   namespace e64` the variable is reached through the global scope. */
-	.camera = &::camera,
+	.pan_left = e64::BTN_C_LEFT,
+	.pan_right = e64::BTN_C_RIGHT,
+	.tilt_up = e64::BTN_C_UP,
+	.tilt_down = e64::BTN_C_DOWN,
 
-	.pan_left  = BTN_C_LEFT,
-	.pan_right = BTN_C_RIGHT,
-	.tilt_up   = BTN_C_UP,
-	.tilt_down = BTN_C_DOWN,
+	.distance_in = e64::BTN_L,
+	.distance_out = e64::BTN_R,
 
-	.distance_in  = BTN_L,
-	.distance_out = BTN_R,
-
-	.fov_in    = BTN_D_UP,
-	.fov_out   = BTN_D_DOWN,
+	.fov_in = e64::BTN_D_UP,
+	.fov_out = e64::BTN_D_DOWN,
 };
 
-/* The prefabs it drives are what seat the player: the scene builds a body from
-   one of them, and that body is the one this controller moves. A single one
-   here, since this example places one character. */
-static const Prefab3D *const character3d_prefab[] = { &character };
+/* The scene entity it drives is what seats the player: the scene builds a
+   body from that row, and that body is the one this controller moves. The
+   table is declared further down. */
+extern e64::scene3d::Entity scene_entities[];
 
-static const character3d::ControlBinding character3d_binding = {
+static const e64::character3d::ControlBinding character3d_binding = {
 
-	.player          = PLAYER_1,
-	.character       = character3d_prefab,
-	.character_count = E64_ARRAY_COUNT(character3d_prefab),
+	.player = e64::PLAYER_1,
+	.character = &scene_entities[1],
 
-	.jump = BTN_A,
+	.jump = e64::BTN_A,
 };
 
-static const controls::Def controls = {
+static const e64::controls::Def controls = {
 
-	.camera      = &camera_binding,
+	.camera = &camera_binding,
 	.character3d = &character3d_binding,
 };
 
 
 
 /* --- the scene -------------------------------------------------------------
-	One row per instance: which prefab, then position, rotation and scale.
+	One row per entity: which prefab, then position, rotation and scale.
 	Prefabs carry no transform, so placing one twice is just another row.
 
-	Rows are built in order and the live scene keeps that order. Characters are
-	numbered separately from entities, in the same placement order: this is the
-	first character row, so it is character 0.
+	Rows are built in order and the live scene keeps that order. The character
+	binding above points at its row, which is how the player gets that body.
 
 	Fields left out of a row are zero, and a zero scale means original size.
 */
 
-static Scene3DPrefab scene_prefabs[] = {
+e64::scene3d::Entity scene_entities[] = {
 
 	{ &room },
 	{ &character, { 0.0f, 0.0f, 0.0f } },
 };
 
-static Scene3DDef scene = {
+static e64::scene3d::Def scene = {
 
-	.light  = &light,
-	.fog    = &fog,
-	.camera = &::camera,
+	.light = &light,
+	.fog = &fog,
+	.camera = &camera,
 
-	.prefab       = scene_prefabs,
-	.prefab_count = E64_ARRAY_COUNT(scene_prefabs),
+	.entity = scene_entities,
+	.entity_count = E64_ARRAY_COUNT(scene_entities),
 };
 
 
@@ -245,52 +240,52 @@ enum { GAMEPLAY3D, STATE_COUNT };
 
 static void gameplay3d_update(void)
 {
-	Viewport *viewport = viewport_get();
+	e64::Viewport *viewport = e64::viewport::get();
 
 	/* The movement step, in two halves. The first reads the seat's buttons and
 	   stick and turns them into a movement command, rotated by the camera
 	   angle so pushing up always walks away from the camera. The second runs
 	   that command through the movement settings and produces velocity. */
-	player::setCharacter3DControl(PLAYER_1, viewport);
-	player::update();
+	e64::player::setCharacter3DControl(e64::PLAYER_1, viewport);
+	e64::player::update();
 
 	/* Characters resolve their own collision and write their own matrix for
 	   this frame's buffer. Call it once per frame, after the movement step. */
-	scene3d_updateCharacters(viewport->fb_index);
+	e64::scene3d::updateCharacters(viewport->fb_index);
 
 	/* The camera, driven straight from its binding rather than through
-	   scene3d_updateCamera. The binding names a player, and the camera follows
+	   scene3d::updateCamera. The binding names a player, and the camera follows
 	   that player's body on its own, so there is no target to supply here.
 	   Example 01 does the other thing: no body, so the game supplies a point. */
-	camera::control::update(&viewport->camera, viewport->camera.binding, scene3d_get(), time_get()->delta);
-	viewport_setPerspectiveCamera();
+	e64::camera3d::control::update(&viewport->camera, viewport->camera.binding, e64::scene3d::get(), e64::time::get()->delta);
+	e64::viewport::setPerspectiveCamera();
 
 	/* Debug lines have to be rewritten every frame; nothing persists. */
-	debugUI_set(0, "STICK walk");
-	debugUI_set(1, "A jump");
-	debugUI_set(3, "CBUTTONS orbit camera");
-	debugUI_set(4, "L R arm length");
-	debugUI_set(5, "DPAD fov");
+	e64::debug::ui::set(0, "STICK walk");
+	e64::debug::ui::set(1, "A jump");
+	e64::debug::ui::set(3, "CBUTTONS orbit camera");
+	e64::debug::ui::set(4, "L R arm length");
+	e64::debug::ui::set(5, "DPAD fov");
 
-	debugUI_showFPS();
-	debugUI_setRight(0, "arm %.1f", camera::springArm::getLength(&viewport->camera));
-	debugUI_setRight(1, "fov %.1f", viewport->camera.field_of_view);
+	e64::debug::ui::showFPS();
+	e64::debug::ui::setRight(0, "arm %.1f", e64::camera3d::springArm::getLength(&viewport->camera));
+	e64::debug::ui::setRight(1, "fov %.1f", viewport->camera.field_of_view);
 }
 
-static const GameStateDef states[STATE_COUNT] = {
+static const e64::Game::State::Def states[STATE_COUNT] = {
 
 	[GAMEPLAY3D] = {
-		.update        = gameplay3d_update,
-		.scene3d       = &scene,
+		.update = gameplay3d_update,
+		.scene3d = &scene,
 
 		/* Wired once, after the scene is loaded and before the first update:
 		   the player is seated on the body the binding names, and the camera
 		   answers to the buttons that name it. */
-		.controls      = &::controls,
+		.controls = &controls,
 
 		/* The engine opens no screen by itself, so every state that draws has
 		   to name a mode. */
-		.viewport   = SCREEN_320x240,
+		.viewport = SCREEN_320x240,
 	},
 };
 
@@ -304,19 +299,19 @@ int main()
 
 	/* Brings up video, audio, controllers, physics and the ROM filesystem.
 	   Runs before anything else the engine offers. */
-	game_init();
+	e64::game::init();
 
-	debugUI_init();
+	e64::debug::ui::init();
 
 	/* Hands over the state table and enters the initial state, which loads the
 	   scene and then wires the controls it declared. */
-	game_start(states, STATE_COUNT, GAMEPLAY3D);
+	e64::game::state::start(states, STATE_COUNT, GAMEPLAY3D);
 
 	/* One frame per iteration: poll the controllers, step the physics, run the
 	   current state's update, draw. */
-	for (;;) game_runStep();
+	for (;;) e64::game::runStep();
 
-	game_close();
+	e64::game::close();
 
 	return 0;
 }

@@ -20,8 +20,8 @@ Entity2D *create(const Def *def)
 
 	/* The definition names the file; the live graphic gets it loaded. */
 	*graphic = *def->graphic;
-	if (graphic->type == GRAPHIC_SPRITE) {
-		graphic->sprite.asset = (sprite_t *)resource_load(graphic->sprite.path, RESOURCE_SPRITE, NULL);
+	if (graphic->type == Graphic::SPRITE) {
+		graphic->sprite.asset = (sprite_t *)resource::load(graphic->sprite.path, Resource::SPRITE, NULL);
 		assert(graphic->sprite.asset);
 	}
 
@@ -29,9 +29,9 @@ Entity2D *create(const Def *def)
 
 	*entity = (Entity2D){
 		.position = def->position,
-		.scale    = unit_scale ? (Vector2){ 1.0f, 1.0f } : def->scale,
+		.scale = unit_scale ? (Vector2){ 1.0f, 1.0f } : def->scale,
 		.rotation = def->rotation,
-		.graphic  = graphic,
+		.graphic = graphic,
 	};
 
 	/* The sounds open with the entity. A looping one starts here and stops
@@ -42,9 +42,9 @@ Entity2D *create(const Def *def)
 		entity->sound = (Sound *)malloc(def->sound_count * sizeof(Sound));
 		assert(entity->sound);
 		for (int i = 0; i < def->sound_count; i++) {
-			entity->sound[i] = sound_load(def->sound[i]);
+			entity->sound[i] = sound::load(def->sound[i]);
 			if (def->sound[i]->loop)
-				sound_play(&entity->sound[i], &flat, 1.0f, 0.0f);
+				sound::play(&entity->sound[i], &flat, 1.0f, 0.0f);
 		}
 		entity->sound_count = def->sound_count;
 	}
@@ -57,11 +57,11 @@ void destroy(Entity2D *entity)
 	if (!entity) return;
 
 	for (int i = 0; i < entity->sound_count; i++)
-		sound_unload(&entity->sound[i]);
+		sound::unload(&entity->sound[i]);
 	free(entity->sound);
 
-	if (entity->graphic->type == GRAPHIC_SPRITE)
-		resource_unload(entity->graphic->sprite.asset);
+	if (entity->graphic->type == Graphic::SPRITE)
+		resource::unload(entity->graphic->sprite.asset);
 
 	free(entity->graphic);
 	free(entity);

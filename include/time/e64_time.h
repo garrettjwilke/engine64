@@ -3,25 +3,29 @@
 
 namespace e64 {
 
-typedef struct
-{
+class Time {
+public:
+
 	float counter;
 	float delta;
 	float rate;
 
-} TimeData;
+};
 
 
-TimeData* time_get(void);
+namespace time {
 
-void time_init();
-void time_update();
-void time_setScale(float scale);
+Time *get(void);
+
+void init(void);
+void update(void);
+void setScale(float scale);
 
 /* After a blocking load: drops the time it took, so the next frame's delta
    is a normal one instead of the whole load measured as gameplay. */
-void time_reset();
+void reset(void);
 
+}
 
 }
 

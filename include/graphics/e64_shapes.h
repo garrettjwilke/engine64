@@ -2,29 +2,32 @@
 #define ENGINE64_SHAPES_H
 
 #include <libdragon.h>
-#include "physics/math/e64_vector2.h"
+#include "math/e64_vector2.h"
 
 namespace e64 {
 
-typedef enum {
+class Rectangle {
+public:
 
-	SHAPE_FILL_SOLID,
-	SHAPE_FILL_GRADIENT,
-	
-} ShapeFill;
+	enum Fill {
+		SOLID,
+		GRADIENT,
+	};
 
-typedef struct {
 
-	ShapeFill fill;
+	Fill fill;
 	union {
 		color_t color;
 		color_t gradient[4];
 	};
+};
 
-} Rectangle;
 
+namespace rectangle {
 
-void shape_drawRectangle(const Rectangle *rect, Vector2 position, Vector2 scale);
+void draw(const Rectangle *rect, Vector2 position, Vector2 scale);
+
+}
 
 }
 

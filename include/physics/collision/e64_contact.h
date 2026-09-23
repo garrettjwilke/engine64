@@ -20,8 +20,9 @@
 */
 
 /*
-	Contact point, manifold, edge, constraint. Pairs work on PhysicsShape (box
-	/ sphere / capsule via tagged union).
+	Contact point, manifold, edge, constraint. Pairs work on physics::Shape
+	(box / sphere / capsule via tagged union). Manager and Solver are defined
+	in their own headers as Contact::Manager and Contact::Solver.
 */
 #ifndef ENGINE64_CONTACT_H
 #define ENGINE64_CONTACT_H
@@ -29,111 +30,138 @@
 #include <math.h>
 #include <stdint.h>
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_math_common.h"
+#include "math/e64_vector3.h"
+#include "math/e64_math.h"
 #include "physics/shapes/e64_physics_shape.h"
 
 namespace e64 {
 
-struct RigidBody;
-struct ContactConstraint;
-
-
-/* 32-bit key identifying a contact point across frames. */
-typedef union FeaturePair {
-	struct {
-		uint8_t in_r;
-		uint8_t out_r;
-		uint8_t in_i;
-		uint8_t out_i;
-	};
-	int32_t key;
-} FeaturePair;
-
-
-typedef struct ContactPoint {
-	Vector3     position;
-	float       penetration;
-	float       normal_impulse;
-	float       tangent_impulse[2];
-	float       bias;
-	float       normal_mass;
-	float       tangent_mass[2];
-	FeaturePair fp;
-	uint8_t     warm_started;
-} ContactPoint;
-
-
-/* Up to 8 contact points between two shapes. */
-typedef struct ContactManifold {
-	PhysicsShape *A;
-	PhysicsShape *B;
-
-	Vector3       normal;               /* from A to B */
-	Vector3       tangent_vectors[2];
-	ContactPoint  contacts[8];
-	int32_t       contact_count;
-
-	struct ContactManifold *next;
-	struct ContactManifold *prev;
-
-	int sensor;
-} ContactManifold;
-
-
-void contactManifold_setPair(ContactManifold *m, PhysicsShape *a, PhysicsShape *b);
-
-
-/* Node in a body's intrusive contact list. */
-typedef struct ContactEdge {
-	struct RigidBody         *other;
-	struct ContactConstraint *constraint;
-	struct ContactEdge       *next;
-	struct ContactEdge       *prev;
-} ContactEdge;
+class RigidBody;
 
 
 enum {
-	CONSTRAINT_COLLIDING     = 0x00000001,
+	CONSTRAINT_COLLIDING = 0x00000001,
 	CONSTRAINT_WAS_COLLIDING = 0x00000002,
-	CONSTRAINT_ISLAND        = 0x00000004,
+	CONSTRAINT_ISLAND = 0x00000004,
 };
 
 
-/* Persistent constraint between two bodies. */
-typedef struct ContactConstraint {
-	PhysicsShape     *A;
-	PhysicsShape     *B;
-	struct RigidBody *body_a;
-	struct RigidBody *body_b;
+class Contact {
+public:
 
-	ContactEdge       edge_a;
-	ContactEdge       edge_b;
-	struct ContactConstraint *next;
-	struct ContactConstraint *prev;
-
-	float friction;
-	float restitution;
-
-	ContactManifold manifold;
-
-	int32_t flags;
-} ContactConstraint;
+	/* 32-bit key identifying a contact point across frames. */
+	union FeaturePair {
+		struct {
+			uint8_t in_r;
+			uint8_t out_r;
+			uint8_t in_i;
+			uint8_t out_i;
+		};
+		int32_t key;
+	};
 
 
-void contactConstraint_solveCollision(ContactConstraint *c);
+	struct Point {
+		Vector3 position;
+		float penetration;
+		float normal_impulse;
+		float tangent_impulse[2];
+		float bias;
+		float normal_mass;
+		float tangent_mass[2];
+		FeaturePair fp;
+		uint8_t warm_started;
+	};
+
+
+	/* Up to 8 contact points between two shapes. */
+	struct Manifold {
+		physics::Shape *A;
+		physics::Shape *B;
+
+		Vector3 normal; /* from A to B */
+		Vector3 tangent_vectors[2];
+		Point contacts[8];
+		int32_t contact_count;
+
+		Manifold *next;
+		Manifold *prev;
+
+		int sensor;
+	};
+
+
+	struct Constraint;
+
+	/* Node in a body's intrusive contact list. */
+	struct Edge {
+		RigidBody *other;
+		Constraint *constraint;
+		Edge *next;
+		Edge *prev;
+	};
+
+
+	/* Persistent constraint between two bodies. */
+	struct Constraint {
+		physics::Shape *A;
+		physics::Shape *B;
+		RigidBody *body_a;
+		RigidBody *body_b;
+
+		Edge edge_a;
+		Edge edge_b;
+		Constraint *next;
+		Constraint *prev;
+
+		float friction;
+		float restitution;
+
+		Manifold manifold;
+
+		int32_t flags;
+	};
+
+
+	/* Broadphase proxy pair, by tree index. */
+	struct Pair {
+		int32_t A;
+		int32_t B;
+	};
+
+
+	class Manager; /* e64_contact_manager.h */
+	class Solver; /* e64_contact_solver.h */
+};
+
+
+namespace contact {
+
+namespace manifold {
+
+void setPair(Contact::Manifold *m, physics::Shape *a, physics::Shape *b);
+
+}
+
+
+namespace constraint {
+
+void solveCollision(Contact::Constraint *c);
+
+}
 
 
 /* Restitution keeps the max, so the bounciest side wins; friction takes the
    geometric mean, so the slippery side dominates. */
-static inline float contact_mixRestitution(const PhysicsShape *A, const PhysicsShape *B) {
+static inline float mixRestitution(const physics::Shape *A, const physics::Shape *B) {
 	return (A->restitution > B->restitution) ? A->restitution : B->restitution;
 }
 
-static inline float contact_mixFriction(const PhysicsShape *A, const PhysicsShape *B) {
+static inline float mixFriction(const physics::Shape *A, const physics::Shape *B) {
 	return sqrtf(A->friction * B->friction);
 }
 
+}
 
 }
 

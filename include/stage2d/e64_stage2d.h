@@ -1,6 +1,6 @@
 /*
 	The 2D stage: the tile map a level is built of, authored in Tiled and
-	loaded from its .stage2d binary. Once loaded it is an array of Element2D,
+	loaded from its .stage2d binary. Once loaded it is an array of Render::Element2D,
 	one per cell that holds a tile, in world pixels: the scene copies it into
 	the frame through the camera the way it copies its entities, and the
 	render never knows a stage exists.
@@ -21,31 +21,35 @@
 
 namespace e64 {
 
-#define STAGE2D_MAX_LAYER 16
+namespace stage2d {
+
+constexpr int MAX_LAYER = 16;
 /* A cell is one byte, 0 empty: as many tiles as a byte can name. */
-#define STAGE2D_MAX_TILE  255
+constexpr int MAX_TILE = 255;
 
 
 /* What the prefab declares: the file. Where the stage stands comes from
    the placement, like every other prefab. */
-typedef struct Stage2DDef {
+typedef struct Def {
 
 	const char *path;
 
-} Stage2DDef;
+} Def;
 
 
 /* One grid of the map, in draw order, back to front: what it takes of the
    camera's scroll, its cells, and which run of the element array is its. */
-typedef struct Stage2DLayer {
+typedef struct Layer {
 
-	float          parallax;
+	float parallax;
 	const uint8_t *cell;
 
 	uint16_t element_start;
 	uint16_t element_count;
 
-} Stage2DLayer;
+} Layer;
+
+}
 
 
 typedef struct Stage2D {
@@ -56,17 +60,17 @@ typedef struct Stage2D {
 
 	/* The stage as drawn: one element per cell with a tile, positions in
 	   world pixels relative to the entity, layer after layer. */
-	Element2D *element;
-	uint16_t   element_count;
+	Render::Element2D *element;
+	uint16_t element_count;
 
-	uint16_t width;        /* cells */
+	uint16_t width; /* cells */
 	uint16_t height;
-	uint16_t stride;       /* bytes per row in the grids */
-	uint16_t cell_width;   /* pixels */
+	uint16_t stride; /* bytes per row in the grids */
+	uint16_t cell_width; /* pixels */
 	uint16_t cell_height;
 
-	uint8_t      layer_count;
-	Stage2DLayer layer[STAGE2D_MAX_LAYER];
+	uint8_t layer_count;
+	stage2d::Layer layer[stage2d::MAX_LAYER];
 
 	/* One bit per tile number as the cells count them: set, the tile is
 	   one the body stands on and walks into, from Tiled's "solid" tile
@@ -77,8 +81,8 @@ typedef struct Stage2D {
 	   tile's is: slot[n] is 1 + its index in graphic, 0 for a tile no cell
 	   draws. */
 	Graphic *graphic;
-	uint8_t  graphic_count;
-	uint8_t  slot[STAGE2D_MAX_TILE + 1];
+	uint8_t graphic_count;
+	uint8_t slot[stage2d::MAX_TILE + 1];
 
 	/* The tile paths, one string per open graphic, kept for as long as the
 	   sprites are open: the resource table holds the pointer, not a copy. */
@@ -90,24 +94,28 @@ typedef struct Stage2D {
 } Stage2D;
 
 
-Stage2D *stage2d_create(const Stage2DDef *def, Entity2D *entity);
-void     stage2d_delete(Stage2D *stage);
+namespace stage2d {
+
+Stage2D *create(const Def *def, Entity2D *entity);
+void destroy(Stage2D *stage);
 
 /* Copies the stage's elements into the frame, each carried to the screen
    through the camera with its layer's parallax, the same as the scene does
    with an entity. What lands off the screen is left out. */
-void stage2d_setRenderContext(const Stage2D *stage, const Camera2D *camera, RenderContext *ctx);
+void setRenderContext(const Stage2D *stage, const Camera2D *camera, Render::Context *ctx);
 
 /* The cell a world position falls in. Outside the map gives coordinates
    outside 0..width-1 / 0..height-1, which getTile answers as empty. */
-void stage2d_getCell(const Stage2D *stage, Vector2 position, int32_t *x, int32_t *y);
+void getCell(const Stage2D *stage, Vector2 position, int32_t *x, int32_t *y);
 
 /* What a layer holds at a cell: 0 empty, n the tile n-1. */
-uint8_t stage2d_getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t y);
+uint8_t getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t y);
 
 /* Whether any layer holds a solid tile at the cell. Outside the map is
    open. */
-bool stage2d_isSolid(const Stage2D *stage, int32_t x, int32_t y);
+bool isSolid(const Stage2D *stage, int32_t x, int32_t y);
+
+}
 
 }
 

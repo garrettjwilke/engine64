@@ -42,31 +42,31 @@ typedef enum {
 
 typedef struct WeaponDef {
 
-	const char *mesh;            /* object name inside the character model */
-	const char *bone;            /* bone the mesh is skinned to */
-	const char *holster_bone;    /* reference bone while holstered */
-	const char *hand_bone;       /* reference bone while drawn */
+	const char *mesh; /* object name inside the character model */
+	const char *bone; /* bone the mesh is skinned to */
+	const char *holster_bone; /* reference bone while holstered */
+	const char *hand_bone; /* reference bone while drawn */
 
 	uint8_t type;
 	uint8_t shoot_mode;
 	uint8_t magazine_size;
 	uint8_t max_integrity;
 
-	T3DVec3 holster_position;    /* relative to holster_bone */
+	T3DVec3 holster_position; /* relative to holster_bone */
 	T3DQuat holster_rotation;
-	T3DVec3 holding_position;    /* relative to hand_bone */
+	T3DVec3 holding_position; /* relative to hand_bone */
 	T3DQuat holding_rotation;
 
 } WeaponDef;
 
 typedef struct WeaponSlot {
 
-	const WeaponDef *weapon;     /* NULL = empty slot */
+	const WeaponDef *weapon; /* NULL = empty slot */
 	uint8_t rounds;
 	uint8_t integrity;
 
-	uint8_t part;                /* resolved mesh part (visibility bit) */
-	int16_t bone;                /* resolved bone indices */
+	uint8_t part; /* resolved mesh part (visibility bit) */
+	int16_t bone; /* resolved bone indices */
 	int16_t holster_bone;
 	int16_t hand_bone;
 
@@ -89,14 +89,14 @@ typedef struct Weapons {
 
 	const WeaponsDef *def;
 	WeaponSlot slot[WEAPON_SLOT_COUNT];
-	uint8_t    drawn;            /* slot in hand, CHARACTER3D_WEAPON_DRAWN_NONE = all holstered */
+	uint8_t drawn; /* slot in hand, CHARACTER3D_WEAPON_DRAWN_NONE = all holstered */
 
 } Weapons;
 
 
 namespace weapon {
 
-void equip  (Character3D *character, uint8_t slot, const WeaponDef *weapon);
+void equip (Character3D *character, uint8_t slot, const WeaponDef *weapon);
 void unequip(Character3D *character, uint8_t slot);
 
 /* Steps the drawn weapon through the occupied slots, unarmed included as a

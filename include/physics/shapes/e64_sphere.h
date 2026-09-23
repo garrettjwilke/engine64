@@ -1,47 +1,56 @@
 /*
-	Sphere geometry (radius). Admin fields live in PhysicsShape.
+	Sphere geometry (radius). Admin fields live in physics::Shape.
 */
 #ifndef ENGINE64_SPHERE_H
 #define ENGINE64_SPHERE_H
 
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_transform.h"
+#include "math/e64_vector3.h"
+#include "math/e64_transform.h"
 #include "physics/geometry/e64_aabb.h"
 #include "physics/geometry/e64_raycast.h"
 
 namespace e64 {
 
-struct MassData;
+namespace physics { namespace shape { struct MassData; } }
 
 
-typedef struct Sphere {
+class Sphere {
+public:
+
+	struct Def {
+		Transform tx;
+		float radius;
+		float friction;
+		float restitution;
+		float density;
+		int sensor;
+	};
+
+
 	float radius;
-} Sphere;
+};
 
 
-typedef struct SphereDef {
-	Transform tx;
-	float     radius;
-	float     friction;
-	float     restitution;
-	float     density;
-	int       sensor;
-} SphereDef;
+namespace sphere {
+
+int testPoint(const Sphere *s, const Transform *world, const Vector3 *p);
+int raycast(const Sphere *s, const Transform *world, RaycastData *raycast);
+void computeAABB(const Sphere *s, const Transform *world, AABB *aabb);
+void computeMass(const Sphere *s, const Transform *local, float density, physics::shape::MassData *md);
 
 
-int   sphere_testPoint(const Sphere *s, const Transform *world, const Vector3 *p);
-int   sphere_raycast(const Sphere *s, const Transform *world, RaycastData *raycast);
-void  sphere_computeAABB(const Sphere *s, const Transform *world, AABB *aabb);
-void  sphere_computeMass(const Sphere *s, const Transform *local, float density, struct MassData *md);
+namespace def {
 
+void init(Sphere::Def *d);
+void set(Sphere::Def *d, const Transform *tx, float radius);
+void setFriction(Sphere::Def *d, float f);
+void setRestitution(Sphere::Def *d, float r);
+void setDensity(Sphere::Def *d, float rho);
+void setSensor(Sphere::Def *d, int s);
 
-void  sphereDef_init(SphereDef *d);
-void  sphereDef_set(SphereDef *d, const Transform *tx, float radius);
-void  sphereDef_setFriction(SphereDef *d, float f);
-void  sphereDef_setRestitution(SphereDef *d, float r);
-void  sphereDef_setDensity(SphereDef *d, float rho);
-void  sphereDef_setSensor(SphereDef *d, int s);
+}
 
+}
 
 }
 

@@ -20,12 +20,12 @@ namespace character2d {
 static void setEntity(Character2D *character)
 {
 	Entity2D *entity = character->entity;
-	Sprite   *sprite = &entity->graphic->sprite;
+	Sprite *sprite = &entity->graphic->sprite;
 
-	sprite->asset  = animation::getSprite(character);
-	sprite->cols   = 0;
-	sprite->rows   = 0;
-	sprite->frame  = 0;
+	sprite->asset = animation::getSprite(character);
+	sprite->cols = 0;
+	sprite->rows = 0;
+	sprite->frame = 0;
 	/* The frames are drawn facing left, so the mirror is the right side. */
 	sprite->flip_x = !character->facing_left;
 
@@ -37,7 +37,7 @@ static void setEntity(Character2D *character)
 	   would land the body on whole world pixels and then on whole screen
 	   ones, and the two together hold it still for a frame and move it two
 	   the next. */
-	float w = sprite->asset->width  * entity->scale.x;
+	float w = sprite->asset->width * entity->scale.x;
 	float h = sprite->asset->height * entity->scale.y;
 
 	entity->position.x = character->position.x - w * 0.5f;
@@ -47,18 +47,18 @@ static void setEntity(Character2D *character)
 
 Character2D *create(const Def *def, Entity2D *entity)
 {
-	assert(def && entity && entity->graphic->type == GRAPHIC_SPRITE);
+	assert(def && entity && entity->graphic->type == Graphic::SPRITE);
 
 	Character2D *character = (Character2D *)malloc(sizeof(Character2D));
 	assert(character);
 
 	/* The placement put the feet where the entity stands. */
 	*character = (Character2D){
-		.def           = def,
-		.entity        = entity,
+		.def = def,
+		.entity = entity,
 		.entity_sprite = entity->graphic->sprite.asset,
-		.position      = entity->position,
-		.movement      = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT2D_STATE_IDLE },
+		.position = entity->position,
+		.movement = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT2D_STATE_IDLE },
 	};
 
 	animation::init(character, def->animation_def);

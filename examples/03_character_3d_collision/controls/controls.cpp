@@ -10,61 +10,53 @@
 	either of them: it always drives the body, and the camera takes its angle
 	from where it already is.
 */
-#include "control/e64_player_control.h"
+#include "controller/e64_controls.h"
 
-#include "camera/e64_camera.h"
-#include "prefab/e64_prefab3d.h"
-
-using namespace e64;
+#include "camera/e64_camera3d.h"
+#include "scene3d/e64_scene3d.h"
 
 
-extern const camera::Def camera;
-extern const Prefab3D  character;
+extern const e64::camera3d::Def camera;
+extern e64::scene3d::Entity scene_entities[];
 
 
 /* Naming the player here is also what the camera follows: it tracks the body
    seated in that slot, with no target passed in from the game. */
-extern const camera::ControlBinding camera_binding = {
+extern const e64::camera3d::ControlBinding camera_binding = {
 
-	.player = PLAYER_1,
+	.player = e64::PLAYER_1,
+	.camera = &camera,
 
-	/* The engine has a namespace of this name (camera::), so with `using
-	   namespace e64` the variable is reached through the global scope. */
-	.camera = &::camera,
+	.pan_left = e64::BTN_C_LEFT,
+	.pan_right = e64::BTN_C_RIGHT,
+	.tilt_up = e64::BTN_C_UP,
+	.tilt_down = e64::BTN_C_DOWN,
 
-	.pan_left  = BTN_C_LEFT,
-	.pan_right = BTN_C_RIGHT,
-	.tilt_up   = BTN_C_UP,
-	.tilt_down = BTN_C_DOWN,
+	.distance_in = e64::BTN_L,
+	.distance_out = e64::BTN_R,
 
-	.distance_in  = BTN_L,
-	.distance_out = BTN_R,
-
-	.fov_in    = BTN_D_UP,
-	.fov_out   = BTN_D_DOWN,
+	.fov_in = e64::BTN_D_UP,
+	.fov_out = e64::BTN_D_DOWN,
 };
 
-/* The prefabs it drives are what seat the player: the scene builds a body
-   from one of them, and that body is the one this controller moves. A single
-   one here, since this example places one character.
+/* The scene entity it drives is what seats the player: the scene builds a
+   body from that row, and that body is the one this controller moves. The
+   character is the first row of the entity table in main.cpp.
 
    Only what this body can do. Aiming, shooting and weapon switching are left
    out, so those buttons read as never pressed. */
-static const Prefab3D *const character3d_prefab[] = { &character };
+extern const e64::character3d::ControlBinding character3d_binding = {
 
-extern const character3d::ControlBinding character3d_binding = {
+	.player = e64::PLAYER_1,
+	.character = &scene_entities[0],
 
-	.player          = PLAYER_1,
-	.character       = character3d_prefab,
-	.character_count = E64_ARRAY_COUNT(character3d_prefab),
-
-	.jump   = BTN_A,
-	.sprint = BTN_Z,
+	.jump = e64::BTN_A,
+	.sprint = e64::BTN_Z,
 };
 
 /* The state names this, and the engine wires both when it is entered. */
-extern const controls::Def controls = {
+extern const e64::controls::Def controls = {
 
-	.camera      = &camera_binding,
+	.camera = &camera_binding,
 	.character3d = &character3d_binding,
 };

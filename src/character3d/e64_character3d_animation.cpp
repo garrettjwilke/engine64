@@ -1,189 +1,39 @@
 #include <assert.h>
 #include <math.h>
 #include <fmath.h>
-#include <malloc.h>
-#include <string.h>
-#include <stdio.h>
 #include <libdragon.h>
 #include "time/e64_time.h"
 #include "entity/e64_entity3d.h"
 #include "viewport/e64_viewport.h"
-#include "physics/math/e64_math_common.h"
+#include "math/e64_math.h"
 
 namespace e64 {
-
-/* Open clips hold a FILE, and libc caps those at 64 (lock pool) — fmemopen
-   streams included, they take a lock like any file. Clips open on first use
-   and close after a while untouched, so only the graph's working set holds
-   files. The delay keeps blend-boundary flicker from churning open/close,
-   and the hard cap bounds the open set no matter the input. */
-#define ANIMATION_CLIP_CLOSE_DELAY 60   /* frames untouched before closing */
-#define ANIMATION_CLIP_MAX_OPEN    24   /* per character */
-
-
 namespace character3d {
 
-/* --- layers ----------------------------------------------------------------- */
-
-void AnimationBuffer::addLayer(const T3DSkeleton *skel, float layer_weight)
-{
-	/* Never write past the stack: a dropped layer is a pose glitch, an
-	   overflow is garbage quaternions frames later. */
-	assert(count < ANIMATION_MAX_LAYERS);
-	if (count >= ANIMATION_MAX_LAYERS) return;
-
-	layer[count]  = skel;
-	weight[count] = layer_weight;
-	count++;
-}
-
-/* A layer at this weight or above replaces the pose outright: the first
-   corner of a grid at full weight always lands here through the dilution in
-   evaluateGraph, and the nlerp it would get costs a sqrt and a divide per bone
-   to hand back the layer's own quaternion. What the copy leaves out of the
-   blend is a hundredth of the pose underneath, below what the eye sees. */
-#define ANIMATION_LAYER_COPY_WEIGHT 0.99f
-
-void AnimationBuffer::blendLayers(const T3DSkeleton *main) const
-{
-	/* A copying layer discards everything blended before it, so the stack is
-	   applied from the last one that copies: the layers below it would cost a
-	   nlerp per bone each and change nothing. Weights are per layer, so this
-	   is settled once, not per bone. */
-	int first = 0;
-	for (int j = count - 1; j > 0; j--) {
-		if (weight[j] >= ANIMATION_LAYER_COPY_WEIGHT) { first = j; break; }
-	}
-
-	for (int i = 0; i < main->skeletonRef->boneCount; i++)
-	{
-		T3DBone *bone = &main->bones[i];
-		bone->hasChanged = true;
-
-		for (int j = first; j < count; j++)
-		{
-			T3DBone *layer = &this->layer[j]->bones[i];
-
-			if (weight[j] >= ANIMATION_LAYER_COPY_WEIGHT) {
-				bone->rotation = layer->rotation;
-				bone->position = layer->position;
-				bone->scale    = layer->scale;
-				continue;
-			}
-
-			t3d_quat_nlerp(&bone->rotation, &bone->rotation, &layer->rotation, weight[j]);
-			t3d_vec3_lerp(&bone->position,  &bone->position,  &layer->position,  weight[j]);
-			t3d_vec3_lerp(&bone->scale,     &bone->scale,     &layer->scale,     weight[j]);
-		}
-	}
-}
-
-
-/* --- clip cache ------------------------------------------------------------- */
-
-T3DSkeleton *Animation::clipBuffer(uint8_t clip)
-{
-	uint8_t buffer = def->clip[clip].buffer;
-	return (buffer == ANIMATION_SLOT_MAIN) ? &main : &this->buffer[buffer];
-}
-
-void Animation::closeClip(uint8_t index)
-{
-	t3d_anim_destroy(&clip[index]);
-	memset(&clip[index], 0, sizeof(clip[index]));
-
-	/* RAM-resident keyframes: destroy already closed the memory stream. */
-	if (clip_data[index]) {
-		free(clip_data[index]);
-		clip_data[index] = NULL;
-	}
-}
-
-void Animation::openClip(uint8_t index)
-{
-	T3DAnim *clip = &this->clip[index];
-	const AnimationClipDef *clip_def = &def->clip[index];
-
-	*clip = t3d_anim_create(model, clip_def->name);
-
-	/* RAM-resident keyframes: load the whole .sdata once and swap the clip's
-	   stream for a memory one. t3d keeps fread()ing as always, just without
-	   the cartridge DMA underneath; rewinds on loop become free. Remove this
-	   block (and the frees in closeClip / character3d_delete) to fall back to
-	   cartridge streaming. */
-	{
-		int size = 0;
-		void *data = asset_load(clip->animRef->filePath, &size);
-		FILE *mem  = data ? fmemopen(data, (size_t)size, "rb") : NULL;
-		if (mem) {
-			long pos = ftell(clip->file);
-			fclose(clip->file);
-			fseek(mem, pos, SEEK_SET);
-			clip->file = mem;
-			clip_data[index] = data;
-		} else if (data) {
-			free(data);
-		}
-	}
-
-	t3d_anim_attach(clip, clipBuffer(index));
-	t3d_anim_set_looping(clip, clip_def->is_looping);
-	t3d_anim_set_playing(clip, clip_def->is_looping);
-}
+/* --- graph shortcuts -------------------------------------------------------- */
 
 T3DAnim *Animation::getClip(uint8_t index)
 {
-	T3DAnim *clip = &this->clip[index];
-	clip_cooldown[index] = 0;
-	if (clip->animRef != NULL) return clip;
-
-	/* At the cap, evict the least recently touched clip. Clips touched this
-	   frame have cooldown 0 and are never evicted: live pointers stay valid. */
-	int open  = 0;
-	int evict = -1;
-	for (int i = 0; i < def->clip_count; i++) {
-		if (this->clip[i].animRef == NULL) continue;
-		open++;
-		if (evict < 0 || clip_cooldown[i] > clip_cooldown[evict]) evict = i;
-	}
-	if (open >= ANIMATION_CLIP_MAX_OPEN && evict >= 0 && clip_cooldown[evict] > 0)
-		closeClip((uint8_t)evict);
-
-	openClip(index);
-
-	return clip;
+	return animation::getClip(&graph, index);
 }
 
-/* Once per frame: close what the graph stopped touching. */
-void Animation::closeIdleClips()
+void Animation::syncGridClips(const e64::Animation::Node *node, float cols_value, float rows_value)
 {
-	for (int i = 0; i < def->clip_count; i++) {
-		if (clip[i].animRef == NULL) continue;
+	animation::syncGridClips(&graph, node, cols_value, rows_value);
+}
 
-		if (clip_cooldown[i] < ANIMATION_CLIP_CLOSE_DELAY) {
-			clip_cooldown[i]++;
-			continue;
-		}
+void Animation::snapGridFromClip(uint8_t src_clip, uint8_t dst_node_idx)
+{
+	animation::snapGridFromClip(&graph, src_clip, dst_node_idx);
+}
 
-		closeClip((uint8_t)i);
-	}
+void Animation::snapGridFromGrid(uint8_t src_node_idx, float src_dir, uint8_t dst_node_idx)
+{
+	animation::snapGridFromGrid(&graph, src_node_idx, src_dir, dst_node_idx);
 }
 
 
 /* --- shared helpers --------------------------------------------------------- */
-
-uint8_t Animation::blendSegment(float weight, uint8_t count, float *t)
-{
-	if (count < 2) { *t = 0.0f; return 0; }
-	if (weight < 0.0f) weight = 0.0f;
-	if (weight > 1.0f) weight = 1.0f;
-
-	float s = weight * (count - 1);
-	uint8_t i = (uint8_t)s;
-	if (i > count - 2) i = count - 2;
-	*t = s - i;
-	return i;
-}
 
 /* gait axis: gait i sits at i / (count - 1) */
 float Animation::getGaitParam(float speed, const MovementSettings *movement)
@@ -217,68 +67,6 @@ bool Animation::isAerial(const Character3D &character)
 	    || character.movement.data.jump_timer > 0.0f;
 }
 
-/* The 1 to 4 clips a grid blends at the given axis values: the base corner,
-   then the next column, the next row, and the far corner, each only when
-   its share is not zero. */
-uint8_t Animation::getGridClips(const AnimationNode *node, float cols_value, float rows_value, uint8_t clip[4])
-{
-	float tx, ty;
-	uint8_t col = blendSegment(cols_value, node->cols, &tx);
-	uint8_t row = blendSegment(rows_value, node->rows, &ty);
-	uint8_t count = 0;
-
-	clip[count++] = node->animation[row * node->cols + col];
-	if (tx > 0.0f)              clip[count++] = node->animation[row * node->cols + col + 1];
-	if (ty > 0.0f)              clip[count++] = node->animation[(row + 1) * node->cols + col];
-	if (tx > 0.0f && ty > 0.0f) clip[count++] = node->animation[(row + 1) * node->cols + col + 1];
-
-	return count;
-}
-
-/* phase carry: clips entering the grid start where the ones leaving it were */
-void Animation::syncGridClips(const AnimationNode *node, float cols_value, float rows_value)
-{
-	uint8_t prev[4], curr[4];
-	uint8_t prev_count = getGridClips(node, param[node->param_cols], param[node->param_rows], prev);
-	uint8_t curr_count = getGridClips(node, cols_value, rows_value, curr);
-
-	/* phase reference: a corner still taking part, or the previous base if
-	   none is. Among those, the centre column wins: it holds the clip the
-	   grids share (walk, run, sprint), the one most likely to have kept
-	   advancing under another grid. A side corner may have been frozen the
-	   whole time, and copying its phase puts the newcomer out of step. */
-	uint8_t centre = node->cols / 2;
-	int16_t ref_clip = -1;
-	for (uint8_t m = 0; m < curr_count; m++) {
-		bool carried = false;
-		for (uint8_t p = 0; p < prev_count; p++)
-			if (curr[m] == prev[p]) carried = true;
-		if (!carried) continue;
-
-		bool centred = false;
-		for (uint8_t r = 0; r < node->rows; r++)
-			if (curr[m] == node->animation[r * node->cols + centre]) centred = true;
-
-		if (ref_clip < 0 || centred) ref_clip = curr[m];
-		if (centred) break;
-	}
-	T3DAnim *ref = getClip(ref_clip >= 0 ? (uint8_t)ref_clip : prev[0]);
-
-	float ref_length = t3d_anim_get_length(ref);
-	if (ref_length <= 0.0f) return;
-	float phase = ref->time / ref_length;
-
-	for (uint8_t m = 0; m < curr_count; m++) {
-		bool carried = false;
-		for (uint8_t p = 0; p < prev_count; p++)
-			if (curr[m] == prev[p]) carried = true;
-		if (carried) continue;
-
-		T3DAnim *dst = getClip(curr[m]);
-		t3d_anim_set_time(dst, phase * t3d_anim_get_length(dst));
-	}
-}
-
 /* axis: back 0 | left 1/4 | fwd 2/4 | right 3/4 | back 1
    Shared by every camera-locked grid; at a standstill the direction holds
    whatever its param last carried. */
@@ -287,7 +75,7 @@ float Animation::getLockedDirectionWeight(const Character3D &character, uint8_t 
 	const KinematicBody *body = &character.body;
 
 	if (body->velocity.x == 0.0f && body->velocity.y == 0.0f)
-		return param[dir_param];
+		return graph.param[dir_param];
 
 	float velocity_yaw = rad_to_deg(fm_atan2f(-body->velocity.x, -body->velocity.y));
 	float rel = angle_wrap_relative(velocity_yaw, body->rotation.z) - body->rotation.z;
@@ -295,26 +83,10 @@ float Animation::getLockedDirectionWeight(const Character3D &character, uint8_t 
 	return (rel + 180.0f) / 360.0f;
 }
 
-/* carries a clip's phase into every clip of a grid */
-void Animation::snapGridFromClip(uint8_t src_clip, uint8_t dst_node_idx)
-{
-	const AnimationNode *node = &def->node[dst_node_idx];
-
-	T3DAnim *src = getClip(src_clip);
-	float src_length = t3d_anim_get_length(src);
-	if (src_length <= 0.0f) return;
-	float phase = src->time / src_length;
-
-	for (int c = 0; c < node->cols * node->rows; c++) {
-		T3DAnim *dst = getClip(node->animation[c]);
-		t3d_anim_set_time(dst, phase * t3d_anim_get_length(dst));
-	}
-}
-
 /* hands a grid's phase back to the locomotion clips on the way out */
 void Animation::snapLocomotionFromGrid(uint8_t src_node_idx, float src_dir)
 {
-	const AnimationNode *node = &def->node[src_node_idx];
+	const e64::Animation::Node *node = &def->graph.node[src_node_idx];
 
 	/* source: the walk-row clip closest to the current weight */
 	uint8_t src_col = (uint8_t)(src_dir * (node->cols - 1) + 0.5f);
@@ -328,7 +100,7 @@ void Animation::snapLocomotionFromGrid(uint8_t src_node_idx, float src_dir)
 	const uint8_t target[] = {
 		def->walk_animation, def->run_animation, def->sprint_animation,
 		def->turn_walk_animation, (uint8_t)(def->turn_walk_animation + 1),
-		def->turn_run_animation,  (uint8_t)(def->turn_run_animation + 1),
+		def->turn_run_animation, (uint8_t)(def->turn_run_animation + 1),
 	};
 
 	for (unsigned t = 0; t < sizeof(target); t++) {
@@ -344,17 +116,17 @@ void Animation::snapLocomotionFromGrid(uint8_t src_node_idx, float src_dir)
    length; a side clip of another length would drift away from the centre
    column while it played, and any phase carried between the two would land
    out of step. */
-void Animation::setGridRowSpeeds(const AnimationNode *node)
+void Animation::setGridRowSpeeds(const e64::Animation::Node *node)
 {
 	const T3DAnim *walk = getClip(def->walk_animation);
-	const T3DAnim *run  = getClip(def->run_animation);
+	const T3DAnim *run = getClip(def->run_animation);
 
 	float walk_length = t3d_anim_get_length(walk);
-	float run_length  = t3d_anim_get_length(run);
+	float run_length = t3d_anim_get_length(run);
 	if (walk_length <= 0.0f || run_length <= 0.0f) return;
 
 	float walk_rate = walk->speed / walk_length;
-	float run_rate  = run->speed  / run_length;
+	float run_rate = run->speed / run_length;
 
 	for (uint8_t r = 0; r < node->rows; r++) {
 		float rate = (r == 0) ? walk_rate : run_rate;
@@ -365,33 +137,13 @@ void Animation::setGridRowSpeeds(const AnimationNode *node)
 	}
 }
 
-/* carries the phase of a grid's dominant column (walk row) to every clip of another */
-void Animation::snapGridFromGrid(uint8_t src_node_idx, float src_dir, uint8_t dst_node_idx)
-{
-	const AnimationNode *src_node = &def->node[src_node_idx];
-	const AnimationNode *dst_node = &def->node[dst_node_idx];
-
-	uint8_t src_col = (uint8_t)(src_dir * (src_node->cols - 1) + 0.5f);
-	if (src_col > src_node->cols - 1) src_col = src_node->cols - 1;
-
-	T3DAnim *src = getClip(src_node->animation[src_col]);
-	float src_length = t3d_anim_get_length(src);
-	if (src_length <= 0.0f) return;
-	float phase = src->time / src_length;
-
-	for (int c = 0; c < dst_node->cols * dst_node->rows; c++) {
-		T3DAnim *dst = getClip(dst_node->animation[c]);
-		t3d_anim_set_time(dst, phase * t3d_anim_get_length(dst));
-	}
-}
-
 
 /* --- idle ------------------------------------------------------------------- */
 
 /* the idle profile is the footing itself: it holds because the footing does */
 void Animation::setIdleRightParam()
 {
-	param[ANIMATION_PARAM_IDLE_RIGHT] =
+	graph.param[ANIMATION_PARAM_IDLE_RIGHT] =
 		def->settings->action_idle_max_blending_ratio * footing;
 }
 
@@ -402,7 +154,7 @@ void Animation::setIdleRightParam()
    cycle. The plant phases come from the asset's settings. */
 float Animation::getLocomotionPhase(const AnimationSettings *settings, float clip_time, float clip_length)
 {
-	float left  = settings->footing_left;
+	float left = settings->footing_left;
 	float right = settings->footing_right;
 
 	/* rises left plant -> right plant, and falls at ONE rate across the wrap
@@ -410,9 +162,9 @@ float Animation::getLocomotionPhase(const AnimationSettings *settings, float cli
 	   plants keep the wave speed continuous */
 	float phase = clip_time / clip_length;
 	float f;
-	if      (phase <= left)  f = (left - phase) / (1.0f - right + left);
+	if (phase <= left) f = (left - phase) / (1.0f - right + left);
 	else if (phase <= right) f = (phase - left) / (right - left);
-	else                     f = 1.0f - (phase - right) / (1.0f - right + left);
+	else f = 1.0f - (phase - right) / (1.0f - right + left);
 	if (f > 0.9999999f) f = 0.9999999f;
 	if (f < 0.0000001f) f = 0.0000001f;
 	return f;
@@ -421,7 +173,7 @@ float Animation::getLocomotionPhase(const AnimationSettings *settings, float cli
 float Animation::getTurningAvg(const AnimationSettings *settings, float current_yaw, float previous_yaw)
 {
 	float delta_yaw = current_yaw - previous_yaw;
-	if (delta_yaw >  180.0f) delta_yaw -= 360.0f;
+	if (delta_yaw > 180.0f) delta_yaw -= 360.0f;
 	if (delta_yaw <= -180.0f) delta_yaw += 360.0f;
 
 	/* Left as written on purpose: libdragon builds with -ffast-math, so the
@@ -437,7 +189,7 @@ float Animation::getTurningAvg(const AnimationSettings *settings, float current_
 
 	float r = avg_delta_yaw / settings->turn_max_angle;
 
-	if (r >  1.0f) r =  1.0f;
+	if (r > 1.0f) r = 1.0f;
 	if (r < -1.0f) r = -1.0f;
 	if (fabsf(r) < 0.001f) r = 0.0f;
 	return r * settings->turn_max_weight;
@@ -460,8 +212,8 @@ float Animation::getGaitAxis(const Character3D &character, float delta)
 	const MovementSettings *movement = character.movement.settings;
 	float speed = character.movement.data.horizontal_speed;
 
-	float raw_gait  = getGaitParam(speed, movement);
-	float prev_gait = param[ANIMATION_PARAM_WALK_GAIT];
+	float raw_gait = getGaitParam(speed, movement);
+	float prev_gait = graph.param[ANIMATION_PARAM_WALK_GAIT];
 
 	uint8_t state = character.movement.current;
 	if (!character3d::movement::isLocomotion(state)) state = character.movement.locomotion;
@@ -473,10 +225,10 @@ float Animation::getGaitAxis(const Character3D &character, float delta)
 		return prev_gait;
 
 	uint8_t last = movement->gait_count - 1;
-	float   gait = character.movement.data.gait;
+	float gait = character.movement.data.gait;
 	if (gait > (float)last) gait = (float)last;
 
-	float asked_gait  = (last > 0) ? gait / (float)last : 0.0f;
+	float asked_gait = (last > 0) ? gait / (float)last : 0.0f;
 	float target_gait = (asked_gait > raw_gait) ? asked_gait : raw_gait;
 
 	float factor = fm_expf(-movement->gait[(uint8_t)gait].response_rate * delta);
@@ -490,11 +242,11 @@ float Animation::getGaitAxis(const Character3D &character, float delta)
    were left at, and the footing jumps for one frame. */
 void Animation::setFooting(Character3D &character)
 {
-	float prev_gait = param[ANIMATION_PARAM_WALK_GAIT];
+	float prev_gait = graph.param[ANIMATION_PARAM_WALK_GAIT];
 
-	const AnimationNode *locomotion = &def->node[def->locomotion_node];
+	const e64::Animation::Node *locomotion = &def->graph.node[def->locomotion_node];
 	float row_t;
-	uint8_t row = blendSegment(prev_gait, locomotion->rows, &row_t);
+	uint8_t row = animation::blendSegment(prev_gait, locomotion->rows, &row_t);
 	if (row_t > 0.5f) row++;
 
 	T3DAnim *base = getClip(locomotion->animation[row * locomotion->cols + locomotion->cols / 2]);
@@ -510,31 +262,31 @@ void Animation::setJumpFootingSpeed(Character3D &character)
 {
 	if (!isAerial(character)) return;
 
-	float jump   = param[ANIMATION_PARAM_JUMP_L] + param[ANIMATION_PARAM_JUMP_R];
+	float jump = graph.param[ANIMATION_PARAM_JUMP_L] + graph.param[ANIMATION_PARAM_JUMP_R];
 	float factor = def->settings->jump_footing_speed * (1.0f - jump);
 	if (factor < 0.0f) factor = 0.0f;
 
-	getClip(def->walk_animation)->speed          *= factor;
-	getClip(def->run_animation)->speed           *= factor;
-	getClip(def->sprint_animation)->speed        *= factor;
-	getClip(def->turn_walk_animation)->speed     *= factor;
+	getClip(def->walk_animation)->speed *= factor;
+	getClip(def->run_animation)->speed *= factor;
+	getClip(def->sprint_animation)->speed *= factor;
+	getClip(def->turn_walk_animation)->speed *= factor;
 	getClip(def->turn_walk_animation + 1)->speed *= factor;
-	getClip(def->turn_run_animation)->speed      *= factor;
-	getClip(def->turn_run_animation + 1)->speed  *= factor;
+	getClip(def->turn_run_animation)->speed *= factor;
+	getClip(def->turn_run_animation + 1)->speed *= factor;
 }
 
 /* the grid runs at the cycle rate the current gait asks for: real speed over
    target speed, and every clip gets the speed that makes its cycle last that long */
 void Animation::setLocomotionSpeed(Character3D &character, float gait)
 {
-	const AnimationNode *node = &def->node[def->locomotion_node];
+	const e64::Animation::Node *node = &def->graph.node[def->locomotion_node];
 	const MovementSettings *movement = character.movement.settings;
 	uint8_t center = node->cols / 2;
 
 	float t;
-	uint8_t row = blendSegment(gait, node->rows, &t);
+	uint8_t row = animation::blendSegment(gait, node->rows, &t);
 
-	float low  = t3d_anim_get_length(getClip(node->animation[row * node->cols + center]));
+	float low = t3d_anim_get_length(getClip(node->animation[row * node->cols + center]));
 	float high = t3d_anim_get_length(getClip(node->animation[(row + 1) * node->cols + center]));
 	float length = low + t * (high - low);
 
@@ -555,7 +307,7 @@ void Animation::setLocomotionSpeed(Character3D &character, float gait)
 
 void Animation::setLocomotionParam(Character3D &character, float gait)
 {
-	const AnimationNode *node = &def->node[def->locomotion_node];
+	const e64::Animation::Node *node = &def->graph.node[def->locomotion_node];
 	const MovementSettings *movement = character.movement.settings;
 	float speed = character.movement.data.horizontal_speed;
 
@@ -566,9 +318,9 @@ void Animation::setLocomotionParam(Character3D &character, float gait)
 
 	syncGridClips(node, turn, gait);
 
-	param[ANIMATION_PARAM_WALK]      = getWalkWeight(speed, movement);
-	param[ANIMATION_PARAM_WALK_GAIT] = gait;
-	param[ANIMATION_PARAM_WALK_TURN] = turn;
+	graph.param[ANIMATION_PARAM_WALK] = getWalkWeight(speed, movement);
+	graph.param[ANIMATION_PARAM_WALK_GAIT] = gait;
+	graph.param[ANIMATION_PARAM_WALK_TURN] = turn;
 }
 
 
@@ -578,6 +330,7 @@ float Animation::getStrafeDirectionWeight(const Character3D &character, float de
 {
 	const AnimationSettings *s = def->settings;
 	const KinematicBody *body = &character.body;
+	float *param = graph.param;
 
 	if (body->velocity.x == 0.0f && body->velocity.y == 0.0f)
 		return param[ANIMATION_PARAM_STRAFE_DIR];
@@ -589,10 +342,10 @@ float Animation::getStrafeDirectionWeight(const Character3D &character, float de
 	   anchors: fwd 0º, strafe ±90º, back_l/back_r ±90º on the back side, back ±180º
 	   the 1/6-2/6 and 4/6-5/6 stretches are never reached by direction: they are the hip turn */
 	float raw;
-	if      (rel < -90.0f) raw = (rel + 180.0f) / 90.0f          * (1.0f / 6.0f);
-	else if (rel <   0.0f) raw = (2.0f + (rel + 90.0f) / 90.0f)  * (1.0f / 6.0f);
-	else if (rel <  90.0f) raw = (3.0f + rel / 90.0f)            * (1.0f / 6.0f);
-	else                   raw = (5.0f + (rel - 90.0f) / 90.0f)  * (1.0f / 6.0f);
+	if (rel < -90.0f) raw = (rel + 180.0f) / 90.0f * (1.0f / 6.0f);
+	else if (rel < 0.0f) raw = (2.0f + (rel + 90.0f) / 90.0f) * (1.0f / 6.0f);
+	else if (rel < 90.0f) raw = (3.0f + rel / 90.0f) * (1.0f / 6.0f);
+	else raw = (5.0f + (rel - 90.0f) / 90.0f) * (1.0f / 6.0f);
 
 	if (param[ANIMATION_PARAM_STRAFE] == 0.0f) return raw;
 
@@ -628,7 +381,7 @@ float Animation::getStrafeDirectionWeight(const Character3D &character, float de
 
 void Animation::snapStrafeEntry()
 {
-	const AnimationNode *node = &def->node[def->strafe_node];
+	const e64::Animation::Node *node = &def->graph.node[def->strafe_node];
 
 	T3DAnim *src = getClip(def->walk_animation);
 	float src_length = t3d_anim_get_length(src);
@@ -644,10 +397,10 @@ void Animation::snapStrafeEntry()
 
 void Animation::snapStrafeExit()
 {
-	const AnimationNode *node = &def->node[def->strafe_node];
+	const e64::Animation::Node *node = &def->graph.node[def->strafe_node];
 
 	/* source: the walk-row clip closest to the current weight, already active */
-	float out = param[ANIMATION_PARAM_STRAFE_DIR];
+	float out = graph.param[ANIMATION_PARAM_STRAFE_DIR];
 	uint8_t src_col = (uint8_t)(out * (node->cols - 1) + 0.5f);
 	if (src_col > node->cols - 1) src_col = node->cols - 1;
 
@@ -659,7 +412,7 @@ void Animation::snapStrafeExit()
 	const uint8_t target[] = {
 		def->walk_animation, def->run_animation, def->sprint_animation,
 		def->turn_walk_animation, (uint8_t)(def->turn_walk_animation + 1),
-		def->turn_run_animation,  (uint8_t)(def->turn_run_animation + 1),
+		def->turn_run_animation, (uint8_t)(def->turn_run_animation + 1),
 	};
 
 	for (unsigned t = 0; t < sizeof(target); t++) {
@@ -672,6 +425,7 @@ void Animation::setStrafeParams(Character3D &character, float delta)
 {
 	const MovementData *data = &character.movement.data;
 	const MovementSettings *movement = character.movement.settings;
+	float *param = graph.param;
 
 	/* Aiming owns the pose while either of its flags is up: the free strafe
 	   bows out entirely, so its exit can never hand the locomotion a phase
@@ -706,7 +460,7 @@ void Animation::setStrafeParams(Character3D &character, float delta)
 	if (prev_blend == 0.0f)
 		snapStrafeEntry();
 
-	const AnimationNode *node = &def->node[def->strafe_node];
+	const e64::Animation::Node *node = &def->graph.node[def->strafe_node];
 	setGridRowSpeeds(node);
 
 	float dir = getStrafeDirectionWeight(character, delta);
@@ -721,8 +475,8 @@ void Animation::setStrafeParams(Character3D &character, float delta)
 	float weight = getWalkWeight(data->horizontal_speed, movement);
 
 	strafe_blend = blend;
-	param[ANIMATION_PARAM_STRAFE]      = weight * blend;
-	param[ANIMATION_PARAM_STRAFE_DIR]  = dir;
+	param[ANIMATION_PARAM_STRAFE] = weight * blend;
+	param[ANIMATION_PARAM_STRAFE_DIR] = dir;
 	param[ANIMATION_PARAM_STRAFE_GAIT] = gait;
 
 	param[ANIMATION_PARAM_WALK] = weight * (1.0f - blend);
@@ -732,6 +486,7 @@ void Animation::setStrafeLockedParams(Character3D &character, float delta)
 {
 	const MovementData *data = &character.movement.data;
 	const MovementSettings *movement = character.movement.settings;
+	float *param = graph.param;
 
 	bool locked = data->strafe_locked
 		&& character3d::movement::isLocomotion(character.movement.current)
@@ -758,7 +513,7 @@ void Animation::setStrafeLockedParams(Character3D &character, float delta)
 	if (prev_blend == 0.0f)
 		snapGridFromClip(def->walk_animation, def->strafe_locked_node);
 
-	const AnimationNode *node = &def->node[def->strafe_locked_node];
+	const e64::Animation::Node *node = &def->graph.node[def->strafe_locked_node];
 	setGridRowSpeeds(node);
 
 	float dir = getLockedDirectionWeight(character, ANIMATION_PARAM_STRAFE_LOCKED_DIR);
@@ -773,11 +528,11 @@ void Animation::setStrafeLockedParams(Character3D &character, float delta)
 	float weight = getWalkWeight(data->horizontal_speed, movement);
 
 	strafe_locked_blend = blend;
-	param[ANIMATION_PARAM_STRAFE_LOCKED]      = weight * blend;
-	param[ANIMATION_PARAM_STRAFE_LOCKED_DIR]  = dir;
+	param[ANIMATION_PARAM_STRAFE_LOCKED] = weight * blend;
+	param[ANIMATION_PARAM_STRAFE_LOCKED_DIR] = dir;
 	param[ANIMATION_PARAM_STRAFE_LOCKED_GAIT] = gait;
 
-	param[ANIMATION_PARAM_WALK]   *= (1.0f - blend);
+	param[ANIMATION_PARAM_WALK] *= (1.0f - blend);
 	param[ANIMATION_PARAM_STRAFE] *= (1.0f - blend);
 }
 
@@ -787,17 +542,17 @@ void Animation::setStrafeLockedParams(Character3D &character, float delta)
 void Animation::syncLandToJump()
 {
 	const AnimationSettings *j = def->settings;
-	T3DAnim *jump_l   = getClip(def->jump_animation);
-	T3DAnim *jump_r   = getClip(def->jump_animation + 1);
-	float    land_t   = getClip(def->land_animation)->time;
-	float    jump_t;
+	T3DAnim *jump_l = getClip(def->jump_animation);
+	T3DAnim *jump_r = getClip(def->jump_animation + 1);
+	float land_t = getClip(def->land_animation)->time;
+	float jump_t;
 
 	if (land_t < j->land_anim_crouch)
 		jump_t = (land_t / j->land_anim_crouch) * j->jump_anim_crouch;
 	else
 		jump_t = (1.0f - (land_t - j->land_anim_crouch) / (j->land_anim_stand - j->land_anim_crouch)) * j->jump_anim_crouch;
 
-	if (jump_t < 0.0f)              jump_t = 0.0f;
+	if (jump_t < 0.0f) jump_t = 0.0f;
 	if (jump_t > j->jump_anim_crouch) jump_t = j->jump_anim_crouch;
 
 	t3d_anim_set_time(jump_l, jump_t);
@@ -806,8 +561,8 @@ void Animation::syncLandToJump()
 
 void Animation::snapToJump()
 {
-	T3DAnim *jump_l   = getClip(def->jump_animation);
-	T3DAnim *jump_r   = getClip(def->jump_animation + 1);
+	T3DAnim *jump_l = getClip(def->jump_animation);
+	T3DAnim *jump_r = getClip(def->jump_animation + 1);
 	T3DAnim *land_animation = getClip(def->land_animation);
 
 	T3DAnim *fall_l = getClip(def->fall_animation);
@@ -829,8 +584,8 @@ void Animation::snapToJump()
 		t3d_anim_set_time(jump_r, 0.0f);
 	}
 
-	param[ANIMATION_PARAM_JUMP_L] = 0.0f;
-	param[ANIMATION_PARAM_JUMP_R] = 0.0f;
+	graph.param[ANIMATION_PARAM_JUMP_L] = 0.0f;
+	graph.param[ANIMATION_PARAM_JUMP_R] = 0.0f;
 }
 
 void Animation::snapToLand()
@@ -841,8 +596,8 @@ void Animation::snapToLand()
 	t3d_anim_set_time(land_r, 0.0f);
 	t3d_anim_set_playing(land_l, true);
 	t3d_anim_set_playing(land_r, true);
-	param[ANIMATION_PARAM_LAND_L] = 0.0f;
-	param[ANIMATION_PARAM_LAND_R] = 0.0f;
+	graph.param[ANIMATION_PARAM_LAND_L] = 0.0f;
+	graph.param[ANIMATION_PARAM_LAND_R] = 0.0f;
 }
 
 /* Falling with no crouch behind it — off a ledge, or a roll that ran out of
@@ -865,8 +620,9 @@ void Animation::setJumpParams(Character3D &character, float delta)
 {
 	const AnimationSettings *j = def->settings;
 	T3DAnim *land_animation = getClip(def->land_animation);
-	uint8_t  cur     = character.movement.current;
-	uint8_t *as      = &action_state;
+	uint8_t cur = character.movement.current;
+	uint8_t *as = &action_state;
+	float *param = graph.param;
 
 	float jump = param[ANIMATION_PARAM_JUMP_L] + param[ANIMATION_PARAM_JUMP_R];
 	float land = param[ANIMATION_PARAM_LAND_L] + param[ANIMATION_PARAM_LAND_R];
@@ -893,7 +649,7 @@ void Animation::setJumpParams(Character3D &character, float delta)
 	   the fall probe: the foot meets the ground on the frame the clip has it
 	   touching, whatever the drop was. */
 	float floor_distance = character.movement.data.floor_distance;
-	float fall_speed     = -character.body.velocity.z;
+	float fall_speed = -character.body.velocity.z;
 
 	if (aerial && !land_animation->isPlaying && floor_distance >= 0.0f && fall_speed > 0.0f
 	    && floor_distance <= fall_speed * j->land_anim_ground) {
@@ -959,7 +715,7 @@ float Animation::rollExitRate(const AnimationSettings *r)
 void Animation::snapRollToLocomotion(bool left)
 {
 	const AnimationSettings *settings = def->settings;
-	const AnimationNode *node = &def->node[def->locomotion_node];
+	const e64::Animation::Node *node = &def->graph.node[def->locomotion_node];
 
 	/* the plant phases are where the footing wave peaks: footing_left is
 	   footing 0, footing_right is footing 1. The exit lands short of the
@@ -977,8 +733,9 @@ void Animation::snapRollToLocomotion(bool left)
 void Animation::setRollParam(Character3D &character, float delta)
 {
 	const AnimationSettings *r = def->settings;
-	uint8_t  cur = character.movement.current;
-	uint8_t *as  = &action_state;
+	uint8_t cur = character.movement.current;
+	uint8_t *as = &action_state;
+	float *param = graph.param;
 
 	if (cur != MOVEMENT_STATE_ROLLING) {
 		if (*as == MOVEMENT_STATE_ROLLING) *as = cur;
@@ -1003,9 +760,9 @@ void Animation::setRollParam(Character3D &character, float delta)
 		T3DAnim *roll_r = getClip(base + 1);
 
 		t3d_anim_set_playing(roll_l, true);
-		t3d_anim_set_time   (roll_l, 0.0f);
+		t3d_anim_set_time (roll_l, 0.0f);
 		t3d_anim_set_playing(roll_r, true);
-		t3d_anim_set_time   (roll_r, 0.0f);
+		t3d_anim_set_time (roll_r, 0.0f);
 
 		float dir = (footing < 0.5f) ? -1.0f : 1.0f;
 		param[ANIMATION_PARAM_ROLL_RUN] = 0.0f;
@@ -1013,13 +770,13 @@ void Animation::setRollParam(Character3D &character, float delta)
 		*as = MOVEMENT_STATE_ROLLING;
 	}
 
-	float dir   = param[ANIMATION_PARAM_ROLL_DIR];
-	bool  left  = dir < 0.0f;
+	float dir = param[ANIMATION_PARAM_ROLL_DIR];
+	bool left = dir < 0.0f;
 
-	uint8_t base      = def->roll_animation;
-	uint8_t roll_idx  = left ? base : base + 1;
-	float   roll_time = getClip(roll_idx)->time;
-	float   ratio     = param[ANIMATION_PARAM_ROLL_RUN];
+	uint8_t base = def->roll_animation;
+	uint8_t roll_idx = left ? base : base + 1;
+	float roll_time = getClip(roll_idx)->time;
+	float ratio = param[ANIMATION_PARAM_ROLL_RUN];
 
 	if (roll_time < r->run_to_rolling_anim_ground && ratio <= 1.0f)
 		ratio += delta / r->run_to_rolling_anim_ground;
@@ -1044,13 +801,13 @@ void Animation::setRollParam(Character3D &character, float delta)
    different period desyncs the arms mid-blend. Same cure as the locomotion
    grid: the cycle length is interpolated at the blend point and every clip
    gets the speed that makes its cycle last exactly that long. */
-void Animation::setSwimSpeed(const AnimationNode *node, float gait)
+void Animation::setSwimSpeed(const e64::Animation::Node *node, float gait)
 {
 	float t;
-	uint8_t col = blendSegment(gait, node->cols, &t);
+	uint8_t col = animation::blendSegment(gait, node->cols, &t);
 
-	float low    = t3d_anim_get_length(getClip(node->animation[col]));
-	float high   = t3d_anim_get_length(getClip(node->animation[col + 1]));
+	float low = t3d_anim_get_length(getClip(node->animation[col]));
+	float high = t3d_anim_get_length(getClip(node->animation[col + 1]));
 	float length = low + t * (high - low);
 	if (length <= 0.0f) return;
 
@@ -1072,6 +829,7 @@ void Animation::setSwimParams(Character3D &character, float delta)
 {
 	const MovementData *data = &character.movement.data;
 	const MovementSettings *movement = character.movement.settings;
+	float *param = graph.param;
 
 	bool swimming = character.movement.current == MOVEMENT_STATE_SWIMMING;
 
@@ -1091,7 +849,7 @@ void Animation::setSwimParams(Character3D &character, float delta)
 		return;
 	}
 
-	const AnimationNode *node = &def->node[def->swim_node];
+	const e64::Animation::Node *node = &def->graph.node[def->swim_node];
 
 	/* Fading in from nothing: restart the strokes so they enter in phase. */
 	if (prev_blend == 0.0f)
@@ -1111,20 +869,20 @@ void Animation::setSwimParams(Character3D &character, float delta)
 	setSwimSpeed(node, gait);
 	syncGridClips(node, gait, 0.0f);
 
-	param[ANIMATION_PARAM_SWIM]      = blend;
+	param[ANIMATION_PARAM_SWIM] = blend;
 	param[ANIMATION_PARAM_SWIM_GAIT] = gait;
 
-	param[ANIMATION_PARAM_WALK]          *= (1.0f - blend);
-	param[ANIMATION_PARAM_STRAFE]        *= (1.0f - blend);
+	param[ANIMATION_PARAM_WALK] *= (1.0f - blend);
+	param[ANIMATION_PARAM_STRAFE] *= (1.0f - blend);
 	param[ANIMATION_PARAM_STRAFE_LOCKED] *= (1.0f - blend);
-	param[ANIMATION_PARAM_AIMING]      *= (1.0f - blend);
+	param[ANIMATION_PARAM_AIMING] *= (1.0f - blend);
 	param[ANIMATION_PARAM_AIMING_IDLE] *= (1.0f - blend);
-	param[ANIMATION_PARAM_CHARGING_SHOOT]       *= (1.0f - blend);
-	param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE]  *= (1.0f - blend);
-	param[ANIMATION_PARAM_JUMP_L]        *= (1.0f - blend);
-	param[ANIMATION_PARAM_JUMP_R]        *= (1.0f - blend);
-	param[ANIMATION_PARAM_LAND_L]        *= (1.0f - blend);
-	param[ANIMATION_PARAM_LAND_R]        *= (1.0f - blend);
+	param[ANIMATION_PARAM_CHARGING_SHOOT] *= (1.0f - blend);
+	param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE] *= (1.0f - blend);
+	param[ANIMATION_PARAM_JUMP_L] *= (1.0f - blend);
+	param[ANIMATION_PARAM_JUMP_R] *= (1.0f - blend);
+	param[ANIMATION_PARAM_LAND_L] *= (1.0f - blend);
+	param[ANIMATION_PARAM_LAND_R] *= (1.0f - blend);
 }
 
 
@@ -1144,6 +902,7 @@ void Animation::setSwimParams(Character3D &character, float delta)
 void Animation::setClimbParams(Character3D &character, float delta)
 {
 	const MovementSettings *movement = character.movement.settings;
+	float *param = graph.param;
 
 	bool climbing = character.movement.current == MOVEMENT_STATE_CLIMBING;
 
@@ -1162,18 +921,18 @@ void Animation::setClimbParams(Character3D &character, float delta)
 	   the ladder, the pair stops being stepped every frame for a layer that
 	   is contributing nothing. The held direction lives outside the param. */
 	if (blend == 0.0f) {
-		param[ANIMATION_PARAM_CLIMB]     = 0.0f;
+		param[ANIMATION_PARAM_CLIMB] = 0.0f;
 		param[ANIMATION_PARAM_CLIMB_DIR] = 0.0f;
 		return;
 	}
 
-	const AnimationNode *node = &def->node[def->climb_node];
+	const e64::Animation::Node *node = &def->graph.node[def->climb_node];
 
 	float velocity = character.body.velocity.z;
 
-	if (velocity >  LOCOMOTION_MIN_SPEED) climb_dir =  1.0f;
+	if (velocity > LOCOMOTION_MIN_SPEED) climb_dir = 1.0f;
 	if (velocity < -LOCOMOTION_MIN_SPEED) climb_dir = -1.0f;
-	if (climb_dir == 0.0f)                climb_dir =  1.0f;
+	if (climb_dir == 0.0f) climb_dir = 1.0f;
 
 	/* The cycle runs on how fast the body is actually moving as a fraction
 	   of the speed the climb tops out at: full tilt lands on the clip's own
@@ -1191,21 +950,21 @@ void Animation::setClimbParams(Character3D &character, float delta)
 	for (uint8_t i = 0; i < node->cols * node->rows; i++)
 		t3d_anim_set_speed(getClip(node->animation[i]), speed);
 
-	param[ANIMATION_PARAM_CLIMB]     = blend;
+	param[ANIMATION_PARAM_CLIMB] = blend;
 	param[ANIMATION_PARAM_CLIMB_DIR] = climb_dir;
 
-	param[ANIMATION_PARAM_WALK]          *= (1.0f - blend);
-	param[ANIMATION_PARAM_STRAFE]        *= (1.0f - blend);
+	param[ANIMATION_PARAM_WALK] *= (1.0f - blend);
+	param[ANIMATION_PARAM_STRAFE] *= (1.0f - blend);
 	param[ANIMATION_PARAM_STRAFE_LOCKED] *= (1.0f - blend);
-	param[ANIMATION_PARAM_AIMING]      *= (1.0f - blend);
+	param[ANIMATION_PARAM_AIMING] *= (1.0f - blend);
 	param[ANIMATION_PARAM_AIMING_IDLE] *= (1.0f - blend);
-	param[ANIMATION_PARAM_CHARGING_SHOOT]       *= (1.0f - blend);
-	param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE]  *= (1.0f - blend);
-	param[ANIMATION_PARAM_SWIM]          *= (1.0f - blend);
-	param[ANIMATION_PARAM_JUMP_L]        *= (1.0f - blend);
-	param[ANIMATION_PARAM_JUMP_R]        *= (1.0f - blend);
-	param[ANIMATION_PARAM_LAND_L]        *= (1.0f - blend);
-	param[ANIMATION_PARAM_LAND_R]        *= (1.0f - blend);
+	param[ANIMATION_PARAM_CHARGING_SHOOT] *= (1.0f - blend);
+	param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE] *= (1.0f - blend);
+	param[ANIMATION_PARAM_SWIM] *= (1.0f - blend);
+	param[ANIMATION_PARAM_JUMP_L] *= (1.0f - blend);
+	param[ANIMATION_PARAM_JUMP_R] *= (1.0f - blend);
+	param[ANIMATION_PARAM_LAND_L] *= (1.0f - blend);
+	param[ANIMATION_PARAM_LAND_R] *= (1.0f - blend);
 }
 
 
@@ -1223,6 +982,7 @@ void Animation::setAimingParams(Character3D &character, float delta)
 {
 	const MovementData *data = &character.movement.data;
 	const MovementSettings *movement = character.movement.settings;
+	float *param = graph.param;
 
 	/* Node 0 is the base idle clip: a def without the module leaves these
 	   fields zeroed and the whole thing stays out of the graph. */
@@ -1230,12 +990,12 @@ void Animation::setAimingParams(Character3D &character, float delta)
 
 	bool locomotion = character3d::movement::isLocomotion(character.movement.current);
 	bool charging = data->charging_shoot && locomotion;
-	bool ready    = data->aiming && locomotion && !charging;
+	bool ready = data->aiming && locomotion && !charging;
 
-	float prev_ready    = aiming_blend;
+	float prev_ready = aiming_blend;
 	float prev_charging = charging_shoot_blend;
 
-	float ready_blend    = 0.0f;
+	float ready_blend = 0.0f;
 	float charging_blend = 0.0f;
 
 	if (ready || prev_ready > 0.0f) {
@@ -1252,14 +1012,14 @@ void Animation::setAimingParams(Character3D &character, float delta)
 		if (charging_blend < 0.001f) charging_blend = 0.0f;
 	}
 
-	aiming_blend         = ready_blend;
+	aiming_blend = ready_blend;
 	charging_shoot_blend = charging_blend;
 
 	if (ready_blend == 0.0f && charging_blend == 0.0f) {
-		param[ANIMATION_PARAM_AIMING]      = 0.0f;
+		param[ANIMATION_PARAM_AIMING] = 0.0f;
 		param[ANIMATION_PARAM_AIMING_IDLE] = 0.0f;
-		param[ANIMATION_PARAM_CHARGING_SHOOT]       = 0.0f;
-		param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE]  = 0.0f;
+		param[ANIMATION_PARAM_CHARGING_SHOOT] = 0.0f;
+		param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE] = 0.0f;
 		return;
 	}
 
@@ -1271,7 +1031,7 @@ void Animation::setAimingParams(Character3D &character, float delta)
 				param[ANIMATION_PARAM_CHARGING_SHOOT_DIR], def->aiming_node);
 		else
 			snapGridFromClip(def->walk_animation, def->aiming_node);
-		t3d_anim_set_time(getClip(def->node[def->aiming_idle_node].animation[0]), 0.0f);
+		t3d_anim_set_time(getClip(def->graph.node[def->aiming_idle_node].animation[0]), 0.0f);
 	}
 	if (prev_charging == 0.0f && charging_blend > 0.0f) {
 		if (prev_ready > 0.0f)
@@ -1279,7 +1039,7 @@ void Animation::setAimingParams(Character3D &character, float delta)
 				param[ANIMATION_PARAM_AIMING_DIR], def->charging_shoot_node);
 		else
 			snapGridFromClip(def->walk_animation, def->charging_shoot_node);
-		t3d_anim_set_time(getClip(def->node[def->charging_shoot_idle_node].animation[0]), 0.0f);
+		t3d_anim_set_time(getClip(def->graph.node[def->charging_shoot_idle_node].animation[0]), 0.0f);
 	}
 
 	float gait = (data->horizontal_speed - movement->gait[0].target_speed)
@@ -1293,30 +1053,30 @@ void Animation::setAimingParams(Character3D &character, float delta)
 	float weight = getWalkWeight(data->horizontal_speed, movement);
 
 	if (ready_blend > 0.0f) {
-		const AnimationNode *node = &def->node[def->aiming_node];
+		const e64::Animation::Node *node = &def->graph.node[def->aiming_node];
 		float dir = getLockedDirectionWeight(character, ANIMATION_PARAM_AIMING_DIR);
 		setGridRowSpeeds(node);
 		syncGridClips(node, dir, gait);
-		param[ANIMATION_PARAM_AIMING]      = weight * ready_blend;
+		param[ANIMATION_PARAM_AIMING] = weight * ready_blend;
 		param[ANIMATION_PARAM_AIMING_IDLE] = (1.0f - weight) * ready_blend;
-		param[ANIMATION_PARAM_AIMING_DIR]  = dir;
+		param[ANIMATION_PARAM_AIMING_DIR] = dir;
 		param[ANIMATION_PARAM_AIMING_GAIT] = gait;
 	} else {
-		param[ANIMATION_PARAM_AIMING]      = 0.0f;
+		param[ANIMATION_PARAM_AIMING] = 0.0f;
 		param[ANIMATION_PARAM_AIMING_IDLE] = 0.0f;
 	}
 
 	if (charging_blend > 0.0f) {
-		const AnimationNode *node = &def->node[def->charging_shoot_node];
+		const e64::Animation::Node *node = &def->graph.node[def->charging_shoot_node];
 		float dir = getLockedDirectionWeight(character, ANIMATION_PARAM_CHARGING_SHOOT_DIR);
 		setGridRowSpeeds(node);
 		syncGridClips(node, dir, gait);
-		param[ANIMATION_PARAM_CHARGING_SHOOT]      = weight * charging_blend;
+		param[ANIMATION_PARAM_CHARGING_SHOOT] = weight * charging_blend;
 		param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE] = (1.0f - weight) * charging_blend;
-		param[ANIMATION_PARAM_CHARGING_SHOOT_DIR]  = dir;
+		param[ANIMATION_PARAM_CHARGING_SHOOT_DIR] = dir;
 		param[ANIMATION_PARAM_CHARGING_SHOOT_GAIT] = gait;
 	} else {
-		param[ANIMATION_PARAM_CHARGING_SHOOT]      = 0.0f;
+		param[ANIMATION_PARAM_CHARGING_SHOOT] = 0.0f;
 		param[ANIMATION_PARAM_CHARGING_SHOOT_IDLE] = 0.0f;
 	}
 
@@ -1336,35 +1096,6 @@ void Animation::setAimingParams(Character3D &character, float delta)
 
 /* --- per-frame driver ------------------------------------------------------- */
 
-void Animation::setActiveNodes()
-{
-	for (int i = 0; i < def->node_count; i++) {
-		const AnimationNode *node = &def->node[i];
-		AnimationNodeType t = node->type;
-		if (t == ANIMATION_NODE_SELECT || t == ANIMATION_NODE_SEQUENCE)
-			node_active[i] = (param[node->param_cols] != 0.0f);
-		if (t != ANIMATION_NODE_BLEND_2D) continue;
-
-		bool was = node_active[i];
-		bool now = (param[node->param_weight] != 0.0f);
-		node_active[i] = now;
-		if (!now || was) continue;
-
-		/* A grid coming back on has sat frozen while another one drove the
-		   body: only the clips it shares with that grid kept advancing, the
-		   rest hold the phase they stopped at. Its clips resume on the live
-		   cycle, the heaviest corner of the previous frame (not advanced yet
-		   this frame), so the two grids agree from the first frame of the
-		   crossfade. One write per clip, on this frame only. */
-		uint8_t clip[4];
-		uint8_t count = getGridClips(node, param[node->param_cols], param[node->param_rows], clip);
-		for (uint8_t m = 0; m < count; m++) {
-			T3DAnim *anim = getClip(clip[m]);
-			t3d_anim_set_time(anim, locomotion_cycle * t3d_anim_get_length(anim));
-		}
-	}
-}
-
 void Animation::setParams(Character3D &character, float delta)
 {
 	float gait = getGaitAxis(character, delta);
@@ -1381,209 +1112,22 @@ void Animation::setParams(Character3D &character, float delta)
 	setAimingParams (character, delta);
 	setSwimParams (character, delta);
 	setClimbParams (character, delta);
-	setActiveNodes ();
-}
-
-
-/* --- graph ------------------------------------------------------------------ */
-
-/* a clip shared by two nodes must advance once per frame */
-void Animation::updateClip(bool *updated, uint8_t clip, float delta)
-{
-	if (updated[clip]) return;
-	updated[clip] = true;
-	t3d_anim_update(getClip(clip), delta);
-}
-
-void Animation::evaluateGraph(float delta)
-{
-	AnimationBuffer blend_buffer;
-	blend_buffer.count = 0;
-
-	bool updated[def->clip_count];
-	memset(updated, false, sizeof(updated));
-
-	/* the heaviest grid corner of the frame; its cycle is read once, after
-	   the walk, instead of dividing every time the lead changes hands */
-	float   cycle_weight = 0.0f;
-	uint8_t cycle_clip   = 0;
-
-	for (int i = 0; i < def->node_count; i++)
-	{
-		if (!node_active[i]) continue;
-
-		const AnimationNode *node = &def->node[i];
-		float param_val = param[node->param_cols];
-
-		switch (node->type)
-		{
-			case ANIMATION_NODE_CLIP:
-			{
-				updateClip(updated, node->animation[0], delta);
-				break;
-			}
-
-			case ANIMATION_NODE_SELECT:
-			{
-				uint8_t active = (param_val < 0.0f) ? node->animation[0] : node->animation[1];
-				uint8_t inactive = (param_val < 0.0f) ? node->animation[1] : node->animation[0];
-
-				if (node_state[i] != active)
-				{
-					node_state[i] = active;
-					t3d_anim_set_time(getClip(inactive), getClip(active)->time);
-				}
-
-				updateClip(updated, active, delta);
-				break;
-			}
-
-			case ANIMATION_NODE_SEQUENCE:
-			{
-				T3DAnim *clip = getClip(node->animation[0]);
-				if (clip->isPlaying)
-				{
-					float limit = t3d_anim_get_length(clip);
-					if ((clip->time + delta) < limit)
-						updateClip(updated, node->animation[0], delta);
-					else
-						updateClip(updated, node->animation[1], delta);
-				}
-				else
-					updateClip(updated, node->animation[1], delta);
-
-				break;
-			}
-
-			case ANIMATION_NODE_BLEND:
-			{
-				if (param_val > 0.0f) {
-					T3DSkeleton *buf = (node->buffer == ANIMATION_SLOT_MAIN) ? &main : &buffer[node->buffer];
-					updateClip(updated, node->animation[0], delta);
-					blend_buffer.addLayer(buf, param_val);
-				}
-
-				break;
-			}
-
-			case ANIMATION_NODE_BLEND_2D:
-			{
-				float weight = param[node->param_weight];
-				if (weight <= 0.0f) break;
-
-				float tx, ty;
-				uint8_t col = blendSegment(param_val, node->cols, &tx);
-				uint8_t row = blendSegment(param[node->param_rows], node->rows, &ty);
-
-				/* bilinear share of each corner, adds up to 1 */
-				uint8_t corner[4];
-				float   share[4];
-				uint8_t count = 0;
-
-				corner[count] = node->animation[row * node->cols + col];
-				share[count++] = (1.0f - tx) * (1.0f - ty);
-
-				if (tx > 0.0f) {
-					corner[count] = node->animation[row * node->cols + col + 1];
-					share[count++] = tx * (1.0f - ty);
-				}
-
-				if (ty > 0.0f) {
-					corner[count] = node->animation[(row + 1) * node->cols + col];
-					share[count++] = (1.0f - tx) * ty;
-				}
-
-				if (tx > 0.0f && ty > 0.0f) {
-					corner[count] = node->animation[(row + 1) * node->cols + col + 1];
-					share[count++] = tx * ty;
-				}
-
-				/* every layer is diluted by the ones applied after it, so each
-				   one is divided by what those leave: the main keeps 1 - weight */
-				float layer[4];
-				float remain = 1.0f;
-				for (int m = count - 1; m >= 0; m--) {
-					layer[m] = (remain > 0.0000001f) ? weight * share[m] / remain : 1.0f;
-					if (layer[m] > 1.0f) layer[m] = 1.0f;
-					remain *= 1.0f - layer[m];
-				}
-
-				for (uint8_t m = 0; m < count; m++) {
-					updateClip(updated, corner[m], delta);
-					if (layer[m] > 0.0f)
-						blend_buffer.addLayer(clipBuffer(corner[m]), layer[m]);
-
-					if (weight * share[m] > cycle_weight) {
-						cycle_weight = weight * share[m];
-						cycle_clip   = corner[m];
-					}
-				}
-
-				break;
-			}
-
-			case ANIMATION_NODE_LAYER:
-			{
-				float abs_val = fabsf(param_val);
-				if (abs_val > 0.0f) {
-					T3DSkeleton *buf = (node->buffer == ANIMATION_SLOT_MAIN) ? &main : &buffer[node->buffer];
-					blend_buffer.addLayer(buf, abs_val);
-				}
-
-				break;
-			}
-		}
-	}
-
-	if (cycle_weight > 0.0f) {
-		T3DAnim *clip = getClip(cycle_clip);
-		locomotion_cycle = clip->time / t3d_anim_get_length(clip);
-	}
-
-	blend_buffer.blendLayers(&main);
+	animation::setActiveNodes (&graph);
 }
 
 
 /* --- lifecycle -------------------------------------------------------------- */
 
-void Animation::initGraph(Character3D &character)
+/* The state the designated initializer in character3d::create left at zero
+   is right as it is: footing, blends, turn average, action state. */
+void Animation::init(const T3DModel *model)
 {
-	model = character.entity->mesh->model;
+	animation::init(&graph, &def->graph, model);
+}
 
-	main = t3d_skeleton_create_buffered(model, FB_COUNT);
-
-	buffer = (T3DSkeleton *)malloc(def->buffer_count * sizeof(T3DSkeleton));
-	assert(buffer);
-	clip = (T3DAnim *)malloc(def->clip_count * sizeof(T3DAnim));
-	assert(clip);
-	node_state = (uint8_t *)malloc(def->node_count * sizeof(uint8_t));
-	assert(node_state);
-	node_active = (bool *)malloc(def->node_count * sizeof(bool));
-	assert(node_active);
-
-	for (int i = 0; i < def->buffer_count; i++)
-		buffer[i] = t3d_skeleton_clone(&main, false);
-
-	memset(node_state,   0,    def->node_count * sizeof(uint8_t));
-	memset(node_active,  true, def->node_count * sizeof(bool));
-	memset(turn_avg,  0,    sizeof(turn_avg));
-	turn_avg_idx = 0;
-	strafe_turning = false;
-	strafe_blend = 0.0f;
-	strafe_locked_blend = 0.0f;
-	aiming_blend = 0.0f;
-	charging_shoot_blend = 0.0f;
-	climb_blend = 0.0f;
-	climb_dir   = 0.0f;
-
-	/* Clips open on demand through getClip: a zeroed slot (animRef NULL) is a
-	   closed clip. */
-	clip_cooldown = (uint8_t *)malloc(def->clip_count);
-	assert(clip_cooldown);
-	memset(clip_cooldown, 0, def->clip_count);
-	memset(clip, 0, def->clip_count * sizeof(T3DAnim));
-	clip_data = (void **)calloc(def->clip_count, sizeof(void *));
-	assert(clip_data);
+void Animation::destroy()
+{
+	animation::destroy(&graph);
 }
 
 }
@@ -1593,13 +1137,13 @@ void Character3D::setAnimation()
 {
 	if (!animation.def) return;
 
-	float delta = time_get()->delta;
+	float delta = time::get()->delta;
 
 	animation.setParams(*this, delta);
-	animation.evaluateGraph(delta);
-	animation.closeIdleClips();
-	skeletonModifiers_apply(&skeleton_modifiers, &animation.main);
-	t3d_skeleton_update(&animation.main);
+	animation::evaluate(&animation.graph, delta);
+	animation::closeIdleClips(&animation.graph);
+	skeleton::modifiers::apply(&skeleton_modifiers, &animation.graph.main);
+	t3d_skeleton_update(&animation.graph.main);
 }
 
 }

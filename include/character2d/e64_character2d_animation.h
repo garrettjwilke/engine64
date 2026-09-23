@@ -30,10 +30,10 @@ namespace character2d {
 
 typedef struct {
 
-	const char *path;         /* the first frame's file */
-	uint8_t     frame_count;
-	float       fps;          /* frames per second the clip was authored at */
-	bool        is_looping;
+	const char *path; /* the first frame's file */
+	uint8_t frame_count;
+	float fps; /* frames per second the clip was authored at */
+	bool is_looping;
 
 } AnimationClipDef;
 
@@ -52,9 +52,9 @@ typedef struct {
 
 typedef struct {
 
-	const AnimationClipDef  *clip;
+	const AnimationClipDef *clip;
 	const AnimationSettings *settings;
-	uint8_t                  clip_count;
+	uint8_t clip_count;
 
 	/* Which clip plays for what the body does, as indices into the table
 	   above. Walk, run and sprint share the stride: the gait axis picks
@@ -81,8 +81,8 @@ typedef struct Animation {
 	   each clip's run begins. The paths are kept for as long as the frames
 	   are open, since the resource table holds the pointer. */
 	struct sprite_s **frame_sprite;
-	uint16_t         *frame_start;
-	char             *path;
+	uint16_t *frame_start;
+	char *path;
 
 	/* ANIMATION_PARAM_WALK_GAIT of the 3D animation: 0 sits on the first
 	   gait, 1 on the last, and the values between are where the speed
@@ -92,11 +92,11 @@ typedef struct Animation {
 	/* Which movement state the action clips last answered to: what tells an
 	   entry into the air or the roll from a frame already inside it. */
 	uint8_t action_state;
-	bool    landing;
+	bool landing;
 
 	uint8_t clip;
-	float   phase;          /* frames into the clip */
-	uint8_t frame;          /* frame the phase lands on */
+	float phase; /* frames into the clip */
+	uint8_t frame; /* frame the phase lands on */
 
 } Animation;
 

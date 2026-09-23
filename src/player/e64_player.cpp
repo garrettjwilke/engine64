@@ -3,12 +3,12 @@
 
 #include "viewport/e64_viewport.h"
 #include "entity/e64_entity3d.h"
-#include "control/e64_character3d_control.h"
+#include "character3d/e64_character3d_control.h"
 #include "character3d/e64_character3d.h"
 #include "character3d/e64_character3d_movement.h"
 #include "character3d/e64_character3d_animation.h"
 #include "player/e64_player.h"
-#include "physics/math/e64_math_functions.h"
+#include "math/e64_math.h"
 #include "scene3d/e64_scene3d.h"
 #include "time/e64_time.h"
 
@@ -34,7 +34,7 @@ void setCharacter3D(Character3D *character, const character3d::ControlBinding *c
 	Player *seat = &player[control->player];
 
 	seat->type = CHARACTER_3D;
-	seat->character3d.control   = control;
+	seat->character3d.control = control;
 	seat->character3d.character = character;
 	seat->entity = character ? character->entity : NULL;
 	if (seat->entity && seat->entity->mesh)
@@ -50,14 +50,14 @@ void setCharacter2D(Character2D *character, const character2d::ControlBinding *c
 	Player *seat = &player[control->player];
 
 	seat->type = CHARACTER_2D;
-	seat->character2d.control   = control;
+	seat->character2d.control = control;
 	seat->character2d.character = character;
 }
 
 /* Cycles the player through the scene's characters, in either direction. */
 void switchCharacter3D(PlayerID id, int8_t direction)
 {
-	Scene3D *scene = scene3d_get();
+	Scene3D *scene = scene3d::get();
 	if (scene->character3d_count < 2) return;
 
 	Player *seat = &player[id];
@@ -83,7 +83,7 @@ void switchCharacter3D(PlayerID id, int8_t direction)
 
 void update(void)
 {
-	const float dt = time_get()->delta;
+	const float dt = time::get()->delta;
 	for (int i = 0; i < PLAYER_COUNT; i++) {
 		/* Seats nobody took: a player without a body has nothing to run. */
 		if (player[i].type == CHARACTER_3D && player[i].character3d.character) {
@@ -102,7 +102,7 @@ void update(void)
 	/* Scene3D characters nobody drives run on an empty command, so they idle
 	   instead of freezing mid pose when the player switches away. */
 	static character3d::MovementCommand idle_cmd;
-	Scene3D *scene = scene3d_get();
+	Scene3D *scene = scene3d::get();
 	for (int i = 0; i < scene->character3d_count; i++) {
 		Character3D *character = scene->character[i];
 
@@ -130,7 +130,7 @@ void setMatrix(uint8_t fb_index)
 {
 	for (int i = 0; i < PLAYER_COUNT; i++)
 		if (player[i].entity)
-			mesh_setMatrix(player[i].entity->mesh, &player[i].entity->transform, fb_index);
+			mesh::setMatrix(player[i].entity->mesh, &player[i].entity->transform, fb_index);
 }
 
 }

@@ -14,33 +14,33 @@
 
 namespace e64 {
 
-#define PARTICLES_MAX 8
+namespace particles {
 
-static Particle particle[PARTICLES_MAX];
+static Particle particle[Particle::MAX];
 static uint8_t particle_count;
 
 
-void particles_init(void)
+void init(void)
 {
 	tpx_init((TPXInitParams){});
 }
 
-Particle *particles_add(const Particle *def)
+Particle *add(const Particle *def)
 {
-	assert(particle_count < PARTICLES_MAX);
+	assert(particle_count < Particle::MAX);
 
 	Particle *added = &particle[particle_count++];
 	*added = *def;
 	return added;
 }
 
-void particles_update(uint8_t fb_index)
+void update(uint8_t fb_index)
 {
 	for (int i = 0; i < particle_count; i++)
 		particle[i].update(&particle[i], fb_index);
 }
 
-void particles_draw(void)
+void draw(void)
 {
 	for (int i = 0; i < particle_count; i++) {
 		Particle *drawn = &particle[i];
@@ -48,42 +48,44 @@ void particles_draw(void)
 
 		drawn->set_render_state();
 
-		if (drawn->textured) particleBuffer_drawTextured(&drawn->buffer, drawn->matrix);
-		else                 particleBuffer_draw(&drawn->buffer, drawn->matrix);
+		if (drawn->textured) buffer::drawTextured(&drawn->buffer, drawn->matrix);
+		else buffer::draw(&drawn->buffer, drawn->matrix);
 	}
 }
 
 
-ParticleBuffer particleBuffer_create(ParticleType type, uint32_t count)
+namespace buffer {
+
+Particle::Buffer create(Particle::Type type, uint32_t count)
 {
 	assert(count % 2 == 0);
 
-	uint32_t pair_size = type == PARTICLE_S8 ? sizeof(TPXParticleS8) : sizeof(TPXParticleS16);
+	uint32_t pair_size = type == Particle::S8 ? sizeof(TPXParticleS8) : sizeof(TPXParticleS16);
 
-	ParticleBuffer buffer = {
-		.type   = type,
-		.count  = count,
-		.matrix = (T3DMat4FP *)malloc_uncached(sizeof(T3DMat4FP) * FB_COUNT),
+	Particle::Buffer buffer = {
+		.type = type,
+		.count = count,
+		.matrix = (T3DMat4FP *)malloc_uncached(sizeof(T3DMat4FP) * Viewport::FB_COUNT),
 	};
 	buffer.s8 = (TPXParticleS8 *)malloc_uncached(pair_size * count / 2);
 
 	return buffer;
 }
 
-void particleBuffer_delete(ParticleBuffer *buffer)
+void destroy(Particle::Buffer *buffer)
 {
 	free_uncached(buffer->s8);
 	free_uncached(buffer->matrix);
-	*buffer = (ParticleBuffer){};
+	*buffer = (Particle::Buffer){};
 }
 
-void particleBuffer_setMatrix(ParticleBuffer *buffer, const float scale[3], const float rotation[3], const float position[3], uint8_t fb_index)
+void setMatrix(Particle::Buffer *buffer, const float scale[3], const float rotation[3], const float position[3], uint8_t fb_index)
 {
 	t3d_mat4fp_from_srt_euler(&buffer->matrix[fb_index], scale, rotation, position);
 }
 
 
-static void particleBuffer_drawWithMatrix(const ParticleBuffer *buffer, const T3DMat4FP *matrix, bool textured)
+static void drawWithMatrix(const Particle::Buffer *buffer, const T3DMat4FP *matrix, bool textured)
 {
 	tpx_state_from_t3d();
 	tpx_matrix_push((T3DMat4FP *)matrix);
@@ -91,26 +93,30 @@ static void particleBuffer_drawWithMatrix(const ParticleBuffer *buffer, const T3
 
 	if (textured) {
 		tpx_state_set_tex_params(0, 0);
-		if (buffer->type == PARTICLE_S8) tpx_particle_draw_tex_s8(buffer->s8, buffer->count);
-		else                             tpx_particle_draw_tex_s16(buffer->s16, buffer->count);
+		if (buffer->type == Particle::S8) tpx_particle_draw_tex_s8(buffer->s8, buffer->count);
+		else tpx_particle_draw_tex_s16(buffer->s16, buffer->count);
 	} else {
-		if (buffer->type == PARTICLE_S8) tpx_particle_draw_s8(buffer->s8, buffer->count);
-		else                             tpx_particle_draw_s16(buffer->s16, buffer->count);
+		if (buffer->type == Particle::S8) tpx_particle_draw_s8(buffer->s8, buffer->count);
+		else tpx_particle_draw_s16(buffer->s16, buffer->count);
 	}
 
 	tpx_matrix_pop(1);
 }
 
-void particleBuffer_draw(const ParticleBuffer *buffer, const T3DMat4FP *matrix)
+void draw(const Particle::Buffer *buffer, const T3DMat4FP *matrix)
 {
-	particleBuffer_drawWithMatrix(buffer, matrix, false);
+	drawWithMatrix(buffer, matrix, false);
 }
 
 /* Expects the texture already uploaded via rdpq: the ucode never loads or
    switches textures itself. */
-void particleBuffer_drawTextured(const ParticleBuffer *buffer, const T3DMat4FP *matrix)
+void drawTextured(const Particle::Buffer *buffer, const T3DMat4FP *matrix)
 {
-	particleBuffer_drawWithMatrix(buffer, matrix, true);
+	drawWithMatrix(buffer, matrix, true);
+}
+
+}
+
 }
 
 }

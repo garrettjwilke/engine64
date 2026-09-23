@@ -2,9 +2,9 @@
 #define ENGINE64_SPRING_ARM_H
 
 #include <stdint.h>
-#include "physics/math/e64_vector2.h"
-#include "physics/math/e64_vector3.h"
-#include "physics/math/e64_math_common.h"
+#include "math/e64_vector2.h"
+#include "math/e64_vector3.h"
+#include "math/e64_math.h"
 
 namespace e64 {
 
@@ -21,7 +21,7 @@ typedef struct Camera Camera;
 #define SPRING_ARM_MIN_LENGTH 0.1f
 
 
-namespace camera {
+namespace camera3d {
 
 typedef struct SpringArmSettings {
 

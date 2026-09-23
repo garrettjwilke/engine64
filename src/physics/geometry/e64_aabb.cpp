@@ -24,8 +24,9 @@
 #include "physics/geometry/e64_aabb.h"
 
 namespace e64 {
+namespace aabb {
 
-int aabb_containsAABB(const AABB *a, const AABB *other)
+int containsAABB(const AABB *a, const AABB *other)
 {
 	return
 		a->min.x <= other->min.x &&
@@ -36,14 +37,14 @@ int aabb_containsAABB(const AABB *a, const AABB *other)
 		a->max.z >= other->max.z;
 }
 
-int aabb_containsPoint(const AABB *a, const Vector3 *p)
+int containsPoint(const AABB *a, const Vector3 *p)
 {
 	return
 		a->min.x <= p->x && a->min.y <= p->y && a->min.z <= p->z &&
 		a->max.x >= p->x && a->max.y >= p->y && a->max.z >= p->z;
 }
 
-float aabb_surfaceArea(const AABB *a)
+float surfaceArea(const AABB *a)
 {
 	float x = a->max.x - a->min.x;
 	float y = a->max.y - a->min.y;
@@ -51,7 +52,7 @@ float aabb_surfaceArea(const AABB *a)
 	return 2.0f * (x*y + x*z + y*z);
 }
 
-int aabb_overlaps(const AABB *a, const AABB *b)
+int overlaps(const AABB *a, const AABB *b)
 {
 	if (a->max.x < b->min.x || a->min.x > b->max.x) return 0;
 	if (a->max.y < b->min.y || a->min.y > b->max.y) return 0;
@@ -59,7 +60,7 @@ int aabb_overlaps(const AABB *a, const AABB *b)
 	return 1;
 }
 
-AABB aabb_combine(const AABB *a, const AABB *b)
+AABB combine(const AABB *a, const AABB *b)
 {
 	AABB c;
 	c.min = (Vector3){
@@ -76,7 +77,7 @@ AABB aabb_combine(const AABB *a, const AABB *b)
 }
 
 
-Vector3 aabb_closestToPoint(const AABB *a, const Vector3 *p)
+Vector3 closestToPoint(const AABB *a, const Vector3 *p)
 {
 	Vector3 c;
 	c.x = p->x < a->min.x ? a->min.x : (p->x > a->max.x ? a->max.x : p->x);
@@ -88,17 +89,17 @@ Vector3 aabb_closestToPoint(const AABB *a, const Vector3 *p)
 
 /* Closest point on the AABB to the segment [a, b]. Ported from the old engine
    (ODE-style iterative clipping against the box slabs). */
-Vector3 aabb_closestToSegment(const AABB *aabb, const Vector3 *a, const Vector3 *b)
+Vector3 closestToSegment(const AABB *bounds, const Vector3 *a, const Vector3 *b)
 {
-	Vector3 center    = { 0.5f * (aabb->min.x + aabb->max.x),
-	                      0.5f * (aabb->min.y + aabb->max.y),
-	                      0.5f * (aabb->min.z + aabb->max.z) };
-	Vector3 half_size = { 0.5f * (aabb->max.x - aabb->min.x),
-	                      0.5f * (aabb->max.y - aabb->min.y),
-	                      0.5f * (aabb->max.z - aabb->min.z) };
+	Vector3 center = { 0.5f * (bounds->min.x + bounds->max.x),
+	                      0.5f * (bounds->min.y + bounds->max.y),
+	                      0.5f * (bounds->min.z + bounds->max.z) };
+	Vector3 half_size = { 0.5f * (bounds->max.x - bounds->min.x),
+	                      0.5f * (bounds->max.y - bounds->min.y),
+	                      0.5f * (bounds->max.z - bounds->min.z) };
 
-	Vector3 s    = vector3_difference(a, &center);
-	Vector3 v    = vector3_difference(b, a);
+	Vector3 s = vector3::difference(a, &center);
+	Vector3 v = vector3::difference(b, a);
 	Vector3 sign = { 1.0f, 1.0f, 1.0f };
 
 	if (v.x < 0.0f) { s.x = -s.x; v.x = -v.x; sign.x = -1.0f; }
@@ -107,19 +108,19 @@ Vector3 aabb_closestToSegment(const AABB *aabb, const Vector3 *a, const Vector3 
 
 	Vector3 v2 = { v.x * v.x, v.y * v.y, v.z * v.z };
 	Vector3 tanchor = { 2.0f, 2.0f, 2.0f };
-	Vector3 region  = { 0.0f, 0.0f, 0.0f };
+	Vector3 region = { 0.0f, 0.0f, 0.0f };
 
 	if (v.x > FLT_MIN) {
-		if      (s.x < -half_size.x) { region.x = -1.0f; tanchor.x = (-half_size.x - s.x) / v.x; }
-		else if (s.x >  half_size.x) { region.x =  1.0f; tanchor.x = ( half_size.x - s.x) / v.x; }
+		if (s.x < -half_size.x) { region.x = -1.0f; tanchor.x = (-half_size.x - s.x) / v.x; }
+		else if (s.x > half_size.x) { region.x = 1.0f; tanchor.x = ( half_size.x - s.x) / v.x; }
 	}
 	if (v.y > FLT_MIN) {
-		if      (s.y < -half_size.y) { region.y = -1.0f; tanchor.y = (-half_size.y - s.y) / v.y; }
-		else if (s.y >  half_size.y) { region.y =  1.0f; tanchor.y = ( half_size.y - s.y) / v.y; }
+		if (s.y < -half_size.y) { region.y = -1.0f; tanchor.y = (-half_size.y - s.y) / v.y; }
+		else if (s.y > half_size.y) { region.y = 1.0f; tanchor.y = ( half_size.y - s.y) / v.y; }
 	}
 	if (v.z > FLT_MIN) {
-		if      (s.z < -half_size.z) { region.z = -1.0f; tanchor.z = (-half_size.z - s.z) / v.z; }
-		else if (s.z >  half_size.z) { region.z =  1.0f; tanchor.z = ( half_size.z - s.z) / v.z; }
+		if (s.z < -half_size.z) { region.z = -1.0f; tanchor.z = (-half_size.z - s.z) / v.z; }
+		else if (s.z > half_size.z) { region.z = 1.0f; tanchor.z = ( half_size.z - s.z) / v.z; }
 	}
 
 	float t = 0.0f;
@@ -150,7 +151,7 @@ Vector3 aabb_closestToSegment(const AABB *aabb, const Vector3 *a, const Vector3 
 			if (tanchor.y == next_t) { tanchor.y = ( half_size.y - s.y) / v.y; region.y += 1.0f; }
 			if (tanchor.z == next_t) { tanchor.z = ( half_size.z - s.z) / v.z; region.z += 1.0f; }
 
-			t     = next_t;
+			t = next_t;
 			dd2dt = next_dd2dt;
 			if (t >= 1.0f) { t = 1.0f; break; }
 		}
@@ -172,4 +173,5 @@ Vector3 aabb_closestToSegment(const AABB *aabb, const Vector3 *a, const Vector3 
 	return (Vector3){ tmp.x + center.x, tmp.y + center.y, tmp.z + center.z };
 }
 
+}
 }
