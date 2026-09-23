@@ -19,7 +19,25 @@ bool isLoadable(const Sprite *element, float rotation)
 
 void loadTexture(const Sprite *element)
 {
-	rdpq_sprite_upload(TILE0, element->asset, NULL);
+	sprite_t *s = element->asset;
+	rdpq_tlut_t tlut = rdpq_tlut_from_format(sprite_get_format(s));
+
+	if (tlut == TLUT_NONE) {
+		rdpq_sprite_upload(TILE0, s, NULL);
+		return;
+	}
+
+	/* A palette sprite is loaded by hand. rdpq_sprite_upload loads the texels
+	   and then the palette, and the palette's SET_TEXTURE_IMAGE reaches the
+	   RDP while the texel load is still fetching its last rows: on hardware
+	   those rows come out of the palette. The load is fenced before the image
+	   changes, which is what SYNC_LOAD is for. */
+	surface_t texels = sprite_get_pixels(s);
+	rdpq_tex_upload(TILE0, &texels, NULL);
+	rdpq_sync_load();
+
+	rdpq_mode_tlut(tlut);
+	rdpq_tex_upload_tlut(sprite_get_palette(s), 0, sprite_get_palette_used_colors(s));
 }
 
 void drawLoaded(const Sprite *element, Vector2 position, Vector2 scale)

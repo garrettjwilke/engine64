@@ -78,7 +78,7 @@ public:
 inline const Viewport::ModeDef SCREEN_320x240_DEF = { .width = 320, .height = 240 };
 inline const Viewport::ModeDef SCREEN_424x240_DEF = { .width = 424, .height = 240 };
 inline const Viewport::ModeDef SCREEN_640x240_DEF = { .width = 640, .height = 240, .scale_x = 2.0f, .scale_y = 1.0f };
-inline const Viewport::ModeDef SCREEN_640x480_DEF = { .width = 640, .height = 480, .interlaced = INTERLACE_HALF };
+inline const Viewport::ModeDef SCREEN_640x480_DEF = { .width = 640, .height = 480, .interlaced = INTERLACE_HALF, .scale_x = 2.0f, .scale_y = 2.0f };
 
 
 namespace viewport {
