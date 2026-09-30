@@ -21,6 +21,19 @@ namespace animation {
 
 namespace buffer {
 
+/* t3d_quat_nlerp without the normalize: the same blend along the shorter
+   arc, leaving the length to whoever normalizes at the end. */
+static inline void quat_lerp(T3DQuat *res, const T3DQuat *a, const T3DQuat *b, float t)
+{
+	float blend = 1.0f - t;
+	if (t3d_quat_dot(a, b) < 0.0f) blend = -blend;
+
+	res->v[0] = blend * a->v[0] + t * b->v[0];
+	res->v[1] = blend * a->v[1] + t * b->v[1];
+	res->v[2] = blend * a->v[2] + t * b->v[2];
+	res->v[3] = blend * a->v[3] + t * b->v[3];
+}
+
 void addLayer(Animation::Buffer *stack, const T3DSkeleton *skel, float weight)
 {
 	/* Never write past the stack: a dropped layer is a pose glitch, an
@@ -60,10 +73,12 @@ void blendLayers(const Animation::Buffer *stack, const T3DSkeleton *main)
 				continue;
 			}
 
-			t3d_quat_nlerp(&bone->rotation, &bone->rotation, &layer->rotation, stack->weight[j]);
+			quat_lerp(&bone->rotation, &bone->rotation, &layer->rotation, stack->weight[j]);
 			t3d_vec3_lerp(&bone->position, &bone->position, &layer->position, stack->weight[j]);
 			t3d_vec3_lerp(&bone->scale, &bone->scale, &layer->scale, stack->weight[j]);
 		}
+
+		t3d_quat_normalize(&bone->rotation);
 	}
 }
 
@@ -497,6 +512,10 @@ void init(Animation *animation, const Animation::Def *def, const T3DModel *model
 	animation->param = (float *)malloc(def->param_count * sizeof(float));
 	assert(animation->param);
 	for (int i = 0; i < def->param_count; i++) animation->param[i] = 0.0f;
+
+	/* Read by setActiveNodes as soon as a grid comes back on, which can be
+	   before any frame has had a grid with weight to write it. */
+	animation->cycle = 0.0f;
 
 	animation->clip = (T3DAnim *)malloc(def->clip_count * sizeof(T3DAnim));
 	assert(animation->clip);

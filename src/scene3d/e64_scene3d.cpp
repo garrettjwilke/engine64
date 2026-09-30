@@ -13,10 +13,10 @@
 #include "scene3d/e64_fog.h"
 #include "entity/e64_entity3d.h"
 #include "scene3d/e64_scene3d.h"
-#include "physics/e64_physics_world.h"
-#include "physics/shapes/e64_physics_shape.h"
-#include "physics/e64_rigid_body.h"
-#include "physics/e64_physics.h"
+#include "physics3d/e64_physics_world.h"
+#include "physics3d/shapes/e64_physics_shape.h"
+#include "physics3d/e64_rigid_body.h"
+#include "physics3d/e64_physics.h"
 #include "engine/e64_common.h"
 
 namespace e64 {
@@ -87,16 +87,13 @@ void load(const Def *def, const controls::Def *controls)
 		/* entity.c builds from a flat parameter block: filled here straight
 		   from the prefab and its placement, and gone after the load. */
 		entity3d::Def entity_def = {
-			.model_path = prefab->model,
-			.part = prefab->part,
-			.part_count = prefab->part_count,
-			.part_position = prefab->part_position,
-			.sound = prefab->sound,
-			.sound_count = prefab->sound_count,
 			.position = placed->position,
 			.rotation = placed->rotation,
 			.scale = scale,
+			.mesh = prefab->mesh.model ? &prefab->mesh : NULL,
 			.collider = prefab->collider,
+			.sound = prefab->sound,
+			.sound_count = prefab->sound_count,
 			.cull = true,
 		};
 
@@ -262,10 +259,8 @@ void setRenderContext(const Scene3D *s, Render::Context *ctx, const Viewport *vi
 			if (mesh->culled) continue;
 		}
 
-		/* Whatever drives this mesh has already moved: fold the new positions
-		   into this frame's vertex buffer, then point the segment its recorded
-		   display list reads from at that same copy. */
-		mesh::deform::update(mesh, fb_index);
+		/* Point the segment the recorded display list reads from at this
+		   frame's copy, the one the update already wrote. */
 		mesh::deform::bindFrame(mesh, fb_index);
 
 		/* One element per object still on: its part turned on, and not cut

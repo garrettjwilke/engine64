@@ -4,105 +4,36 @@
 	of setJumpParams and setRollParam brought across the same way. What there
 	drove a blend graph over skeleton buffers has no meaning for sprites and
 	did not come across.
+
+	The clips and their playback are the entity sprite's
+	e64::sprite::Animation; what is left here is the choice of clip off the
+	movement.
 */
 #include <assert.h>
-#include <ctype.h>
-#include <malloc.h>
 #include <math.h>
 #include <fmath.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <libdragon.h>
 
 #include "character2d/e64_character2d.h"
-#include "resource/e64_resource.h"
 
 namespace e64 {
 
 namespace character2d {
 namespace animation {
 
-/* --- frames ----------------------------------------------------------------- */
-
-/* Opens every frame of every clip. A clip names its first frame; the number
-   before the extension counts the rest, with as many digits as it was
-   written with. */
-static void loadFrames(Animation *animation)
-{
-	const AnimationDef *def = animation->def;
-
-	uint16_t total = 0;
-	size_t longest = 0;
-	animation->frame_start = (uint16_t *)malloc(def->clip_count * sizeof(uint16_t));
-	assert(animation->frame_start);
-
-	for (int c = 0; c < def->clip_count; c++) {
-		animation->frame_start[c] = total;
-		total += def->clip[c].frame_count;
-		size_t len = strlen(def->clip[c].path) + 1;
-		if (len > longest) longest = len;
-	}
-
-	animation->frame_sprite = (sprite_t **)malloc(total * sizeof(sprite_t *));
-	animation->path = (char *)malloc(total * longest);
-	assert(animation->frame_sprite && animation->path);
-
-	for (int c = 0; c < def->clip_count; c++) {
-		const char *first = def->clip[c].path;
-
-		const char *dot = strrchr(first, '.');
-		assert(dot);
-		const char *num = dot;
-		while (num > first && isdigit((unsigned char)num[-1])) num--;
-		int digits = (int)(dot - num);
-		assert(digits > 0);
-		int base = atoi(num);
-
-		for (int f = 0; f < def->clip[c].frame_count; f++) {
-			uint16_t index = animation->frame_start[c] + f;
-			char *path = animation->path + index * longest;
-
-			snprintf(path, longest, "%.*s%0*d%s", (int)(num - first), first, digits, base + f, dot);
-
-			animation->frame_sprite[index] = (sprite_t *)resource::load(path, Resource::SPRITE, NULL);
-			assert(animation->frame_sprite[index]);
-		}
-	}
-}
-
 void init(Character2D *character, const AnimationDef *def)
 {
-	assert(def && def->clip_count);
+	e64::sprite::Animation *sprite = character->entity->graphic->sprite.animation;
+	assert(def && sprite);
 
 	Animation *animation = &character->animation;
 
 	*animation = (Animation){
 		.def = def,
+		.sprite = sprite,
 		.action_state = MOVEMENT2D_STATE_IDLE,
-		.clip = def->idle_animation,
 	};
-	loadFrames(animation);
-}
-
-void free(Character2D *character)
-{
-	Animation *animation = &character->animation;
-	const AnimationDef *def = animation->def;
-
-	uint16_t total = animation->frame_start[def->clip_count - 1] + def->clip[def->clip_count - 1].frame_count;
-	for (int i = 0; i < total; i++)
-		resource::unload(animation->frame_sprite[i]);
-
-	::free(animation->frame_sprite);
-	::free(animation->frame_start);
-	::free(animation->path);
-}
-
-sprite_t *getSprite(const Character2D *character)
-{
-	const Animation *animation = &character->animation;
-	return animation->frame_sprite[animation->frame_start[animation->clip] + animation->frame];
+	e64::sprite::animation::setClip(sprite, def->idle_animation, 0.0f);
 }
 
 
@@ -250,9 +181,9 @@ static uint8_t selectActionClip(Character2D *character, bool *restart)
 			return def->land_animation;
 		}
 
-		if (animation->clip == def->jump_animation && !isFinished(character))
+		if (animation->sprite->clip == def->jump_animation && !e64::sprite::animation::isFinished(animation->sprite))
 			return def->jump_animation;
-		if (animation->clip != def->fall_animation) *restart = true;
+		if (animation->sprite->clip != def->fall_animation) *restart = true;
 		return def->fall_animation;
 	}
 
@@ -269,13 +200,13 @@ static uint8_t selectActionClip(Character2D *character, bool *restart)
 		}
 	}
 	if (animation->landing) {
-		if (isFinished(character) || cur == MOVEMENT2D_STATE_WALKING)
+		if (e64::sprite::animation::isFinished(animation->sprite) || cur == MOVEMENT2D_STATE_WALKING)
 			animation->landing = false;
 		else
 			return def->land_animation;
 	}
 
-	return def->clip_count; /* none: the locomotion picks */
+	return animation->sprite->def->clip_count; /* none: the locomotion picks */
 }
 
 
@@ -303,7 +234,7 @@ static float getReferenceSpeed(const Character2D *character)
 	const Animation *animation = &character->animation;
 	const MovementSettings *settings = character->movement.settings;
 
-	if (!sharesStride(animation->def, animation->clip)) return 0.0f;
+	if (!sharesStride(animation->def, animation->sprite->clip)) return 0.0f;
 
 	if (settings->gait_count == 0) return 0.0f;
 	if (settings->gait_count == 1) return settings->gait[0].target_speed;
@@ -314,47 +245,26 @@ static float getReferenceSpeed(const Character2D *character)
 	     + t * (settings->gait[row + 1].target_speed - settings->gait[row].target_speed);
 }
 
-static void advance(Character2D *character, float dt)
+static void setRate(Character2D *character)
 {
-	Animation *animation = &character->animation;
-	const AnimationClipDef *current = &animation->def->clip[animation->clip];
-
 	/* The clip was drawn moving at that speed, so running it at any other
 	   one slides the feet. The frames are scaled by the difference. */
-	float rate = current->fps;
+	float rate = 1.0f;
 	const float reference = getReferenceSpeed(character);
-	if (reference > 0.0f) rate *= character->movement.data.horizontal_speed / reference;
+	if (reference > 0.0f) rate = character->movement.data.horizontal_speed / reference;
 
-	animation->phase += dt * rate;
-
-	if (current->frame_count == 0) { animation->frame = 0; return; }
-
-	if (current->is_looping) {
-		animation->phase = fmodf(animation->phase, (float)current->frame_count);
-		if (animation->phase < 0.0f) animation->phase += (float)current->frame_count;
-	}
-
-	int index = (int)animation->phase;
-	if (index >= current->frame_count) index = current->frame_count - 1;
-	if (index < 0) index = 0;
-	animation->frame = (uint8_t)index;
-}
-
-bool isFinished(const Character2D *character)
-{
-	const Animation *animation = &character->animation;
-	const AnimationClipDef *current = &animation->def->clip[animation->clip];
-	return !current->is_looping && animation->phase >= (float)current->frame_count;
+	e64::sprite::animation::setRate(character->animation.sprite, rate);
 }
 
 static void setClip(Animation *animation, uint8_t wanted, bool restart)
 {
 	const AnimationDef *def = animation->def;
+	e64::sprite::Animation *sprite = animation->sprite;
 
-	if (wanted == animation->clip && !restart) return;
+	if (wanted == sprite->clip && !restart) return;
 
-	const AnimationClipDef *from = &def->clip[animation->clip];
-	const AnimationClipDef *to = &def->clip[wanted];
+	const e64::sprite::Animation::ClipDef *from = &sprite->def->clip[sprite->clip];
+	const e64::sprite::Animation::ClipDef *to = &sprite->def->clip[wanted];
 
 	/* Phase carry, the 3D syncGridClips: the clip coming in starts where
 	   the one going out was, measured as a fraction of its own cycle. The
@@ -364,14 +274,12 @@ static void setClip(Animation *animation, uint8_t wanted, bool restart)
 	   Only inside the grid. A stride handed to a roll or a landing means
 	   nothing, and those restart. */
 	float carried = 0.0f;
-	if (!restart && sharesStride(def, animation->clip)
+	if (!restart && sharesStride(def, sprite->clip)
 	 && sharesStride(def, wanted) && from->frame_count > 0) {
-		carried = (animation->phase / (float)from->frame_count) * (float)to->frame_count;
+		carried = (sprite->phase / (float)from->frame_count) * (float)to->frame_count;
 	}
 
-	animation->clip = wanted;
-	animation->phase = carried;
-	animation->frame = 0;
+	e64::sprite::animation::setClip(sprite, wanted, carried);
 }
 
 void update(Character2D *character, float dt)
@@ -382,11 +290,11 @@ void update(Character2D *character, float dt)
 
 	bool restart;
 	uint8_t wanted = selectActionClip(character, &restart);
-	if (wanted == animation->def->clip_count)
+	if (wanted == animation->sprite->def->clip_count)
 		wanted = selectLocomotionClip(character);
 
 	setClip(animation, wanted, restart);
-	advance(character, dt);
+	setRate(character);
 }
 
 }

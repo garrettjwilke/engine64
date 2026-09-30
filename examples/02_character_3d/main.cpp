@@ -67,7 +67,7 @@ static const e64::collider::Def room_collider = { room_shapes, 1 };
 static const e64::Prefab3D room = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/room.t3dm",
+	.mesh = { .model = "rom:/models/room.t3dm" },
 	.collider = &room_collider,
 };
 
@@ -149,7 +149,7 @@ static const e64::character3d::Def character3d_def = {
 static const e64::Prefab3D character = {
 
 	.type = e64::prefab3d::PREFAB3D_CHARACTER,
-	.model = "rom:/models/capsule.t3dm",
+	.mesh = { .model = "rom:/models/capsule.t3dm" },
 	.character = &character3d_def,
 };
 

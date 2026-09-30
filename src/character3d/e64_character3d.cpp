@@ -50,11 +50,11 @@ Character3D *create(const Def *def, Entity3D *entity)
 		(def->collider_settings->height - 2.0f * def->collider_settings->radius) * 0.5f);
 	collider::setVertical(&character->collider, &character->body.position);
 
-	/* A def without animations (a vehicle) skips the whole graph: the mesh
-	   keeps a NULL skeleton and draws through the model object path. */
+	/* The graph is the mesh's: the character only drives it. A def without
+	   animations (a vehicle) leaves it alone. */
 	if (def->animation_def) {
-		character->animation.init(entity->mesh->model);
-		entity->mesh->skeleton = &character->animation.graph.main;
+		assert(entity->mesh->animation);
+		character->animation.init(entity->mesh->animation);
 	}
 
 	/* Aim before the weapons: the bow has to follow a spine already bent. */
@@ -73,11 +73,11 @@ Character3D *create(const Def *def, Entity3D *entity)
 		   so each modifier runs after the one it hangs from. */
 		for (const SpringBonesDef *set = def->spring_bones; set->count; set++) {
 			int16_t joint[16];
-			uint8_t count = springBones_resolveChain(&character->animation.graph.main, set, joint, 16);
+			uint8_t count = springBones_resolveChain(&character->animation.graph->main, set, joint, 16);
 			if (count > set->count) count = set->count;
 
 			for (uint8_t i = 0; i < count; i++) {
-				if (!springBone_init(&spring_bone[n], &character->animation.graph.main, joint[i],
+				if (!springBone_init(&spring_bone[n], &character->animation.graph->main, joint[i],
 				                     i, set, &entity->transform))
 					continue;
 
@@ -87,28 +87,16 @@ Character3D *create(const Def *def, Entity3D *entity)
 		}
 	}
 
-	/* Part 0 = body, parts 1..N = one per weapon object, def order.
-	   Only the body starts visible; equipping turns weapon bits on.
-	   No weapons: the whole model is part 0. A skinned model records
-	   against the skeleton segment; without a skeleton it records like a
-	   prop. */
-	const T3DMat4FP *bones = def->animation_def
-	                       ? (const T3DMat4FP *)t3d_segment_placeholder(T3D_SEGMENT_SKELETON)
-	                       : NULL;
-
-	if (def->weapons_def)
-		mesh::record(entity->mesh, def->weapons_def->mesh, def->weapons_def->mesh_count, bones);
-	else
-		mesh::record(entity->mesh, NULL, 0, bones);
+	/* The mesh's parts 1..N are the weapons. Only the body starts visible;
+	   equipping turns a weapon on. */
+	for (uint8_t part = 1; part <= entity->mesh->part_count; part++)
+		mesh::part::setVisible(entity->mesh, part, false);
 
 	return character;
 }
 
 void destroy(Character3D *character)
 {
-	if (character->animation.def)
-		character->animation.destroy();
-
 	free(character);
 }
 

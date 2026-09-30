@@ -42,23 +42,24 @@
 	PREFAB3D_PROP with no .collider and no .prop body is static scenery: drawn,
 	never simulated, no collision. Adding physics to a prop is example 02.
 
-	.model is a path into the ROM filesystem. The Makefile compiles the .glb
-	files in assets/models into the .t3dm files named here.
+	.mesh.model is a path into the ROM filesystem. The Makefile compiles the
+	.glb files in assets/models into the .t3dm files named here.
 */
 
 /* The smallest prefab there is: a type and a model, drawn as one piece. */
-static const e64::Prefab3D room = { .type = e64::prefab3d::PREFAB3D_PROP, .model = "rom:/models/room.t3dm" };
+static const e64::Prefab3D room = { .type = e64::prefab3d::PREFAB3D_PROP, .mesh = { .model = "rom:/models/room.t3dm" } };
 
 /* lamp_post.glb contains two objects, named "post" and "lamp" in Blender.
 
-   A model is drawn as a single unit unless the prefab lists part names. Each
-   name in .part becomes a part that can be drawn or skipped independently at
-   runtime, matched against the object names inside the model. Everything the
-   list does not name is grouped into one remaining part that is always drawn.
-   Up to seven names can be listed.
+   A model is drawn as a single unit unless the mesh lists part names. Each
+   name in .mesh.part becomes a part that can be drawn or skipped independently
+   at runtime, matched against the object names inside the model. Everything
+   the list does not name is grouped into one remaining part that is always
+   drawn. Up to seven names can be listed.
 
-   .part_position places each named part inside the entity, in the same order
-   as the names, and .part_count must equal the number of names listed. A part
+   .mesh.part_position places each named part inside the entity, in the same
+   order as the names, and .mesh.part_count must equal the number of names
+   listed. A part
    left at zero is drawn exactly where it was modelled.
 
    Here both objects were modelled at the origin, so the lamp needs an offset
@@ -79,11 +80,12 @@ static const e64::Vector3 lamp_post_part_positions[] = {
 static const e64::Prefab3D lamp_post = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/lamp_post.t3dm",
-
-	.part = lamp_post_parts,
-	.part_position = lamp_post_part_positions,
-	.part_count = 2,
+	.mesh = {
+		.model = "rom:/models/lamp_post.t3dm",
+		.part = lamp_post_parts,
+		.part_position = lamp_post_part_positions,
+		.part_count = 2,
+	},
 };
 
 

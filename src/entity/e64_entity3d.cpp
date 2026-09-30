@@ -6,12 +6,10 @@
 #include <t3d/t3dskeleton.h>
 
 #include "entity/e64_entity3d.h"
-#include "resource/e64_resource.h"
-#include "model/e64_mesh_deform.h"
 #include "character3d/e64_character3d_animation.h"
 #include "viewport/e64_viewport.h"
 #include "math/e64_math.h"
-#include "physics/e64_physics_world.h"
+#include "physics3d/e64_physics_world.h"
 
 namespace e64 {
 
@@ -49,42 +47,8 @@ Entity3D *create(const Def *def)
 	}
 
 	/* A sound placed alone has nothing to draw. */
-	if (!def->model_path) return entity;
-
-	/* Zeroed: each recording path fills its own fields, and the delete
-	   frees every pointer it finds. */
-	entity->mesh = (Mesh *)calloc(1, sizeof(Mesh));
-	assert(entity->mesh);
-	entity->mesh->model = (T3DModel *)resource::load(def->model_path, Resource::MODEL, NULL);
-	entity->mesh->matrix_buffer = (T3DMat4FP *)malloc_uncached(sizeof(T3DMat4FP) * Viewport::FB_COUNT);
-	assert(entity->mesh->matrix_buffer);
-	t3d_mat4fp_identity(entity->mesh->matrix_buffer);
-
-	entity->mesh->skeleton = NULL;
-	entity->mesh->deform = NULL;
-	entity->mesh->texture_scroll = NULL;
-	mesh::initBounds(entity->mesh);
-
-	if (def->character) {
-		/* character3d_create records the model with its skeleton segment. */
-	} else {
-		/* The model is static, so it records with no skeleton segment, and
-		   every part starts on screen: a prop shows whole until the game
-		   decides to hide something. */
-		mesh::record(entity->mesh, def->part, def->part_count, NULL);
-		entity->mesh->visible = (uint8_t)((2u << entity->mesh->part_count) - 1);
-
-		/* A part declared away from where it was modelled gets its offset here,
-		   so it is already in place the first time it is drawn. */
-		for (int i = 0; def->part_position && i < def->part_count; i++) {
-			const Vector3 *position = &def->part_position[i];
-			if (position->x == 0.0f && position->y == 0.0f && position->z == 0.0f)
-				continue;
-
-			Render::Transform offset = { .position = *position, .scale = { 1.0f, 1.0f, 1.0f } };
-			mesh::part::setOffset(entity->mesh, 1 + i, &offset);
-		}
-	}
+	if (def->mesh)
+		entity->mesh = mesh::create(def->mesh);
 
 	return entity;
 }
@@ -111,13 +75,8 @@ void setPartOffset(Entity3D *entity, const char *name, const Render::Transform *
 
 void destroy(Entity3D *entity)
 {
-	if (entity->mesh) {
-		mesh::release(entity->mesh);
-		mesh::deform::destroy(entity->mesh);
-		free_uncached(entity->mesh->matrix_buffer);
-		resource::unload(entity->mesh->model);
-		free(entity->mesh);
-	}
+	if (entity->mesh)
+		mesh::destroy(entity->mesh);
 
 	for (int i = 0; i < entity->sound_count; i++)
 		sound::unload(&entity->sound[i]);

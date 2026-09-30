@@ -22,10 +22,13 @@ static void setEntity(Character2D *character)
 	Entity2D *entity = character->entity;
 	Sprite *sprite = &entity->graphic->sprite;
 
-	sprite->asset = animation::getSprite(character);
-	sprite->cols = 0;
-	sprite->rows = 0;
-	sprite->frame = 0;
+	/* Without animations the entity keeps its own sprite. */
+	if (character->animation.def) {
+		sprite->asset = e64::sprite::animation::getSprite(character->animation.sprite);
+		sprite->cols = 0;
+		sprite->rows = 0;
+		sprite->frame = 0;
+	}
 	/* The frames are drawn facing left, so the mirror is the right side. */
 	sprite->flip_x = !character->facing_left;
 
@@ -56,30 +59,29 @@ Character2D *create(const Def *def, Entity2D *entity)
 	*character = (Character2D){
 		.def = def,
 		.entity = entity,
-		.entity_sprite = entity->graphic->sprite.asset,
 		.position = entity->position,
 		.movement = (Movement){ .settings = def->movement_settings, .data = { .is_grounded = true }, .current = MOVEMENT2D_STATE_IDLE },
 	};
 
-	animation::init(character, def->animation_def);
+	/* A def without animations (a fixed body) skips them: the entity keeps
+	   the sprite it was placed with. */
+	if (def->animation_def)
+		animation::init(character, def->animation_def);
+
 	setEntity(character);
 	return character;
 }
 
 void destroy(Character2D *character)
 {
-	if (!character) return;
-
-	/* The entity closes its own sprite when it goes; it gets it back. */
-	character->entity->graphic->sprite.asset = character->entity_sprite;
-
-	animation::free(character);
 	::free(character);
 }
 
 void update(Character2D *character, float dt)
 {
-	animation::update(character, dt);
+	if (character->animation.def)
+		animation::update(character, dt);
+
 	setEntity(character);
 }
 

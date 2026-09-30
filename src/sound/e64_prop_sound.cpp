@@ -1,9 +1,9 @@
 #include "sound/e64_prop_sound.h"
 #include "entity/e64_entity3d.h"
 #include "shaders/e64_water.h"
-#include "physics/collision/e64_contact.h"
-#include "physics/e64_rigid_body.h"
-#include "physics/e64_physics_world.h"
+#include "physics3d/collision/e64_contact.h"
+#include "physics3d/e64_rigid_body.h"
+#include "physics3d/e64_physics_world.h"
 #include "math/e64_math.h"
 
 namespace e64 {

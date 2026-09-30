@@ -48,9 +48,10 @@ static const e64::Vector3 lamp_post_part_positions[] = {
 extern const e64::Prefab3D lamp_post = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/lamp_post.t3dm",
-
-	.part = lamp_post_parts,
-	.part_position = lamp_post_part_positions,
-	.part_count = 2,
+	.mesh = {
+		.model = "rom:/models/lamp_post.t3dm",
+		.part = lamp_post_parts,
+		.part_position = lamp_post_part_positions,
+		.part_count = 2,
+	},
 };

@@ -5,7 +5,7 @@
 #include <t3d/t3dmodel.h>
 #include <t3d/t3dmath.h>
 
-#include "physics/e64_physics.h"
+#include "physics3d/e64_physics.h"
 #include "engine/e64_common.h" /* RENDER_SCALE */
 #include "scene3d/e64_light.h"
 

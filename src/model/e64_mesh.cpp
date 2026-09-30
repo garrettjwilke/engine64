@@ -2,9 +2,12 @@
 #include <assert.h>
 #include <malloc.h>
 #include <string.h>
+#include <t3d/t3d.h>
 #include <t3d/t3dmodel.h>
 
 #include "model/e64_mesh.h"
+#include "model/e64_mesh_deform.h"
+#include "resource/e64_resource.h"
 #include "engine/e64_common.h"
 #include "math/e64_math.h"
 #include "math/e64_quaternion.h"
@@ -461,6 +464,68 @@ void release(Mesh *mesh)
 	mesh->part_count = 0;
 	mesh->part_offset = NULL;
 	mesh->part_matrix = NULL;
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* Lifetime                                                                  */
+/* ------------------------------------------------------------------------ */
+
+Mesh *create(const Mesh::Def *def)
+{
+	/* Zeroed: what the def leaves out stays NULL, and destroy frees every
+	   pointer it finds. */
+	Mesh *mesh = (Mesh *)calloc(1, sizeof(Mesh));
+	assert(mesh);
+	mesh->model = (T3DModel *)resource::load(def->model, Resource::MODEL, NULL);
+	mesh->matrix_buffer = (T3DMat4FP *)malloc_uncached(sizeof(T3DMat4FP) * Viewport::FB_COUNT);
+	assert(mesh->matrix_buffer);
+	t3d_mat4fp_identity(mesh->matrix_buffer);
+	initBounds(mesh);
+
+	/* An animated model records against the skeleton segment, filled each
+	   frame from the animation's pose; a static one records with none. */
+	const T3DMat4FP *bones = NULL;
+	if (def->animation) {
+		mesh->animation = (Animation *)malloc(sizeof(Animation));
+		assert(mesh->animation);
+		animation::init(mesh->animation, def->animation, mesh->model);
+		mesh->skeleton = &mesh->animation->main;
+		bones = (const T3DMat4FP *)t3d_segment_placeholder(T3D_SEGMENT_SKELETON);
+	}
+
+	/* Every part starts on screen: the model shows whole until the game
+	   decides to hide something. */
+	record(mesh, def->part, def->part_count, bones);
+	mesh->visible = (uint8_t)((2u << mesh->part_count) - 1);
+
+	/* A part declared away from where it was modelled gets its offset here,
+	   so it is already in place the first time it is drawn. */
+	for (int i = 0; def->part_position && i < def->part_count; i++) {
+		const Vector3 *position = &def->part_position[i];
+		if (position->x == 0.0f && position->y == 0.0f && position->z == 0.0f)
+			continue;
+
+		Render::Transform offset = { .position = *position, .scale = { 1.0f, 1.0f, 1.0f } };
+		part::setOffset(mesh, 1 + i, &offset);
+	}
+
+	return mesh;
+}
+
+void destroy(Mesh *mesh)
+{
+	release(mesh);
+	deform::destroy(mesh);
+
+	if (mesh->animation) {
+		animation::destroy(mesh->animation);
+		free(mesh->animation);
+	}
+
+	free_uncached(mesh->matrix_buffer);
+	resource::unload(mesh->model);
+	free(mesh);
 }
 
 

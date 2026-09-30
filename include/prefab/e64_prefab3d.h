@@ -9,9 +9,9 @@
 #include <stdint.h>
 
 #include "entity/e64_entity3d.h"
-#include "physics/e64_rigid_body.h"
-#include "physics/e64_cloth.h"
-#include "physics/collision/e64_collider.h"
+#include "physics3d/e64_rigid_body.h"
+#include "physics3d/e64_cloth.h"
+#include "physics3d/collision/e64_collider.h"
 #include "character3d/e64_character3d.h"
 #include "shaders/e64_water.h"
 #include "sound/e64_sound.h"
@@ -35,24 +35,10 @@ typedef enum {
 typedef struct Prefab3D {
 
 	prefab3d::Type type;
-	const char *model;
 
-	/* Objects inside the model the game drives on its own, named as they are
-	   named in the model, so it can show and hide each one. Left out, the model
-	   is drawn whole. */
-	const char *const *part;
-
-	/* Where each of those objects is drawn, in the entity's own space and in
-	the same order as the names. A part left at zero stays where it was
-	modelled. */
-	const Vector3 *part_position;
-
-	uint8_t part_count;
-
-	/* Opened in the entity from create to delete. The looping ones play on
-	   their own; the rest wait for whoever fires them. */
-	const Sound::Def *const *sound;
-	uint8_t sound_count;
+	/* What is drawn: the model, its animation and its parts. Any kind can be
+	   animated; a character needs it to move. No model: nothing to draw. */
+	Mesh::Def mesh;
 
 	/* Solid for a prop, sensor volume for water. NULL: no collision. */
 	const collider::Def *collider;
@@ -64,6 +50,11 @@ typedef struct Prefab3D {
 		const Cloth::Def *cloth;
 		const Water::Def *water;
 	};
+
+	/* Opened in the entity from create to delete. The looping ones play on
+	   their own; the rest wait for whoever fires them. */
+	const Sound::Def *const *sound;
+	uint8_t sound_count;
 
 } Prefab3D;
 

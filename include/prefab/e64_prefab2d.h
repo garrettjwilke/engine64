@@ -36,15 +36,15 @@ typedef struct Prefab2D {
 	   sprite sheet it picks its frames out of. */
 	Graphic graphic;
 
-	/* Opened in the entity from create to delete. The looping ones play on
-	   their own; the rest wait for whoever fires them. */
-	const Sound::Def *const *sound;
-	uint8_t sound_count;
-
 	/* What the kind needs. Collision comes with the 2D physics. A stage
 	   draws its own tiles and leaves the graphic above unused. */
 	const character2d::Def *character;
 	const stage2d::Def *stage;
+
+	/* Opened in the entity from create to delete. The looping ones play on
+	   their own; the rest wait for whoever fires them. */
+	const Sound::Def *const *sound;
+	uint8_t sound_count;
 
 	/* PROP only: how much of the camera's scroll it takes. 1 sits in the
 	   world and moves with it, and a backdrop takes some fraction of that,

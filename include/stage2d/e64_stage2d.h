@@ -18,6 +18,7 @@
 #include "render/e64_render.h"
 #include "entity/e64_entity2d.h"
 #include "camera/e64_camera2d.h"
+#include "physics2d/collision/e64_grid_collider2d.h"
 
 namespace e64 {
 
@@ -72,10 +73,14 @@ typedef struct Stage2D {
 	uint8_t layer_count;
 	stage2d::Layer layer[stage2d::MAX_LAYER];
 
-	/* One bit per tile number as the cells count them: set, the tile is
-	   one the body stands on and walks into, from Tiled's "solid" tile
-	   property. */
-	const uint8_t *solid;
+	/* One byte per tile number as the cells count them: the tile's
+	   collision, what the game makes of touching it, 0 none; from Tiled's
+	   "collision" tile property. */
+	const uint8_t *tile_collision;
+
+	/* The shape of the stage for physics2d, one cell per map cell holding
+	   the collision of its tile. Placed in the world by entity. */
+	GridCollider2D *collider;
 
 	/* The graphics of the tiles the map uses, one each, and where each
 	   tile's is: slot[n] is 1 + its index in graphic, 0 for a tile no cell
@@ -111,9 +116,15 @@ void getCell(const Stage2D *stage, Vector2 position, int32_t *x, int32_t *y);
 /* What a layer holds at a cell: 0 empty, n the tile n-1. */
 uint8_t getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t y);
 
-/* Whether any layer holds a solid tile at the cell. Outside the map is
-   open. */
-bool isSolid(const Stage2D *stage, int32_t x, int32_t y);
+/* The tile collision of the cell: that of the first layer, back to front,
+   whose tile there has one. 0 when none does, and outside the map. */
+uint8_t getTileCollision(const Stage2D *stage, int32_t x, int32_t y);
+
+/* Whether the cell has a tile collision. */
+bool hasCollision(const Stage2D *stage, int32_t x, int32_t y);
+
+/* The world transform of the collider: the entity's position, no turn. */
+Transform2D getColliderTransform(const Stage2D *stage);
 
 }
 

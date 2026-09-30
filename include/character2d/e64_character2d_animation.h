@@ -11,9 +11,9 @@
 	layers a weight over the locomotion, a sprite can only show one clip, so
 	the action holds the frame until it ends or the body moves on.
 
-	A clip is a run of sprite files named after the first, "<name>_f00" and
-	the number counting up. The animation opens every frame on init and hands
-	the entity the current one.
+	The clips and their playback are the entity sprite's e64::sprite::Animation:
+	this picks which one plays and hands it over, the way
+	character3d::Animation sets the params of the mesh's e64::Animation graph.
 */
 #ifndef ENGINE64_CHARACTER2D_ANIMATION_H
 #define ENGINE64_CHARACTER2D_ANIMATION_H
@@ -21,22 +21,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "graphics/e64_sprite_animation.h"
+
 namespace e64 {
 
 typedef struct Character2D Character2D;
 
 
 namespace character2d {
-
-typedef struct {
-
-	const char *path; /* the first frame's file */
-	uint8_t frame_count;
-	float fps; /* frames per second the clip was authored at */
-	bool is_looping;
-
-} AnimationClipDef;
-
 
 /* Where inside the action clips the body meets the world, in seconds from
    the clip's start, the way character3d::AnimationSettings names them. */
@@ -52,12 +44,10 @@ typedef struct {
 
 typedef struct {
 
-	const AnimationClipDef *clip;
 	const AnimationSettings *settings;
-	uint8_t clip_count;
 
-	/* Which clip plays for what the body does, as indices into the table
-	   above. Walk, run and sprint share the stride: the gait axis picks
+	/* Which clip plays for what the body does, as indices into the sprite's
+	   clip table. Walk, run and sprint share the stride: the gait axis picks
 	   among them and the phase carries across the change. Jump is the
 	   take-off and runs into fall when it ends; land and roll play once
 	   through. */
@@ -77,12 +67,7 @@ typedef struct Animation {
 
 	const AnimationDef *def;
 
-	/* Every frame of every clip, open, in clip order; frame_start is where
-	   each clip's run begins. The paths are kept for as long as the frames
-	   are open, since the resource table holds the pointer. */
-	struct sprite_s **frame_sprite;
-	uint16_t *frame_start;
-	char *path;
+	e64::sprite::Animation *sprite; /* the entity's */
 
 	/* ANIMATION_PARAM_WALK_GAIT of the 3D animation: 0 sits on the first
 	   gait, 1 on the last, and the values between are where the speed
@@ -94,27 +79,16 @@ typedef struct Animation {
 	uint8_t action_state;
 	bool landing;
 
-	uint8_t clip;
-	float phase; /* frames into the clip */
-	uint8_t frame; /* frame the phase lands on */
-
 } Animation;
 
 
 namespace animation {
 
-/* Opens the frames and parks the animation on the idle. */
+/* Takes the entity sprite's animation and parks it on the idle. */
 void init(Character2D *character, const AnimationDef *def);
-void free(Character2D *character);
 
 /* Runs one step: reads the movement, leaves clip and frame ready to draw. */
 void update(Character2D *character, float dt);
-
-/* True once a non-looping clip has run past its last frame. */
-bool isFinished(const Character2D *character);
-
-/* The sprite of the frame the animation is on. */
-struct sprite_s *getSprite(const Character2D *character);
 
 }
 }

@@ -24,7 +24,7 @@ void init(Character3D *character, const AimingSettings *settings)
 	aiming->pitch_scale = settings->pitch_scale;
 
 	for (uint8_t i = 0; i < aiming->count; i++)
-		aiming->bone[i] = (int16_t)t3d_skeleton_find_bone(&character->animation.graph.main,
+		aiming->bone[i] = (int16_t)t3d_skeleton_find_bone(&character->animation.graph->main,
 		                                                  (char *)settings->bone[i]);
 }
 

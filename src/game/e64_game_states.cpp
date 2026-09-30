@@ -1,6 +1,7 @@
 /*
 	State machinery only: the table itself is the game's, handed over at
-	game::state::start. The engine loads, unloads and switches whatever it is given.
+	game::state::start. The engine loads, unloads and switches whatever it is given,
+	and plays the frame of whatever it loaded.
 */
 #include <assert.h>
 #include <libdragon.h>
@@ -8,9 +9,16 @@
 #include "time/e64_time.h"
 #include "scene3d/e64_scene3d.h"
 #include "scene2d/e64_scene2d.h"
+#include "model/e64_mesh_deform.h"
 #include "player/e64_player.h"
+#include "player/e64_player_control.h"
 #include "controller/e64_controls.h"
 #include "viewport/e64_viewport.h"
+#include "physics3d/e64_physics.h"
+#include "sound/e64_prop_sound.h"
+#include "shaders/e64_water.h"
+#include "particles/e64_particles.h"
+#include "camera/e64_camera3d_control.h"
 #include "game/e64_game.h"
 #include "game/e64_game_states.h"
 
@@ -39,6 +47,7 @@ static void load(Game::State::ID id)
 	   points the camera as it builds what the bindings name. */
 	if (def->scene3d) scene3d::load(def->scene3d, def->controls);
 	if (def->scene2d) scene2d::load(def->scene2d, def->controls);
+	if (def->ui) ui::load(def->ui);
 
 	if (def->onEnter) def->onEnter();
 }
@@ -48,17 +57,36 @@ static void unload(Game::State::ID id)
 	const Game::State::Def *def = get(id);
 
 	if (def->onExit) def->onExit();
+
+	/* The seats point into the scenes: emptied before the bodies go. */
+	if (def->scene2d || def->scene3d) player::init();
+	if (def->ui) ui::unload();
 	if (def->scene2d) scene2d::unload();
-	if (def->scene3d) {
-		player::init();
-		scene3d::unload();
-	}
+	if (def->scene3d) scene3d::unload();
 }
 
-static bool isOverlayPair(Game::State::ID prev, Game::State::ID next)
+static bool isOverlay(const Game::State::Def *def)
 {
-	return get(next)->overlay_of == get(prev)
-	    || get(prev)->overlay_of == get(next);
+	return def->overlay_count > 0;
+}
+
+/* Whether the state declares this base among the ones it overlays. */
+static bool isOverlayOf(const Game::State::Def *def, Game::State::ID base)
+{
+	for (int i = 0; i < def->overlay_count; i++)
+		if (def->overlay_of[i] == get(base)) return true;
+	return false;
+}
+
+/* Only the interface changes hands between an overlay and its base: the
+   world underneath stays as it is, and coming back does not re-enter it. */
+static void switchInterface(Game::State *s, Game::State::ID new_state)
+{
+	const Game::State::Def *def = get(new_state);
+
+	s->current = new_state;
+	if (def->ui) ui::load(def->ui);
+	else ui::unload();
 }
 
 static void settle(Game::State *s)
@@ -71,22 +99,25 @@ static void settle(Game::State *s)
 	Game::State::ID prev = s->current;
 	Game::State::ID new_state = s->next;
 
-	/* An overlay rides its base: the 3D world stays untouched and dropping
-	   back does not re-enter the base. Only the 2D scene changes hands, and
-	   it comes back the way its definition declares it. */
-	if (isOverlayPair(prev, new_state)) {
-		const Game::State::Def *def = get(new_state);
-		s->current = new_state;
-		if (def->scene2d) scene2d::load(def->scene2d, def->controls);
-		if (def->overlay_of == get(prev) && def->onEnter) def->onEnter();
+	/* Up onto an overlay from one of its bases: the base is remembered for
+	   the way back down. */
+	if (isOverlayOf(get(new_state), prev)) {
+		s->base = prev;
+		switchInterface(s, new_state);
+		if (get(new_state)->onEnter) get(new_state)->onEnter();
+		return;
+	}
+
+	/* Back down to the base it came from. */
+	if (isOverlay(leaving) && new_state == s->base) {
+		switchInterface(s, new_state);
 		return;
 	}
 
 	rspq_wait();
 	unload(prev);
 	/* An abandoned overlay takes its base state down with it. */
-	if (get(prev)->overlay_of)
-		unload(get(prev)->overlay_of - s->table);
+	if (isOverlay(leaving)) unload(s->base);
 	s->current = new_state;
 	load(new_state);
 
@@ -115,16 +146,66 @@ void start(const Game::State::Def *table, uint8_t count, Game::State::ID initial
 	s->count = count;
 	s->current = initial;
 	s->next = initial;
+	s->base = initial;
 
 	load(initial);
 	time::reset();
 }
 
+/* The frame of the scenes the state declares: the seats drive their bodies,
+   the world advances, the cameras follow. A state that declares none plays
+   nothing here. */
+static void step(const Game::State::Def *def)
+{
+	Viewport *viewport = viewport::get();
+	Scene3D *scene = scene3d::get();
+	float delta = time::get()->delta;
+	uint8_t fb_index = viewport->fb_index;
+
+	if (def->scene3d) {
+		for (int i = 0; i < PLAYER_COUNT; i++)
+			player::setCharacter3DControl((PlayerID)i, viewport);
+		player::update();
+
+		physics::World *world = scene3d::getPhysics();
+
+		physics::update(world, delta);
+		propSound::update(world);
+		water::update(delta);
+		mesh::deform::update(scene->entity, scene->entity_count, fb_index);
+
+		scene3d::updateCharacters(fb_index);
+		scene3d::updateEntities(fb_index);
+
+		particles::update(fb_index);
+
+		if (viewport->camera.binding)
+			camera3d::control::update(&viewport->camera, viewport->camera.binding,
+			                          scene, delta);
+		viewport::setPerspectiveCamera();
+	}
+
+	if (def->scene2d) {
+		for (int i = 0; i < PLAYER_COUNT; i++)
+			player::setCharacter2DControl((PlayerID)i);
+		if (!def->scene3d) player::update();
+
+		scene2d::updateAnimations(delta);
+		scene2d::updateCharacters(delta);
+		scene2d::updateCamera(scene2d::getCharacter2D(0), delta);
+	}
+}
+
+/* What the game declared as the state's own runs first, the controller
+   read and then the update, then the frame. */
 void update(void)
 {
 	Game::State *s = &game::get()->state;
+	const Game::State::Def *def = get(s->current);
 
-	get(s->current)->update();
+	if (def->control) def->control();
+	if (def->update) def->update();
+	step(def);
 	settle(s);
 }
 

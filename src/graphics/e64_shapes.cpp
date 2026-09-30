@@ -12,6 +12,7 @@ void draw(const Rectangle *rect, Vector2 position, Vector2 scale)
 
 	if (rect->fill == Rectangle::SOLID) {
 
+		rdpq_set_mode_standard();
 		rdpq_set_prim_color(rect->color);
 		rdpq_mode_combiner(RDPQ_COMBINER_FLAT);
 		rdpq_mode_blender(RDPQ_BLENDER_MULTIPLY);

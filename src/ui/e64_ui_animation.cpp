@@ -1,12 +1,12 @@
 /*
-	Track animation over the entities of a 2D scene. A track names the
-	entity it writes and which of its fields, so the animation is data: it
-	holds no addresses and survives the scene being loaded again.
+	Track animation over the widgets of the interface. A track names the
+	widget it writes and which of its fields, so the animation is data: it
+	holds no addresses and survives the interface being loaded again.
 */
 #include <stddef.h>
 
 #include "ui/e64_ui_animation.h"
-#include "scene2d/e64_scene2d.h"
+#include "ui/e64_ui.h"
 #include "math/e64_math.h"
 #include "menu/e64_menu.h"
 
@@ -23,18 +23,18 @@ typedef struct {
 
 } FieldRef;
 
-static FieldRef field(Scene2D *scene, const UIAnimation::Track *track)
+static FieldRef field(UI *ui, const UIAnimation::Track *track)
 {
-	Entity2D *e = scene2d::getEntity(scene, track->layer, track->entity);
-	Graphic *g = e->graphic;
+	Widget *w = ui::getWidget(ui, track->layer, track->entity);
+	Graphic *g = &w->graphic;
 
 	switch (track->field) {
 
-		case UIAnimation::FIELD_POSITION_X: return (FieldRef){ .as_float = &e->position.x };
-		case UIAnimation::FIELD_POSITION_Y: return (FieldRef){ .as_float = &e->position.y };
-		case UIAnimation::FIELD_SCALE_X: return (FieldRef){ .as_float = &e->scale.x };
-		case UIAnimation::FIELD_SCALE_Y: return (FieldRef){ .as_float = &e->scale.y };
-		case UIAnimation::FIELD_ROTATION: return (FieldRef){ .as_float = &e->rotation };
+		case UIAnimation::FIELD_POSITION_X: return (FieldRef){ .as_float = &w->position.x };
+		case UIAnimation::FIELD_POSITION_Y: return (FieldRef){ .as_float = &w->position.y };
+		case UIAnimation::FIELD_SCALE_X: return (FieldRef){ .as_float = &w->scale.x };
+		case UIAnimation::FIELD_SCALE_Y: return (FieldRef){ .as_float = &w->scale.y };
+		case UIAnimation::FIELD_ROTATION: return (FieldRef){ .as_float = &w->rotation };
 
 		case UIAnimation::FIELD_TRANSPARENCY: return (FieldRef){ .as_u8 = &g->transparency };
 		case UIAnimation::FIELD_TEXT_STYLE: return (FieldRef){ .as_u8 = &g->text.style };
@@ -127,16 +127,16 @@ static float progress(const UIAnimation::Track *track, float local)
 
 /* Backwards is the same motion seen in reverse, so the curve mirrors too:
    what eases in on the way in eases out on the way out. Re-easing forward
-   instead would hold the entity still and then snap it. */
+   instead would hold the widget still and then snap it. */
 static float progressReversed(const UIAnimation::Track *track, float local)
 {
 	float t = trackTime(track, local);
 	return 1.0f - ease_function[track->easing](1.0f - t);
 }
 
-static void applyTrack(Scene2D *scene, const UIAnimation::Track *track, float time)
+static void applyTrack(UI *ui, const UIAnimation::Track *track, float time)
 {
-	FieldRef ref = field(scene, track);
+	FieldRef ref = field(ui, track);
 
 	int8_t source_index;
 	if (track->values_by_index && sourceIndex(track, &source_index)) {
@@ -160,9 +160,9 @@ static void applyTrack(Scene2D *scene, const UIAnimation::Track *track, float ti
 	write(&ref, lerpf(track->from, track->to, progress(track, local)));
 }
 
-static void applyTrackReversed(Scene2D *scene, const UIAnimation::Track *track, float time)
+static void applyTrackReversed(UI *ui, const UIAnimation::Track *track, float time)
 {
-	FieldRef ref = field(scene, track);
+	FieldRef ref = field(ui, track);
 
 	int8_t source_index;
 	if (track->values_by_index && sourceIndex(track, &source_index)) {
@@ -171,7 +171,7 @@ static void applyTrackReversed(Scene2D *scene, const UIAnimation::Track *track, 
 	}
 
 	if (ref.as_bool) {
-		/* The entity stays the way the animation left it for as long as it
+		/* The widget stays the way the animation left it for as long as it
 		   takes to leave; a step holds it to the end. */
 		bool in_window = (track->duration <= 0.0f) || (time < track->duration);
 		*ref.as_bool = in_window ? track->to_bool : track->from_bool;
@@ -182,27 +182,27 @@ static void applyTrackReversed(Scene2D *scene, const UIAnimation::Track *track, 
 }
 
 
-void apply(Scene2D *scene, const UIAnimation *animation, float time)
+void apply(UI *ui, const UIAnimation *animation, float time)
 {
 	for (int i = 0; i < animation->track_count; i++)
-		applyTrack(scene, &animation->track[i], time);
+		applyTrack(ui, &animation->track[i], time);
 }
 
 
 namespace player {
 
-static void applyFrame(UIAnimation::Player *player, Scene2D *scene, float time)
+static void applyFrame(UIAnimation::Player *player, UI *ui, float time)
 {
 	const UIAnimation *animation = player->animation;
 
 	if (player->is_reversed) {
 		for (int i = 0; i < animation->track_count; i++)
-			applyTrackReversed(scene, &animation->track[i], time);
+			applyTrackReversed(ui, &animation->track[i], time);
 		return;
 	}
 
 	for (int i = 0; i < animation->track_count; i++)
-		applyTrack(scene, &animation->track[i], time);
+		applyTrack(ui, &animation->track[i], time);
 }
 
 /* Leaves every lerp target on its start value so pending tracks can stay
@@ -210,7 +210,7 @@ static void applyFrame(UIAnimation::Player *player, Scene2D *scene, float time)
    track over a target wins; reversed it walks forwards, since the reverse
    starts from the end state. Live lookups and flags write every frame and
    need no priming. */
-static void prime(UIAnimation::Player *player, Scene2D *scene)
+static void prime(UIAnimation::Player *player, UI *ui)
 {
 	const UIAnimation *animation = player->animation;
 
@@ -221,7 +221,7 @@ static void prime(UIAnimation::Player *player, Scene2D *scene)
 
 		if (track->values_by_index) continue;
 
-		FieldRef ref = field(scene, track);
+		FieldRef ref = field(ui, track);
 		if (ref.as_bool) continue;
 
 		write(&ref, player->is_reversed ? track->to : track->from);
@@ -229,7 +229,7 @@ static void prime(UIAnimation::Player *player, Scene2D *scene)
 }
 
 
-void start(UIAnimation::Player *player, Scene2D *scene, const UIAnimation *animation, UIAnimation::PlayMode mode, bool is_reversed)
+void start(UIAnimation::Player *player, UI *ui, const UIAnimation *animation, UIAnimation::PlayMode mode, bool is_reversed)
 {
 	player->animation = animation;
 	player->mode = mode;
@@ -237,8 +237,8 @@ void start(UIAnimation::Player *player, Scene2D *scene, const UIAnimation *anima
 	player->is_active = true;
 	player->is_reversed = is_reversed;
 
-	prime(player, scene);
-	applyFrame(player, scene, 0.0f);
+	prime(player, ui);
+	applyFrame(player, ui, 0.0f);
 }
 
 void stop(UIAnimation::Player *player)
@@ -246,7 +246,7 @@ void stop(UIAnimation::Player *player)
 	player->is_active = false;
 }
 
-void update(UIAnimation::Player *player, Scene2D *scene, float dt)
+void update(UIAnimation::Player *player, UI *ui, float dt)
 {
 	if (!player->is_active || !player->animation) return;
 
@@ -256,26 +256,26 @@ void update(UIAnimation::Player *player, Scene2D *scene, float dt)
 		: duration(player->animation);
 
 	if (player->time < total) {
-		applyFrame(player, scene, player->time);
+		applyFrame(player, ui, player->time);
 		return;
 	}
 
 	switch (player->mode) {
 
 		case UIAnimation::PLAY_ONCE:
-			applyFrame(player, scene, total);
+			applyFrame(player, ui, total);
 			player->is_active = false;
 			break;
 
 		case UIAnimation::PLAY_LOOP:
 			while (player->time >= total) player->time -= total;
-			applyFrame(player, scene, player->time);
+			applyFrame(player, ui, player->time);
 			break;
 
 		case UIAnimation::PLAY_PING_PONG:
 			while (player->time >= total) player->time -= total;
 			player->is_reversed = !player->is_reversed;
-			applyFrame(player, scene, player->time);
+			applyFrame(player, ui, player->time);
 			break;
 	}
 }

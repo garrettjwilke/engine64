@@ -18,11 +18,22 @@ Entity2D *create(const Def *def)
 	Graphic *graphic = (Graphic *)malloc(sizeof(Graphic));
 	assert(graphic);
 
-	/* The definition names the file; the live graphic gets it loaded. */
+	/* The definition names the file or the clips; the live graphic gets
+	   them loaded. An animated sprite starts on the first frame of its first
+	   clip. */
 	*graphic = *def->graphic;
 	if (graphic->type == Graphic::SPRITE) {
-		graphic->sprite.asset = (sprite_t *)resource::load(graphic->sprite.path, Resource::SPRITE, NULL);
-		assert(graphic->sprite.asset);
+		Sprite *sprite = &graphic->sprite;
+		if (sprite->animation_def) {
+			sprite->animation = (sprite::Animation *)malloc(sizeof(sprite::Animation));
+			assert(sprite->animation);
+			sprite::animation::init(sprite->animation, sprite->animation_def, 0);
+			sprite->asset = sprite::animation::getSprite(sprite->animation);
+		}
+		else {
+			sprite->asset = (sprite_t *)resource::load(sprite->path, Resource::SPRITE, NULL);
+			assert(sprite->asset);
+		}
 	}
 
 	bool unit_scale = def->scale.x == 0.0f && def->scale.y == 0.0f;
@@ -60,8 +71,14 @@ void destroy(Entity2D *entity)
 		sound::unload(&entity->sound[i]);
 	free(entity->sound);
 
-	if (entity->graphic->type == Graphic::SPRITE)
-		resource::unload(entity->graphic->sprite.asset);
+	if (entity->graphic->type == Graphic::SPRITE) {
+		Sprite *sprite = &entity->graphic->sprite;
+		if (sprite->animation) {
+			sprite::animation::destroy(sprite->animation);
+			free(sprite->animation);
+		}
+		else resource::unload(sprite->asset);
+	}
 
 	free(entity->graphic);
 	free(entity);

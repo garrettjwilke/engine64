@@ -8,6 +8,7 @@
 #include <t3d/t3dmodel.h>
 
 #include "model/e64_mesh_deform.h"
+#include "entity/e64_entity3d.h"
 
 namespace e64 {
 namespace mesh {
@@ -308,9 +309,11 @@ bool set(Mesh *mesh, const Vector3 *source, const Vector3 *source_normal,
 	return true;
 }
 
-void update(Mesh *mesh, uint8_t fb_index)
+void update(Entity3D *const *entity, uint8_t count, uint8_t fb_index)
 {
-	if (mesh->deform) write(mesh->deform, fb_index);
+	for (uint8_t i = 0; i < count; i++)
+		if (entity[i]->mesh && entity[i]->mesh->deform)
+			write(entity[i]->mesh->deform, fb_index);
 }
 
 /* Separate from the update because it has to run at draw time, in front of the

@@ -15,6 +15,7 @@
 #include "particles/e64_particles.h"
 #include "render/e64_render.h"
 #include "scene2d/e64_scene2d.h"
+#include "ui/e64_ui.h"
 #include "debug/e64_debug.h"
 #include "time/e64_time.h"
 #include "scene3d/e64_scene3d.h"
@@ -90,8 +91,13 @@ static void end(void)
 	viewport::detach();
 }
 
-/* No transparency a sprite could carry: the RDP is not on a sprite mode. */
+/* No key a sprite could carry: the RDP is not on a sprite mode. */
 static constexpr int SPRITE_MODE_UNSET = -1;
+
+/* The key of a sprite mode: the transparency in the low byte, and above it
+   whether it is copy mode and whether it reads a palette. */
+static constexpr int SPRITE_MODE_COPY = 1 << 8;
+static constexpr int SPRITE_MODE_TLUT = 1 << 9;
 
 /* The whole RDP state a sprite draws under, in one batch: the mode API
    calls between begin and end are programmed as a single change instead of
@@ -99,19 +105,48 @@ static constexpr int SPRITE_MODE_UNSET = -1;
    env alpha modulates only the alpha channel while RGB passes TEX0
    untouched, so prim color stays free for tinting.
 
-   A run of sprites sharing a transparency sets this once: a stage's tiles
-   are hundreds of elements under the very same state. */
-static void setSpriteMode(uint8_t transparency)
+   Copy mode moves texels to the framebuffer as they are, about four times
+   faster, and only cuts by alpha compare. The TLUT goes in the same batch:
+   it is part of the mode, and what reads the palette has to have it on.
+
+   A run of sprites sharing a key sets this once: a stage's tiles are
+   hundreds of elements under the very same state. */
+static void setSpriteMode(uint8_t transparency, bool copy, rdpq_tlut_t tlut)
 {
 	rdpq_mode_begin();
-		rdpq_set_mode_standard();
-		rdpq_mode_blender(RDPQ_BLENDER_MULTIPLY);
-		rdpq_mode_alphacompare(1);
-		if (transparency) rdpq_mode_combiner(RDPQ_COMBINER1((0,0,0,TEX0), (TEX0,0,ENV,0)));
+		if (copy) {
+			rdpq_set_mode_copy(true);
+		} else {
+			rdpq_set_mode_standard();
+			rdpq_mode_blender(RDPQ_BLENDER_MULTIPLY);
+			rdpq_mode_alphacompare(1);
+			if (transparency) rdpq_mode_combiner(RDPQ_COMBINER1((0,0,0,TEX0), (TEX0,0,ENV,0)));
+		}
+		rdpq_mode_tlut(tlut);
 	rdpq_mode_end();
 
 	/* Not a mode call, so it is issued on its own either way. */
 	if (transparency) rdpq_set_env_color(RGBA32(0, 0, 0, (uint8_t)(255 - transparency)));
+}
+
+/* Whether a sprite can go in copy mode: one texel per pixel across,
+   unturned, unmirrored, opaque, in a format copy mode reads, onto a 16 bit
+   framebuffer (a 32 bit one hangs it). Copy mode steps 4 texels a clock and
+   only renders right with dsdx 4.0: a scale across, or a mirror (-4.0), is
+   wrong there, while a scale down is free. A tiled sprite fills its size at
+   one texel per pixel. */
+static bool isCopyable(const Render::Element2D *element, bool fb16)
+{
+	const Graphic *graphic = element->graphic;
+	const Sprite *sprite = &graphic->sprite;
+
+	if (!fb16) return false;
+	if (element->rotation != 0.0f || sprite->flip_x || graphic->transparency) return false;
+
+	tex_format_t fmt = sprite_get_format(sprite->asset);
+	if (fmt != FMT_CI4 && fmt != FMT_CI8 && fmt != FMT_RGBA16) return false;
+
+	return sprite->tiled || element->scale.x == 1.0f;
 }
 
 /* The recorded material uploaded the textures with the file's own tile
@@ -204,6 +239,8 @@ void draw(void)
 	context::init(ctx);
 	scene3d::setRenderContext(scene3d::get(), ctx, viewport);
 	scene2d::setRenderContext(scene2d::get(), ctx);
+	/* Last in the list, so it draws over the scene. */
+	ui::setRenderContext(ui::get(), ctx);
 
 	start(&viewport->fb_index);
 
@@ -250,6 +287,16 @@ void draw(void)
 
 	particles::draw();
 
+	sprite::copySharedPalettes(viewport->fb_index);
+
+	/* The texture the RDP has on, for the whole frame: a sprite in a
+	   section finds what the one before it left, scissor or not. Whatever
+	   draws its own way says what it overwrote. */
+	sprite::Texture texture = {};
+
+	/* Copy mode needs a 16 bit framebuffer: the same for every sprite. */
+	const bool fb16 = display_get_bitdepth() == 2;
+
 	for (int s = 0; s < ctx->section_count; s++) {
 		Render::Section *section = &ctx->section[s];
 
@@ -272,15 +319,10 @@ void draw(void)
 				section->scissor_y + section->scissor_h);
 		}
 
-		/* The sprite state the RDP is already programmed with: the
-		   transparency it was set for, or SPRITE_MODE_UNSET when a shape or
-		   a text left the mode on something else. Only a change pays. */
+		/* The sprite state the RDP is already programmed with: the key it
+		   was set for, or SPRITE_MODE_UNSET when a shape or a text left the
+		   mode on something else. Only a change pays. */
 		int sprite_mode = SPRITE_MODE_UNSET;
-
-		/* The texture already in TMEM, so a run of elements sharing one
-		   sprite uploads it once. Anything that draws its own way leaves it
-		   unknown and the next upload is paid again. */
-		const sprite_t *loaded = NULL;
 
 		for (int i = 0; i < section->element_count; i++) {
 			Render::Element2D *element = &ctx->element2d[section->element_start + i];
@@ -290,32 +332,29 @@ void draw(void)
 				case Graphic::RECTANGLE:
 					rectangle::draw(&graphic->rectangle, element->position, element->scale);
 					sprite_mode = SPRITE_MODE_UNSET;
-					loaded = NULL;
+					sprite::forgetTexture(&texture);
 					break;
 				case Graphic::TEXT:
 					text::draw(&graphic->text, element->position);
 					sprite_mode = SPRITE_MODE_UNSET;
-					loaded = NULL;
+					sprite::forgetPalettes(&texture);
 					break;
-				case Graphic::SPRITE:
-					if (sprite_mode != graphic->transparency) {
-						setSpriteMode(graphic->transparency);
-						sprite_mode = graphic->transparency;
+				case Graphic::SPRITE: {
+					bool copy = isCopyable(element, fb16);
+					rdpq_tlut_t tlut = rdpq_tlut_from_format(sprite_get_format(graphic->sprite.asset));
+					int mode = graphic->transparency
+					         | (copy ? SPRITE_MODE_COPY : 0)
+					         | (tlut != TLUT_NONE ? SPRITE_MODE_TLUT : 0);
+
+					if (sprite_mode != mode) {
+						setSpriteMode(graphic->transparency, copy, tlut);
+						sprite_mode = mode;
 					}
 
-					if (sprite::isLoadable(&graphic->sprite, element->rotation)) {
-						if (graphic->sprite.asset != loaded) {
-							sprite::loadTexture(&graphic->sprite);
-							loaded = graphic->sprite.asset;
-						}
-						sprite::drawLoaded(&graphic->sprite, element->position, element->scale);
-						break;
-					}
-
-					if (graphic->sprite.tiled) sprite::drawTiled(&graphic->sprite, element->position, element->scale);
-					else sprite::draw(&graphic->sprite, element->position, element->scale, element->rotation);
-					loaded = NULL;
+					if (graphic->sprite.tiled) sprite::drawTiled(&graphic->sprite, &texture, element->position, element->scale);
+					else sprite::draw(&graphic->sprite, &texture, element->position, element->scale, element->rotation);
 					break;
+				}
 			}
 		}
 

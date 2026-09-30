@@ -6,13 +6,13 @@
 	tools/stage_importer is the authority):
 
 	  0   "STG2"
-	  4   version (2)
+	  4   version (3)
 	  5   layer count
 	  6   width, 8 height, 10 stride, 12 cell width, 14 cell height  (u16)
 	  16  tile count (u16)
 	  18  digits of the tile number, 19 length of the base path
 	  24  base path, NUL terminated: "rom:/stages/<pack>/<prefix>"
-	      solid bits: 32 bytes, bit n set means tile number n is solid
+	      tile collisions: 256 bytes, that of tile number n at n, 0 none
 	      layer table: parallax (f32), grid offset from file start (u32)
 	      grids: stride * height bytes each
 */
@@ -43,7 +43,7 @@ Stage2D *create(const Def *def, Entity2D *entity)
 	int size;
 	uint8_t *file = (uint8_t *)asset_load(def->path, &size);
 	assert(file && size >= 24);
-	assert(memcmp(file, "STG2", 4) == 0 && file[4] == 2);
+	assert(memcmp(file, "STG2", 4) == 0 && file[4] == 3);
 	stage->file = file;
 
 	stage->layer_count = file[5];
@@ -59,13 +59,19 @@ Stage2D *create(const Def *def, Entity2D *entity)
 	assert(tile_count && tile_count <= MAX_TILE);
 
 	const char *base = (const char *)file + 24;
-	stage->solid = file + 24 + padded8(base_len);
-	const uint8_t *table = stage->solid + 32;
+	stage->tile_collision = file + 24 + padded8(base_len);
+	const uint8_t *table = stage->tile_collision + MAX_TILE + 1;
 
 	for (int i = 0; i < stage->layer_count; i++) {
 		stage->layer[i].parallax = readF32(table + i * 8);
 		stage->layer[i].cell = file + readU32(table + i * 8 + 4);
 	}
+
+	/* --- the collider --------------------------------------------------- */
+	stage->collider = gridCollider2d::create(stage->width, stage->height, stage->cell_width, stage->cell_height);
+	for (int y = 0; y < stage->height; y++)
+		for (int x = 0; x < stage->width; x++)
+			gridCollider2d::setCell(stage->collider, x, y, getTileCollision(stage, x, y));
 
 	/* --- the tiles ------------------------------------------------------ */
 	/* Which tiles the map draws, and how many cells draw one: those tiles
@@ -171,6 +177,8 @@ void destroy(Stage2D *stage)
 	for (int i = 0; i < stage->graphic_count; i++)
 		resource::unload(stage->graphic[i].sprite.asset);
 
+	gridCollider2d::destroy(stage->collider);
+
 	free(stage->element);
 	free(stage->graphic);
 	free(stage->path);
@@ -235,15 +243,25 @@ uint8_t getTile(const Stage2D *stage, uint8_t layer, int32_t x, int32_t y)
 	return stage->layer[layer].cell[y * stage->stride + x];
 }
 
-bool isSolid(const Stage2D *stage, int32_t x, int32_t y)
+uint8_t getTileCollision(const Stage2D *stage, int32_t x, int32_t y)
 {
-	if (x < 0 || y < 0 || x >= stage->width || y >= stage->height) return false;
+	if (x < 0 || y < 0 || x >= stage->width || y >= stage->height) return 0;
 
 	for (int l = 0; l < stage->layer_count; l++) {
 		uint8_t tile = stage->layer[l].cell[y * stage->stride + x];
-		if (tile && (stage->solid[tile >> 3] >> (tile & 7)) & 1) return true;
+		if (tile && stage->tile_collision[tile]) return stage->tile_collision[tile];
 	}
-	return false;
+	return 0;
+}
+
+bool hasCollision(const Stage2D *stage, int32_t x, int32_t y)
+{
+	return getTileCollision(stage, x, y) != 0;
+}
+
+Transform2D getColliderTransform(const Stage2D *stage)
+{
+	return (Transform2D){ stage->entity->position, 0.0f };
 }
 
 }

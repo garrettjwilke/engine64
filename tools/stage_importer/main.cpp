@@ -11,9 +11,9 @@
 	  base path   the ROM path of the tiles up to their number, e.g.
 	              "rom:/stages/kenney_pixel-platformer/tile_"; the engine
 	              appends the number and ".sprite"
-	  solid       32 bytes, one bit per tile number as the cells count them
-	              (bit n set: tile n-1 is solid), from the tileset's "solid"
-	              tile property
+	  collision   256 bytes, one per tile number as the cells count them: the
+	              collision of tile n-1 at n, 0 none; from the tileset's
+	              "collision" int tile property, or 1 for a "solid" bool one
 	  layers      parallax and grid offset from the file start, per layer, in
 	              draw order, back to front
 	  grids       one byte per cell, row by row, 0 empty, n the tile n-1; each
@@ -21,8 +21,9 @@
 
 	The tile images must be named <prefix><number>.png with the number equal
 	to the tile id, which is what the engine relies on to reach a tile from
-	the first one plus an offset. They live under assets/stages/<pack>/Tiles/,
-	in that folder or one below it; the ROM keeps that layout minus "Tiles/".
+	the first one plus an offset. They live under assets/stages/<stage>/Tiles/
+	or the shared assets/stages/Tiles/, in that folder or one below it; the
+	ROM keeps that layout minus "Tiles/".
 */
 #include <stdio.h>
 #include <stdint.h>
@@ -52,7 +53,7 @@ static char *read_file(const char *path)
 	fseek(f, 0, SEEK_END);
 	long size = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	char *data = malloc(size + 1);
+	char *data = (char *)malloc(size + 1);
 	if (fread(data, 1, size, f) != (size_t)size) fail("cannot read", path);
 	data[size] = 0;
 	fclose(f);
@@ -215,13 +216,13 @@ int main(int argc, char **argv)
 
 	/* Every tile image is <prefix><number>.png with number == id, the number
 	   written with the same amount of digits, all in the same folder under
-	   some pack's Tiles/. A tile with a "solid" property set is one the body
-	   stands on and walks into. */
+	   some pack's Tiles/. A tile's "collision" property is what the game
+	   makes of touching it, 0 none; a "solid" property set is collision 1. */
 	char    prefix[256] = "";
-	char    folder[512] = "";   /* "<pack>/<below Tiles/>", e.g. "kenney_pixel-platformer/Backgrounds/" */
+	char    folder[512] = "";   /* "<stage>/<below Tiles/>", e.g. "kenney_pixel-platformer/Backgrounds/" */
 	int     digits = 0;
 	int     seen = 0;
-	uint8_t solid[32] = {0};
+	uint8_t tile_collision[MAX_TILES + 1] = {0};
 	const char *tile;
 	while ((tile = next_tag(&tcur, "tile"))) {
 		int id = attribute_int(tile, "id", -1);
@@ -233,11 +234,20 @@ int main(int argc, char **argv)
 		const char *prop;
 		while ((prop = next_tag(&pcur, "property")) && prop < tile_end) {
 			char pname[64], pvalue[64];
-			if (attribute(prop, "name", pname, sizeof pname) && strcmp(pname, "solid") == 0
-			 && attribute(prop, "value", pvalue, sizeof pvalue) && strcmp(pvalue, "true") == 0) {
-				if (id < 0 || id >= MAX_TILES) fail("solid tile out of range in", tsx_path);
-				solid[(id + 1) >> 3] |= 1 << ((id + 1) & 7);
+			if (!attribute(prop, "name", pname, sizeof pname) || !attribute(prop, "value", pvalue, sizeof pvalue)) continue;
+
+			int value = -1;
+			if (strcmp(pname, "collision") == 0) {
+				value = atoi(pvalue);
+				if (value < 0 || value > 255) fail("tile collision must be 0 to 255 in", tsx_path);
+			} else if (strcmp(pname, "solid") == 0 && strcmp(pvalue, "true") == 0) {
+				value = 1;
 			}
+			if (value < 0) continue;
+
+			if (id < 0 || id >= MAX_TILES) fail("tile with a collision out of range in", tsx_path);
+			if (tile_collision[id + 1] && tile_collision[id + 1] != value) fail("tile with two collisions in", tsx_path);
+			tile_collision[id + 1] = (uint8_t)value;
 		}
 
 		const char *icur = tcur;
@@ -255,13 +265,15 @@ int main(int argc, char **argv)
 			resolve_path(tsx_dir, buf, full, sizeof full);
 
 			const char *tiles = strstr(full, "/Tiles/");
-			if (!tiles) fail("tile image is not under a pack's Tiles/ folder", full);
+			if (!tiles) fail("tile image is not under a Tiles/ folder", full);
 			const char *pack = tiles;
 			while (pack > full && pack[-1] != '/') pack--;
-			if (pack == tiles) fail("tile image has no pack folder before Tiles/", full);
+			if (pack == tiles) fail("tile image has no folder before Tiles/", full);
+			int pack_len = (int)(tiles - pack) + 1;
+			if (pack_len == 7 && strncmp(pack, "stages/", 7) == 0) pack_len = 0;   /* the shared assets/stages/Tiles/ */
 			const char *below = tiles + strlen("/Tiles/");
 			const char *last  = strrchr(below, '/');
-			snprintf(this_folder, sizeof this_folder, "%.*s/%.*s", (int)(tiles - pack), pack,
+			snprintf(this_folder, sizeof this_folder, "%.*s%.*s", pack_len, pack,
 			         last ? (int)(last - below + 1) : 0, below);
 		}
 
@@ -300,7 +312,7 @@ int main(int argc, char **argv)
 
 		Layer *l = &layers[layer_count++];
 		l->parallax = attribute_float(layer, "parallaxx", 1.0f);
-		l->cell = calloc(width * height, 1);
+		l->cell = (uint8_t *)calloc(width * height, 1);
 
 		const char *dcur = cursor;
 		const char *data = next_tag(&dcur, "data");
@@ -338,13 +350,13 @@ int main(int argc, char **argv)
 	size_t stride       = padded8(width);
 	size_t header_size  = 24;
 	size_t base_offset  = header_size;
-	size_t solid_offset = base_offset + padded8(base_len);
-	size_t table_offset = solid_offset + sizeof solid;
+	size_t collision_offset = base_offset + padded8(base_len);
+	size_t table_offset = collision_offset + sizeof tile_collision;
 	size_t grid_offset  = table_offset + padded8(layer_count * 8);
 	size_t grid_size    = padded8(stride * height);
 
 	fwrite("STG2", 1, 4, out); bytes_written = 4;
-	write_u8(out, 2);
+	write_u8(out, 3);
 	write_u8(out, layer_count);
 	write_u16(out, width);
 	write_u16(out, height);
@@ -359,7 +371,7 @@ int main(int argc, char **argv)
 	fwrite(base, 1, base_len, out); bytes_written += base_len;
 	align8(out);
 
-	fwrite(solid, 1, sizeof solid, out); bytes_written += sizeof solid;
+	fwrite(tile_collision, 1, sizeof tile_collision, out); bytes_written += sizeof tile_collision;
 
 	for (int i = 0; i < layer_count; i++) {
 		write_f32(out, layers[i].parallax);
@@ -377,10 +389,10 @@ int main(int argc, char **argv)
 	}
 	fclose(out);
 
-	int solid_count = 0;
-	for (int i = 1; i <= tile_count; i++) solid_count += (solid[i >> 3] >> (i & 7)) & 1;
+	int collision_count = 0;
+	for (int i = 1; i <= tile_count; i++) collision_count += tile_collision[i] != 0;
 
-	printf("%s: %dx%d cells of %dx%d, %d layers, %d tiles (%d solid), %zu bytes\n",
-	       out_path, width, height, cell_width, cell_height, layer_count, tile_count, solid_count, bytes_written);
+	printf("%s: %dx%d cells of %dx%d, %d layers, %d tiles (%d with collision), %zu bytes\n",
+	       out_path, width, height, cell_width, cell_height, layer_count, tile_count, collision_count, bytes_written);
 	return 0;
 }

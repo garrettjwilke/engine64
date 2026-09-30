@@ -93,6 +93,6 @@ static const e64::character3d::Def character3d_def = {
 extern const e64::Prefab3D character = {
 
 	.type = e64::prefab3d::PREFAB3D_CHARACTER,
-	.model = "rom:/models/capsule.t3dm",
+	.mesh = { .model = "rom:/models/capsule.t3dm" },
 	.character = &character3d_def,
 };

@@ -20,7 +20,14 @@
 #                     collision mesh, as filesystem/collision/<name>.collision.
 #   assets_extra      any other file the game converts with its own rule.
 # Per-file converter flags go on the target, as make allows:
-#   filesystem/fonts/Xolonium10.font64: MKFONT_FLAGS += --size 10
+#   filesystem/fonts/%/Xolonium10.font64: MKFONT_FLAGS += --size 10
+#
+# Fonts are rasterized once per display the game plays on, since the shape
+# of a glyph depends on the shape of the pixel. FONT_DISPLAYS lists them as
+# mkfont takes them, resolution and physical aspect:
+#   FONT_DISPLAYS = 320x240,4:3 640x240,4:3 424x240,16:9
+# Each lands in filesystem/fonts/<WxH>/ under the font's own name, and the
+# engine picks the folder of the video mode in force when it loads one.
 
 BUILD_DIR ?= build
 
@@ -56,7 +63,8 @@ endif
 # first, cold code last.
 ENGINE_ORDER = \
 	time \
-	math memory physics/geometry physics/shapes physics/collision physics \
+	math memory physics3d/geometry physics3d/shapes physics3d/collision physics3d \
+	physics2d/geometry physics2d/shapes physics2d/collision \
 	character3d entity player controller model graphics shaders render scene3d \
 	camera viewport particles sound game scene2d stage2d character2d ui menu resource debug
 
@@ -88,15 +96,21 @@ assets_sprite  = $(shell find assets/sprites -name '*.png' 2>/dev/null)
 assets_model   = $(wildcard assets/models/*.glb)
 assets_font    = $(wildcard assets/fonts/*.ttf)
 assets_audio   = $(wildcard assets/audio/*.wav)
-assets_stage   = $(wildcard assets/stages/*/Tiled/*.tmx)
-assets_tile    = $(wildcard assets/stages/*/Tiles/*.png) $(wildcard assets/stages/*/Tiles/*/*.png)
+assets_stage   = $(wildcard assets/stages/*/*.tmx)
+assets_tile    = $(wildcard assets/stages/*/Tiles/*.png) $(wildcard assets/stages/*/Tiles/*/*.png) \
+                 $(wildcard assets/stages/Tiles/*.png) $(wildcard assets/stages/Tiles/*/*.png)
+
+FONT_DISPLAYS ?= 320x240,4:3
+comma := ,
+font_display_dir = $(firstword $(subst $(comma), ,$(1)))
+font_displays = $(foreach d,$(FONT_DISPLAYS),$(call font_display_dir,$(d)))
 
 assets = $(patsubst assets/textures/%.png,filesystem/textures/%.sprite,$(assets_texture)) \
          $(patsubst assets/sprites/%.png,filesystem/sprites/%.sprite,$(assets_sprite)) \
          $(patsubst assets/models/%.glb,filesystem/models/%.t3dm,$(assets_model)) \
-         $(patsubst assets/fonts/%.ttf,filesystem/fonts/%.font64,$(assets_font)) \
+         $(foreach d,$(font_displays),$(patsubst assets/fonts/%.ttf,filesystem/fonts/$(d)/%.font64,$(assets_font))) \
          $(patsubst assets/audio/%.wav,filesystem/audio/%.wav64,$(assets_audio)) \
-         $(patsubst assets/stages/%.tmx,filesystem/stages/%.stage2d,$(subst /Tiled/,/,$(assets_stage))) \
+         $(patsubst assets/stages/%.tmx,filesystem/stages/%.stage2d,$(assets_stage)) \
          $(patsubst assets/stages/%.png,filesystem/stages/%.sprite,$(subst /Tiles/,/,$(assets_tile))) \
          $(assets_collision) \
          $(assets_extra)
@@ -135,10 +149,18 @@ filesystem/models/%.t3dm: assets/models/%.glb $(MODEL_IMPORTER)
 	$(MODEL_IMPORTER) --bvh $(GLTF_FLAGS) "$<" $@
 	$(N64_BINDIR)/mkasset -c 2 -o $(dir $@) $@
 
-filesystem/fonts/%.font64: assets/fonts/%.ttf
-	@mkdir -p $(dir $@)
-	@echo "    [FONT] $@"
-	$(N64_MKFONT) $(MKFONT_FLAGS) -o $(dir $@) "$<"
+# One rule per display: the folder names it, MKFONT_DISPLAY shapes the
+# glyphs for it. The per-font flags the game sets on filesystem/fonts/%/<name>
+# apply on top, and a font that wants another shape on a display sets its
+# own MKFONT_DISPLAY there (a wide typeface squeezed: the aspect times 1.5).
+define font_rules
+filesystem/fonts/$(1)/%.font64: MKFONT_DISPLAY = $(2)
+filesystem/fonts/$(1)/%.font64: assets/fonts/%.ttf
+	@mkdir -p $$(dir $$@)
+	@echo "    [FONT] $$@"
+	$$(N64_MKFONT) $$(MKFONT_FLAGS) --display $$(MKFONT_DISPLAY) -o $$(dir $$@) "$$<"
+endef
+$(foreach d,$(FONT_DISPLAYS),$(eval $(call font_rules,$(call font_display_dir,$(d)),$(d))))
 
 filesystem/audio/%.wav64: assets/audio/%.wav
 	@mkdir -p $(dir $@)
@@ -160,12 +182,13 @@ filesystem/collision/%.collision: assets/models/%.glb $(COLLISION_IMPORTER)
 	$(N64_BINDIR)/mkasset -c 1 -o $(dir $@) $@
 
 # --- stages ------------------------------------------------------------------
-# A stage is authored in Tiled as assets/stages/<pack>/Tiled/<name>.tmx, with
-# its tiles one image each under assets/stages/<pack>/Tiles/, in that folder
+# A stage is authored in Tiled as assets/stages/<stage>/<name>.tmx beside its
+# .tsx, with its tiles one image each under assets/stages/<stage>/Tiles/, or,
+# when several stages share them, under assets/stages/Tiles/; in that folder
 # or one below it (Tiles/Backgrounds/). The engine's own importer turns the
-# map into filesystem/stages/<pack>/<name>.stage2d, and the tiles go beside
-# it as sprites with the same layout minus "Tiles/", which is where the
-# stage looks for them at run time.
+# map into filesystem/stages/<stage>/<name>.stage2d, and the tiles become
+# sprites with the same layout minus "Tiles/", which is where the stage looks
+# for them at run time.
 stage_pack = $(firstword $(subst /, ,$(1)))
 stage_tile = $(patsubst $(call stage_pack,$(1))/%,%,$(1))
 STAGE_IMPORTER = $(ENGINE_DIR)/tools/stage_importer/stage_importer
@@ -174,13 +197,13 @@ $(STAGE_IMPORTER): $(ENGINE_DIR)/tools/stage_importer/main.cpp
 	$(MAKE) -C $(ENGINE_DIR)/tools/stage_importer
 
 .SECONDEXPANSION:
-filesystem/stages/%.stage2d: assets/stages/$$(dir $$*)Tiled/$$(notdir $$*).tmx $(STAGE_IMPORTER)
+filesystem/stages/%.stage2d: assets/stages/%.tmx $(STAGE_IMPORTER)
 	@mkdir -p $(dir $@)
 	@echo "    [STAGE] $@"
 	$(STAGE_IMPORTER) "$<" $@
 	$(N64_BINDIR)/mkasset -c 1 -o $(dir $@) $@
 
-filesystem/stages/%.sprite: assets/stages/$$(call stage_pack,$$*)/Tiles/$$(call stage_tile,$$*).png
+filesystem/stages/%.sprite: $$(or $$(wildcard assets/stages/$$(call stage_pack,$$*)/Tiles/$$(call stage_tile,$$*).png),assets/stages/Tiles/$$*.png)
 	@mkdir -p $(dir $@)
 	@echo "    [SPRITE] $@"
 	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) -o $(dir $@) "$<"

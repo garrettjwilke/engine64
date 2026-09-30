@@ -7,9 +7,9 @@
 #include "scene3d/e64_fog.h"
 #include "camera/e64_camera3d.h"
 #include "camera/e64_spring_arm.h"
-#include "physics/shapes/e64_physics_shape.h"
-#include "physics/e64_rigid_body.h"
-#include "physics/collision/e64_mesh_collider.h"
+#include "physics3d/shapes/e64_physics_shape.h"
+#include "physics3d/e64_rigid_body.h"
+#include "physics3d/collision/e64_mesh_collider.h"
 #include "sound/e64_sound.h"
 
 namespace e64 {

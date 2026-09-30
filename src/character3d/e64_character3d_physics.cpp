@@ -13,11 +13,11 @@
 
 #include "character3d/e64_character3d.h"
 #include "math/e64_math.h"
-#include "physics/e64_physics_world.h"
-#include "physics/e64_rigid_body.h"
-#include "physics/e64_buoyancy.h"
-#include "physics/collision/e64_collision.h"
-#include "physics/collision/e64_mesh_collider.h"
+#include "physics3d/e64_physics_world.h"
+#include "physics3d/e64_rigid_body.h"
+#include "physics3d/e64_buoyancy.h"
+#include "physics3d/collision/e64_collision.h"
+#include "physics3d/collision/e64_mesh_collider.h"
 
 namespace e64 {
 

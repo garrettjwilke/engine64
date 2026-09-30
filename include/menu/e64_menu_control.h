@@ -10,7 +10,6 @@ namespace menu {
 namespace control {
 
 void read(Controls *controls, const Controller *controller, const ControlBinding *binding);
-void update(void);
 
 }
 

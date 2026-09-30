@@ -6,8 +6,8 @@
 #include <t3d/t3dmodel.h>
 
 #include "shaders/e64_water.h"
-#include "physics/collision/e64_mesh_collider.h"
-#include "physics/e64_physics_world.h"
+#include "physics3d/collision/e64_mesh_collider.h"
+#include "physics3d/e64_physics_world.h"
 
 namespace e64 {
 namespace water {

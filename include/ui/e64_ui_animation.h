@@ -6,7 +6,7 @@
 
 namespace e64 {
 
-struct Scene2D;
+struct UI;
 
 
 class UIAnimation {
@@ -82,8 +82,8 @@ public:
 
 	struct Track {
 
-		/* Which entity of the live scene, by layer and placement, and what
-		   of it. */
+		/* Which widget of the live interface, by layer and placement, and
+		   what of it. */
 		uint8_t layer;
 		uint8_t entity;
 		uint8_t field; /* Field */
@@ -122,13 +122,13 @@ namespace uiAnimation {
 
 namespace player {
 
-void start(UIAnimation::Player *player, Scene2D *scene, const UIAnimation *animation, UIAnimation::PlayMode mode, bool is_reversed);
+void start(UIAnimation::Player *player, UI *ui, const UIAnimation *animation, UIAnimation::PlayMode mode, bool is_reversed);
 void stop(UIAnimation::Player *player);
-void update(UIAnimation::Player *player, Scene2D *scene, float dt);
+void update(UIAnimation::Player *player, UI *ui, float dt);
 
 }
 
-void apply(Scene2D *scene, const UIAnimation *animation, float time);
+void apply(UI *ui, const UIAnimation *animation, float time);
 
 }
 

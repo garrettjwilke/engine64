@@ -2,10 +2,10 @@
 #define ENGINE64_ENTITY3D_H
 
 #include "render/e64_render.h"
-#include "physics/e64_rigid_body.h"
-#include "physics/shapes/e64_physics_shape.h"
-#include "physics/collision/e64_collider.h"
-#include "physics/e64_cloth.h"
+#include "physics3d/e64_rigid_body.h"
+#include "physics3d/shapes/e64_physics_shape.h"
+#include "physics3d/collision/e64_collider.h"
+#include "physics3d/e64_cloth.h"
 #include "shaders/e64_water.h"
 #include "model/e64_mesh.h"
 #include "sound/e64_sound.h"
@@ -22,17 +22,17 @@ public:
 	/* Set when the entity has a rigid body. If that body is simulated, it is
 	   what places the mesh each frame instead of the transform above. */
 	RigidBody *body;
-
-	/* Test the model's bounding box against the view frustum before drawing
-	   it. Off means the entity is drawn every frame, no questions asked. */
-	bool cull;
-
+	
 	/* The prefab's sounds, open: one per entry, in the same order, from
 	   create to delete. The looping ones play from the entity for as long
 	   as it exists; the rest wait for whoever fires them, the character
 	   its own, the game the prop's. */
 	Sound *sound;
 	uint8_t sound_count;
+	
+	/* Test the model's bounding box against the view frustum before drawing
+		it. Off means the entity is drawn every frame, no questions asked. */
+	bool cull;
 
 };
 
@@ -44,26 +44,17 @@ namespace entity3d {
 
 typedef struct Def {
 
-	const char *model_path; /* NULL: nothing to draw, a sound placed alone */
-
-	/* Objects of the model the game shows and hides on its own. Left out, the
-	   model is drawn whole. */
-	const char *const *part;
-	uint8_t part_count;
-
-	/* Where each of those is drawn, in the entity's own space. */
-	const Vector3 *part_position;
-
-	const Sound::Def *const *sound;
-	uint8_t sound_count;
 	Vector3 position;
 	Vector3 rotation;
 	Vector3 scale;
+	const Mesh::Def *mesh; /* NULL: nothing to draw, a sound placed alone */
 	const character3d::Def *character;
 	const RigidBody::Def *body;
 	const collider::Def *collider;
 	const Cloth::Def *cloth;
 	const Water::Def *water;
+	const Sound::Def *const *sound;
+	uint8_t sound_count;
 	bool cull;
 
 } Def;

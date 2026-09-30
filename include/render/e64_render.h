@@ -76,7 +76,8 @@ public:
 
 	};
 
-	/* The frame's draw list: filled by the scenes, consumed by render::draw. */
+	/* The frame's draw list: filled by the scenes and the interface,
+	   consumed by render::draw. */
 	struct Context {
 
 		Element2D element2d[MAX_2D_ELEMENTS];
@@ -107,9 +108,10 @@ void init(Render::Context *ctx);
 
 }
 
-/* Draws the frame: hands its context to each scene to fill, then paints it.
-   A scene that is not loaded pushes nothing, so whatever is up is what
-   shows. Reaches the scenes and the viewport itself. */
+/* Draws the frame: hands its context to each scene and to the interface to
+   fill, then paints it, the interface last. What is not loaded pushes
+   nothing, so whatever is up is what shows. Reaches the scenes, the
+   interface and the viewport itself. */
 void draw(void);
 
 }

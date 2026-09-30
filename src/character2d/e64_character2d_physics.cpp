@@ -1,9 +1,8 @@
 /*
 	Port of character3d::physics to the plane, which is itself Godot's
 	test_body_motion recovery and CharacterBody3D::_set_collision_direction.
-	Everything runs in Vector3 with z at zero, so the capsule against a cell
-	is aabb::closestToSegment and the floor probe is aabb::closestToPoint, the
-	same distance code the 3D body uses against boxes.
+	Detection is the stage's GridCollider2D; what is done with the contacts
+	stays here, in Vector3 with z at zero.
 */
 #include <math.h>
 #include <stdint.h>
@@ -11,7 +10,9 @@
 #include "character2d/e64_character2d.h"
 #include "stage2d/e64_stage2d.h"
 #include "math/e64_math.h"
-#include "physics/geometry/e64_aabb.h"
+#include "math/e64_vector3.h"
+#include "physics2d/collision/e64_grid_collider2d.h"
+#include "physics2d/collision/e64_collision2d.h"
 
 namespace e64 {
 
@@ -47,80 +48,86 @@ typedef struct CollisionState {
 
 /* --- the capsule ------------------------------------------------------------ */
 
-/* The inner segment of the capsule, feet at position: from the bottom
-   sphere's centre up to the top sphere's centre. */
-static void getSegment(const Character2D *character, Vector3 *a, Vector3 *b)
+/* The capsule as a physics2d shape, feet at position, its radius grown by
+   margin so the contacts reach that far out of the surface. */
+static void getCapsule(const Character2D *character, float margin, physics2d::Shape2D *shape)
 {
 	const ColliderSettings *collider = character->def->collider_settings;
-	float r = collider->radius;
+	float half = 0.5f * collider->height;
 
-	*a = (Vector3){ character->position.x, character->position.y - r, 0.0f };
-	*b = (Vector3){ character->position.x, character->position.y - collider->height + r, 0.0f };
+	shape->type = physics2d::Shape2D::SHAPE_CAPSULE;
+	shape->local = (Transform2D){ { 0.0f, -half }, 0.0f };
+	shape->world = (Transform2D){ { character->position.x, character->position.y - half }, 0.0f };
+	shape->next = NULL;
+	shape->owner = (void *)character;
+	shape->sensor = 0;
+	shape->capsule = (Capsule2D){ collider->radius + margin, half - collider->radius };
 }
 
-/* The box of a cell of the stage, a slab through z so the 3D distance code
-   never leaves the plane. */
-static AABB cellBox(const Stage2D *stage, int32_t x, int32_t y)
+/* The bottom sphere of the capsule, swept down by the snap length. */
+static void getFloorProbe(const Character2D *character, physics2d::Shape2D *shape)
 {
-	Vector2 origin = stage->entity->position;
-	float x0 = origin.x + x * stage->cell_width;
-	float y0 = origin.y + y * stage->cell_height;
-	return (AABB){
-		{ x0, y0, -1.0f },
-		{ x0 + stage->cell_width, y0 + stage->cell_height, 1.0f },
-	};
-}
+	float radius = character->def->collider_settings->radius;
+	float offset = -radius + CHARACTER2D_FLOOR_SNAP_LENGTH;
 
-/* The cells a world box reaches, clamped to nothing: isSolid answers open
-   outside the map. */
-static void cellRange(const Stage2D *stage, float min_x, float min_y, float max_x, float max_y,
-                      int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
-{
-	Vector2 origin = stage->entity->position;
-	*x0 = (int32_t)floorf((min_x - origin.x) / stage->cell_width);
-	*x1 = (int32_t)floorf((max_x - origin.x) / stage->cell_width);
-	*y0 = (int32_t)floorf((min_y - origin.y) / stage->cell_height);
-	*y1 = (int32_t)floorf((max_y - origin.y) / stage->cell_height);
+	shape->type = physics2d::Shape2D::SHAPE_CIRCLE;
+	shape->local = (Transform2D){ { 0.0f, offset }, 0.0f };
+	shape->world = (Transform2D){ { character->position.x, character->position.y + offset }, 0.0f };
+	shape->next = NULL;
+	shape->owner = (void *)character;
+	shape->sensor = 0;
+	shape->circle = (Circle2D){ radius };
 }
 
 
 /* --- contacts ---------------------------------------------------------------- */
 
-/* Every solid cell the capsule overlaps, as a contact: the closest point of
-   the cell to the segment, the normal from it toward the segment, the depth
-   under the radius. A segment run through by the cell has no direction to
-   give, and is pushed up. */
-static int collectContacts(const Character2D *character, Contact *contacts)
+typedef struct ContactQuery {
+	const physics2d::Shape2D *body;
+	float margin; /* grown into the body's radius, taken back from the depth */
+	Contact *contacts;
+	int count;
+} ContactQuery;
+
+/* One cell of the grid query: the body against the cell's shape, and the
+   manifold turned around into a contact, seen from the cell. */
+static int addContact(void *cb, const physics2d::Shape2D *cell, int32_t, int32_t)
+{
+	ContactQuery *query = (ContactQuery *)cb;
+
+	Contact2D::Manifold m;
+	collision2d::collide(&m, query->body, cell);
+	if (!m.contact_count) return 1;
+
+	query->contacts[query->count++] = (Contact){
+		.normal = vector3::create(-m.normal.x, -m.normal.y, 0.0f),
+		.depth = -m.contacts[0].penetration - query->margin,
+	};
+	return query->count < CHARACTER2D_MAX_CONTACTS;
+}
+
+/* Every solid cell the body reaches, as a contact. */
+static int queryContacts(const Character2D *character, const physics2d::Shape2D *body, float margin, Contact *contacts)
 {
 	const Stage2D *stage = character->stage;
-	float radius = character->def->collider_settings->radius;
+	Transform2D world = stage2d::getColliderTransform(stage);
 
-	Vector3 a, b;
-	getSegment(character, &a, &b);
+	AABB2D box;
+	physics2d::shape2d::computeAABB(body, &box);
 
-	float reach = radius + CHARACTER2D_RECOVERY_MARGIN;
-	int32_t x0, y0, x1, y1;
-	cellRange(stage, a.x - reach, b.y - reach, a.x + reach, a.y + reach, &x0, &y0, &x1, &y1);
+	ContactQuery query = { body, margin, contacts, 0 };
+	gridCollider2d::queryAABB(stage->collider, &world, &box, &query, addContact);
+	return query.count;
+}
 
-	int count = 0;
-	for (int32_t y = y0; y <= y1 && count < CHARACTER2D_MAX_CONTACTS; y++) {
-		for (int32_t x = x0; x <= x1 && count < CHARACTER2D_MAX_CONTACTS; x++) {
-			if (!stage2d::isSolid(stage, x, y)) continue;
+/* Every solid cell the capsule overlaps, or is within the recovery margin
+   of, as a contact. */
+static int collectContacts(const Character2D *character, Contact *contacts)
+{
+	physics2d::Shape2D capsule;
+	getCapsule(character, CHARACTER2D_RECOVERY_MARGIN, &capsule);
 
-			AABB box = cellBox(stage, x, y);
-			Vector3 on_box = aabb::closestToSegment(&box, &a, &b);
-			Vector3 on_seg = segment_closestToPoint(&a, &b, &on_box);
-			Vector3 d = vector3::difference(&on_seg, &on_box);
-			float dist2 = vector3::dot(&d, &d);
-			if (dist2 > reach * reach) continue;
-
-			float dist = sqrtf(dist2);
-			contacts[count].normal = (dist > 1.0e-6f) ? vector3::scaled(&d, 1.0f / dist) : vector3::create(0.0f, -1.0f, 0.0f);
-			contacts[count].depth = radius - dist;
-			count++;
-		}
-	}
-	return count;
+	return queryContacts(character, &capsule, CHARACTER2D_RECOVERY_MARGIN, contacts);
 }
 
 /* Port of CharacterBody3D::_set_collision_direction: every contact of the
@@ -273,52 +280,33 @@ typedef struct FloorProbe {
 	Vector3 normal;
 } FloorProbe;
 
-static void floorProbe_consider(FloorProbe *probe, const Vector3 *center, float radius, const Vector3 *closest)
+static void floorProbe_consider(FloorProbe *probe, const Contact *contact)
 {
-	Vector3 d = vector3::difference(center, closest);
-	float dist2 = vector3::dot(&d, &d);
-	if (dist2 > radius * radius) return;
-
-	float dist = sqrtf(dist2);
-	Vector3 normal = (dist > 1.0e-6f)
-		? vector3::scaled(&d, 1.0f / dist)
-		: vector3::create(0.0f, -1.0f, 0.0f);
-
 	/* Walkable floor only. */
-	if (-normal.y < CHARACTER2D_FLOOR_MAX_SLOPE_COS) return;
+	if (-contact->normal.y < CHARACTER2D_FLOOR_MAX_SLOPE_COS) return;
 
-	float penetration = radius - dist;
-	if (!probe->found || penetration > probe->penetration) {
+	if (!probe->found || contact->depth > probe->penetration) {
 		probe->found = true;
-		probe->penetration = penetration;
-		probe->normal = normal;
+		probe->penetration = contact->depth;
+		probe->normal = contact->normal;
 	}
 }
 
 static void findFloor(const Character2D *character, FloorProbe *probe)
 {
-	const Stage2D *stage = character->stage;
-	float radius = character->def->collider_settings->radius;
-
-	/* Bottom-sphere centre, swept down by the snap length. */
-	Vector3 center = { character->position.x, character->position.y - radius + CHARACTER2D_FLOOR_SNAP_LENGTH, 0.0f };
-
 	/* Every field written up front: found gates the others, and the
 	   compiler cannot see that across the inlining. */
 	probe->found = false;
 	probe->penetration = 0.0f;
 	probe->normal = vector3::create(0.0f, -1.0f, 0.0f);
 
-	int32_t x0, y0, x1, y1;
-	cellRange(stage, center.x - radius, center.y - radius, center.x + radius, center.y + radius, &x0, &y0, &x1, &y1);
+	physics2d::Shape2D circle;
+	getFloorProbe(character, &circle);
 
-	for (int32_t y = y0; y <= y1; y++)
-		for (int32_t x = x0; x <= x1; x++) {
-			if (!stage2d::isSolid(stage, x, y)) continue;
-			AABB box = cellBox(stage, x, y);
-			Vector3 closest = aabb::closestToPoint(&box, &center);
-			floorProbe_consider(probe, &center, radius, &closest);
-		}
+	Contact contacts[CHARACTER2D_MAX_CONTACTS] __attribute__((uninitialized));
+	int count = queryContacts(character, &circle, 0.0f, contacts);
+
+	for (int i = 0; i < count; i++) floorProbe_consider(probe, &contacts[i]);
 }
 
 /* How far the floor is straight below the feet, so the animation can start
@@ -327,18 +315,9 @@ static void findFloor(const Character2D *character, FloorProbe *probe)
 static float floorDistance(const Character2D *character)
 {
 	const Stage2D *stage = character->stage;
-	Vector2 origin = stage->entity->position;
+	Transform2D world = stage2d::getColliderTransform(stage);
 
-	int32_t col = (int32_t)floorf((character->position.x - origin.x) / stage->cell_width);
-	int32_t row = (int32_t)floorf((character->position.y - origin.y) / stage->cell_height);
-
-	for (int32_t y = row; y <= row + CHARACTER2D_FALL_PROBE_CELLS; y++) {
-		if (!stage2d::isSolid(stage, col, y)) continue;
-		float top = origin.y + y * stage->cell_height;
-		if (top < character->position.y) continue; /* the cell the feet are already in */
-		return top - character->position.y;
-	}
-	return -1.0f;
+	return gridCollider2d::distanceDown(stage->collider, &world, &character->position, CHARACTER2D_FALL_PROBE_CELLS);
 }
 
 /* Godot's _snap_on_floor conditions: only when the body was on the floor,

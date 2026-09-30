@@ -37,8 +37,6 @@ void setCharacter3D(Character3D *character, const character3d::ControlBinding *c
 	seat->character3d.control = control;
 	seat->character3d.character = character;
 	seat->entity = character ? character->entity : NULL;
-	if (seat->entity && seat->entity->mesh)
-		t3d_matrix_set(seat->entity->mesh->matrix_buffer, true);
 }
 
 /* The 2D body draws through its own scene entity, so the seat keeps no

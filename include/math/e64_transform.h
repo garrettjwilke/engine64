@@ -8,7 +8,7 @@
 
 #include "math/e64_vector3.h"
 #include "math/e64_matrix3.h"
-#include "physics/geometry/e64_half_space.h"
+#include "physics3d/geometry/e64_half_space.h"
 
 namespace e64 {
 

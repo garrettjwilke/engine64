@@ -99,8 +99,13 @@ Scene2D *get(void);
 void load(const Def *def, const controls::Def *controls);
 void unload(void);
 
-/* Advances every character's animation and carries the frame to what
-   draws it. */
+/* Advances every animated sprite at the rate its owner set and hands the
+   entity the frame it lands on. Runs before the characters, which pick the
+   clip and the rate the next advance uses. */
+void updateAnimations(float dt);
+
+/* Moves every character, picks its clip and rate, and carries the frame to
+   what draws it. */
 void updateCharacters(float dt);
 
 /* Moves the camera to where the character it follows stands. */

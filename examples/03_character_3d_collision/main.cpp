@@ -77,7 +77,7 @@ static const e64::collider::Def capsule_collider = { capsule_shapes, 1 };
 static const e64::Prefab3D capsule = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/capsule.t3dm",
+	.mesh = { .model = "rom:/models/capsule.t3dm" },
 	.collider = &capsule_collider,
 };
 
@@ -96,7 +96,7 @@ static const e64::collider::Def box_collider = { box_shapes, 1 };
 static const e64::Prefab3D cube = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/cube.t3dm",
+	.mesh = { .model = "rom:/models/cube.t3dm" },
 	.collider = &box_collider,
 };
 
@@ -113,7 +113,7 @@ static const e64::collider::Def sphere_collider = { sphere_shapes, 1 };
 static const e64::Prefab3D sphere = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/sphere.t3dm",
+	.mesh = { .model = "rom:/models/sphere.t3dm" },
 	.collider = &sphere_collider,
 };
 

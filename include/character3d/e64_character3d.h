@@ -8,7 +8,7 @@
 #include <t3d/t3dskeleton.h>
 #include <t3d/t3danim.h>
 
-#include "physics/e64_physics.h"
+#include "physics3d/e64_physics.h"
 #include "model/e64_mesh.h"
 #include "model/e64_skeleton.h"
 #include "character3d/e64_character3d_physics.h"

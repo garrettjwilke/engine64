@@ -39,17 +39,18 @@ public:
 namespace entity2d {
 
 /* Filled by the scene from the prefab and its placement, gone after the
-   load. The graphic is copied in; a sprite gets its file loaded. A zero
+   load. The graphic is copied in; a sprite gets its file or its clips
+   loaded. A zero
    scale means identity. */
 typedef struct Def {
+	
+	Vector2 position;
+	Vector2 scale;
+	float rotation;
 
 	const Graphic *graphic;
 	const Sound::Def *const *sound;
 	uint8_t sound_count;
-
-	Vector2 position;
-	Vector2 scale;
-	float rotation;
 
 } Def;
 

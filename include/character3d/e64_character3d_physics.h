@@ -5,7 +5,7 @@
 
 #include "math/e64_vector3.h"
 #include "math/e64_transform.h"
-#include "physics/shapes/e64_physics_shape.h"
+#include "physics3d/shapes/e64_physics_shape.h"
 
 namespace e64 {
 

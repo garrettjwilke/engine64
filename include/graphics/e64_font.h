@@ -18,7 +18,12 @@ public:
 
 
 	struct Def {
-		const char *path; /* NULL = unused slot (0 is: rdpq reserves font id 0) */
+		/* The file, with a %s where the display goes: the font is rasterized
+		   once per display the game plays on, and the load fills in the
+		   WxH of the video mode in force ("rom:/fonts/%s/Menu.font64" reads
+		   rom:/fonts/640x240/Menu.font64 in that mode). NULL = unused slot
+		   (0 is: rdpq reserves font id 0). */
+		const char *path;
 		const Style *style;
 		uint8_t style_count;
 	};

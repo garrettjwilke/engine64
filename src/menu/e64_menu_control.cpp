@@ -1,12 +1,11 @@
 /*
-	Dispatch only: what each state does with the controller lives in the game's
-	state table, in the def's control callback.
+	Reading the controller as a menu does: presses, with a held direction
+	repeating on a clock. What each state does with it lives in the game's
+	state table, in the def's control callback, which the state loop runs.
 */
 #include <math.h>
 
 #include "menu/e64_menu_control.h"
-#include "game/e64_game.h"
-#include "game/e64_game_states.h"
 #include "time/e64_time.h"
 
 namespace e64 {
@@ -135,12 +134,6 @@ void read(Controls *controls, const Controller *controller, const ControlBinding
 		.tab_left = controller::isPressed(controller, binding->tab_left),
 		.tab_right = controller::isPressed(controller, binding->tab_right),
 	};
-}
-
-void update(void)
-{
-	const Game::State::Def *def = game::state::get(game::get()->state.current);
-	if (def->control) def->control();
 }
 
 }

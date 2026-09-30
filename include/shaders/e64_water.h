@@ -18,7 +18,7 @@
 
 #include "math/e64_vector2.h"
 #include "math/e64_vector3.h"
-#include "physics/e64_buoyancy.h"
+#include "physics3d/e64_buoyancy.h"
 #include "sound/e64_sound.h"
 
 namespace e64 {

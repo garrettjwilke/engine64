@@ -21,7 +21,7 @@ void equip(Character3D *character, uint8_t slot_id, const WeaponDef *weapon)
 	assert(slot_id < WEAPON_SLOT_COUNT);
 
 	Weapons *weapons = &character->weapons;
-	T3DSkeleton *skeleton = &character->animation.graph.main;
+	T3DSkeleton *skeleton = &character->animation.graph->main;
 
 	uint8_t part = mesh::part::find(character->entity->mesh, weapon->mesh);
 	assert(part); /* weapon mesh must exist in the character model */
@@ -83,7 +83,7 @@ void cycle(Character3D *character, int8_t dir)
 void setBones(Character3D *character)
 {
 	Weapons *weapons = &character->weapons;
-	T3DSkeleton *skeleton = &character->animation.graph.main;
+	T3DSkeleton *skeleton = &character->animation.graph->main;
 
 	for (int s = 0; s < WEAPON_SLOT_COUNT; s++) {
 		WeaponSlot *slot = &weapons->slot[s];

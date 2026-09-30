@@ -94,14 +94,13 @@ typedef struct {
 } AnimationSettings;
 
 
-/* The graph is the model's; what follows names the clips and nodes the
-   character's state machine drives by role. The full-body grids (locomotion,
-   strafe, locked, aiming, swim) go first in the node table and the partial
-   and action layers (jump, land, roll, climb) after them: see
-   e64::Animation::Node. */
+/* The graph is the mesh's, with ANIMATION_PARAM_COUNT params; what follows
+   names the clips and nodes the character's state machine drives by role. The
+   full-body grids (locomotion, strafe, locked, aiming, swim) go first in the
+   node table and the partial and action layers (jump, land, roll, climb) after
+   them: see e64::Animation::Node. */
 typedef struct {
 
-	e64::Animation::Def graph; /* param_count is ANIMATION_PARAM_COUNT */
 	const AnimationSettings *settings;
 
 	uint8_t walk_animation;
@@ -137,7 +136,7 @@ class Animation {
 public:
 
 	const AnimationDef *def;
-	e64::Animation graph;
+	e64::Animation *graph; /* the mesh's */
 
 	float footing;
 
@@ -153,8 +152,7 @@ public:
 	float climb_blend;
 	float climb_dir; /* last non-zero direction, held while stopped */
 
-	void init(const T3DModel *model);
-	void destroy();
+	void init(e64::Animation *graph);
 	void setParams(Character3D &character, float delta);
 
 private:

@@ -20,11 +20,10 @@ public:
 
 	const character2d::Def *def;
 
-	/* The scene entity this character draws through. The character writes
-	   its frame, flip and position from create to destroy, and puts the
-	   entity's own sprite back when it goes. */
+	/* The scene entity this character draws through. The character picks
+	   the clip of its sprite and writes the frame, flip and position from
+	   create to destroy. */
 	Entity2D *entity;
-	struct sprite_s *entity_sprite;
 
 	/* The stage the body collides with, handed over by the scene once it
 	   is loaded. */

@@ -10,6 +10,7 @@
 #include "math/e64_vector2.h"
 #include "math/e64_vector3.h"
 #include "math/e64_quaternion.h"
+#include "model/e64_animation.h"
 
 namespace e64 {
 
@@ -26,6 +27,29 @@ public:
 
 	/* The id of an object that carries no material: nothing runs ahead of it. */
 	static constexpr uint8_t MATERIAL_NONE = 0xFF;
+
+
+	struct Def {
+
+		const char *model;
+
+		/* The model's clips and the graph that blends them. NULL: the model
+		   is static. */
+		const Animation::Def *animation;
+
+		/* Objects inside the model the game drives on its own, named as they
+		   are named in the model, so it can show and hide each one. Left out,
+		   the model is drawn whole. */
+		const char *const *part;
+
+		/* Where each of those objects is drawn, in the entity's own space and
+		   in the same order as the names. A part left at zero stays where it
+		   was modelled. */
+		const Vector3 *part_position;
+
+		uint8_t part_count;
+
+	};
 
 
 	/* Every model draws through its objects. Each object owns a block with
@@ -60,7 +84,11 @@ public:
 
 	T3DMat4FP *matrix_buffer; /* NULL = matrix baked in dl (static mesh) */
 	T3DModel *model;
-	T3DSkeleton *skeleton; /* NULL = static mesh (set by character3d_create) */
+	T3DSkeleton *skeleton; /* NULL = static mesh; the animation's pose otherwise */
+
+	/* The clips playing on the model and the pose they leave, opened with the
+	   mesh when its def declares an animation. NULL = static mesh. */
+	Animation *animation;
 
 	/* Where the vertices come from when something else drives them. The
 	   binding lives in its own module, so the mesh only needs to know it is
@@ -88,6 +116,11 @@ public:
 
 
 namespace mesh {
+
+/* Loads the model, opens its animation when the def has one and records it
+   with every part on screen. */
+Mesh *create(const Mesh::Def *def);
+void destroy(Mesh *mesh);
 
 void initBounds(Mesh *mesh);
 

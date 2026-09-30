@@ -73,11 +73,8 @@ typedef struct WeaponSlot {
 } WeaponSlot;
 
 
-/* Which model objects are weapons, in mesh part order. */
+/* The weapon objects are the mesh's parts, in the same order. */
 typedef struct WeaponsDef {
-
-	const char *const *mesh;
-	uint8_t mesh_count;
 
 	/* What the character starts carrying. Only seeds the slots: equipping and
 	   unequipping afterwards is runtime state on the Character3D. */

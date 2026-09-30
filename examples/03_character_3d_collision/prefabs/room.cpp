@@ -20,6 +20,6 @@ static const e64::collider::Def room_collider = { room_shapes, 1 };
 extern const e64::Prefab3D room = {
 
 	.type = e64::prefab3d::PREFAB3D_PROP,
-	.model = "rom:/models/room.t3dm",
+	.mesh = { .model = "rom:/models/room.t3dm" },
 	.collider = &room_collider,
 };

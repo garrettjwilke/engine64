@@ -66,7 +66,7 @@ static void updateFootsteps(Character3D *character, const SoundDef *def)
 	/* Wading: no dry steps until the body is mostly out of the water. */
 	if (movement->data.in_water && movement->data.submerged_fraction > CHARACTER3D_SOUND_WET_FRACTION) return;
 
-	float cycle = character->animation.graph.cycle;
+	float cycle = character->animation.graph->cycle;
 	float speed = movement->data.horizontal_speed;
 
 	for (int i = 0; i < def->footing_count; i++) {
@@ -214,7 +214,7 @@ static void updateSwim(Character3D *character, const SoundDef *def)
 	uint8_t count = heavy ? def->swim_stroke_heavy_count : def->swim_stroke_light_count;
 	if (!count) return;
 
-	float cycle = character->animation.graph.cycle;
+	float cycle = character->animation.graph->cycle;
 
 	for (int i = 0; i < def->stroke_count; i++) {
 		if (!crossed(character->sound.previous_cycle, cycle, def->stroke[i]))
@@ -238,7 +238,7 @@ void update(Character3D *character)
 	updateLanding(character, def);
 	updateSwim(character, def);
 
-	character->sound.previous_cycle = character->animation.graph.cycle;
+	character->sound.previous_cycle = character->animation.graph->cycle;
 	character->sound.previous_roll_timer = character->movement.data.roll_timer;
 	character->sound.previous_grounded = character->movement.data.is_grounded;
 	character->sound.previous_in_water = character->movement.data.in_water;

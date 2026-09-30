@@ -63,12 +63,12 @@ void load(const Def *def, const controls::Def *controls)
 			/* Filled from the prefab and its placement, the way the 3D load
 			   fills its entity3d::Def, and gone after the load. */
 			entity2d::Def entity_def = {
-				.graphic = &prefab->graphic,
-				.sound = prefab->sound,
-				.sound_count = prefab->sound_count,
 				.position = placed->position,
 				.scale = placed->scale,
 				.rotation = placed->rotation,
+				.graphic = &prefab->graphic,
+				.sound = prefab->sound,
+				.sound_count = prefab->sound_count,
 			};
 
 			assert(scene.entity_count < MAX_ENTITY);
@@ -117,6 +117,17 @@ void unload(void)
 		font::unloadAsset(scene.font[i]);
 
 	scene = (Scene2D){};
+}
+
+void updateAnimations(float dt)
+{
+	for (int i = 0; i < scene.entity_count; i++) {
+		Graphic *graphic = scene.entity[i]->graphic;
+		if (graphic->type != Graphic::SPRITE || !graphic->sprite.animation) continue;
+
+		sprite::animation::advance(graphic->sprite.animation, dt);
+		graphic->sprite.asset = sprite::animation::getSprite(graphic->sprite.animation);
+	}
 }
 
 void updateCharacters(float dt)
