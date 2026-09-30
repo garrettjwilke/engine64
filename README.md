@@ -21,7 +21,7 @@ Fake buoyancy; equilibrium depth spring, submersion scaled drag and sink limit.
 **Character movement**<br/>
 Gait based movement system: target speed, acceleration and rotation response per gait, with exponential velocity convergence. Per asset settings for charged jump, air control and roll phases.
 
-**Character animation**<br/>
+**Model animation**<br/>
 Blend tree based animation system: clip playback, selection, sequencing, 1D and 2D blend spaces, and weighted layering over skeleton buffers.
 
 **Spring bones**<br/>
@@ -32,10 +32,13 @@ World motion damping and teleport thresholds from [AnimNode_KawaiiPhysicsSimulat
 Data driven scene definitions: lighting, fog, camera setup, wind, and sound emitters. Loading resolves a definition into the physics world, character instances, cloth bindings and active emitters.
 
 **2D scenes**<br/>
-Rectangles, sprites and text grouped in layers, each under its own scissor. Definition and instance as on the 3D side: loading resolves a definition into the live scene drawn over the world.
+Rectangles, sprites and text grouped in layers, each under its own scissor, seen through a 2D camera on the model of [Camera2D](https://github.com/godotengine/godot/blob/master/scene/2d/camera_2d.cpp) from Godot Engine: follow with drag margins, zoom and per layer parallax. Tile maps authored in [Tiled](https://www.mapeditor.org/) and imported as stages, with solid cells as the collision grid. Definition and instance as on the 3D side.
+
+**2D character**<br/>
+The 3D character brought to the plane: kinematic capsule against the solid tiles of the stage, with the same recovery step and contact classification from Godot, gait based movement, jump and roll, and sprite clips picked from the movement state.
 
 **UI**<br/>
-Track based animation engine over the loaded 2D scene: easing curves, staggered delays, timed visibility windows and state driven lookups, with tracks addressing an element field by index instead of by pointer and reverse playback mirroring the curves.
+Widgets in screen space, grouped in layers with their own scissor and drawn after the scenes. Track based animation engine over them: easing curves, staggered delays, timed visibility windows and state driven lookups, with tracks addressing a widget field by index instead of by pointer and reverse playback mirroring the curves.
 
 **Sound**<br/>
 Positional sound system on top of the Libdragon mixer. Per sample volume, min and max distance with inverse falloff, priority based channel allocation and out of range culling. Constant power panning from listener position and camera orientation, damped at close range. Distance and panning applied on independent mixer paths with RSP driven ramps. Playback rate scaling to fit a sample to a requested duration.<br/>
