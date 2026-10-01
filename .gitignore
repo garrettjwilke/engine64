@@ -1,0 +1,25 @@
+# Build outputs and intermediates
+build/
+filesystem/
+*.o
+*.d
+*.a
+
+# N64 ROMs and binaries
+*.z64
+*.v64
+*.n64
+*.elf
+*.dfs
+*.map
+*.sym
+
+# Host tools
+tools/model_importer/gltf_to_t3d
+tools/collision_importer/collision_importer
+tools/stage_importer/stage_importer
+
+# System and editor files
+.DS_Store
+*.swp
+*~

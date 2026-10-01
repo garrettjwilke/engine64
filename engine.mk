@@ -31,16 +31,42 @@
 
 BUILD_DIR ?= build
 
+# Expand leading tilde in paths if present
+N64_INST := $(patsubst ~%,$(HOME)%,$(N64_INST))
+T3D_INST := $(patsubst ~%,$(HOME)%,$(T3D_INST))
+
+# Auto-detect N64_INST if not set
+ifeq ($(N64_INST),)
+ifneq ($(wildcard $(HOME)/build/libdragon/include/n64.mk),)
+N64_INST := $(HOME)/build/libdragon
+else ifneq ($(wildcard $(ENGINE_DIR)/../libdragon/include/n64.mk),)
+N64_INST := $(realpath $(ENGINE_DIR)/../libdragon)
+endif
+endif
+
 # The ROM is the goal whatever target this file declares first.
 .DEFAULT_GOAL := all
 
-# The libdragon and tiny3d makefiles, unless the project pulled them in
-# already (a project that builds on more than one engine does).
+# The libdragon and tiny3d makefiles, unless cleaning or pulled in already
+ifneq ($(MAKECMDGOALS),clean)
 ifeq ($(origin N64_MKSPRITE),undefined)
+ifneq ($(wildcard $(N64_INST)/include/n64.mk),)
 include $(N64_INST)/include/n64.mk
+else
+$(error N64_INST is not set or $(N64_INST)/include/n64.mk not found)
+endif
 endif
 ifeq ($(origin T3D_GLTF_TO_3D),undefined)
+ifneq ($(wildcard $(T3D_INST)/t3d.mk),)
 include $(T3D_INST)/t3d.mk
+else ifneq ($(wildcard $(N64_INST)/include/t3d.mk),)
+include $(N64_INST)/include/t3d.mk
+else ifneq ($(wildcard $(ENGINE_DIR)/../tiny3d/t3d.mk),)
+include $(ENGINE_DIR)/../tiny3d/t3d.mk
+else
+$(error Could not find t3d.mk. Please set T3D_INST to your tiny3d directory or install tiny3d into $(N64_INST))
+endif
+endif
 endif
 
 # $(ENGINE_DIR)/src is there to pull an engine unit in with <module/file.cpp>

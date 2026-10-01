@@ -5,7 +5,7 @@ CXX    ?= g++
 CXXFLAGS ?= -O2
 
 collision_importer: main.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< -I$(T3D_INST)/tools/gltf_importer/src/lib -lm
+	$(CXX) $(CXXFLAGS) -o $@ $< -I../model_importer/src/lib -I$(T3D_INST)/tools/gltf_importer/src/lib -lm
 
 clean:
 	rm -f collision_importer

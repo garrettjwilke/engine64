@@ -96,7 +96,7 @@ BVH_ALWAYS_INLINE Vec<T, N> robust_max(const Vec<T, N>& a, const Vec<T, N>& b) {
 
 template <typename T, size_t N>
 BVH_ALWAYS_INLINE T dot(const Vec<T, N>& a, const Vec<T, N>& b) {
-    return std::transform::reduce(a.values, a.values + N, b.values, T(0));
+    return std::transform_reduce(a.values, a.values + N, b.values, T(0));
 }
 
 template <typename T>

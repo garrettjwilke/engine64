@@ -131,7 +131,7 @@ static void hashGrow(VertexHash *hash, const Vec3 *vertices)
 	uint32_t *old_slot  = hash->slot;
 
 	hash->capacity = old_capacity ? old_capacity * 2 : 256;
-	hash->slot     = calloc(hash->capacity, sizeof(uint32_t));
+	hash->slot     = (uint32_t *)calloc(hash->capacity, sizeof(uint32_t));
 	if (!hash->slot) fail("Out of memory growing the vertex hash!");
 
 	for (size_t i = 0; i < old_capacity; i++)
@@ -163,7 +163,7 @@ static uint16_t weldVertex(CollisionMesh *mesh, VertexHash *hash, Vec3 v)
 
 	if (mesh->vertex_count >= 0x10000) fail("Too many vertices (>65535)!");
 
-	mesh->verticesFloat = realloc(mesh->verticesFloat, (mesh->vertex_count + 1) * sizeof(Vec3));
+	mesh->verticesFloat = (Vec3 *)realloc(mesh->verticesFloat, (mesh->vertex_count + 1) * sizeof(Vec3));
 	if (!mesh->verticesFloat) fail("Out of memory storing vertices!");
 
 	mesh->verticesFloat[mesh->vertex_count] = v;
@@ -236,13 +236,13 @@ static void findActiveEdges(CollisionMesh *mesh, const Vec3 *face_normals)
 {
 	size_t tri_count = mesh->normal_count;
 
-	mesh->active_edges = calloc(tri_count ? tri_count : 1, 1);
+	mesh->active_edges = (uint8_t *)calloc(tri_count ? tri_count : 1, 1);
 	if (!mesh->active_edges) fail("Out of memory storing active edges!");
 
 	size_t capacity = 256;
 	while (capacity < tri_count * 6) capacity *= 2;
 
-	EdgeSlot *slots = malloc(capacity * sizeof(EdgeSlot));
+	EdgeSlot *slots = (EdgeSlot *)malloc(capacity * sizeof(EdgeSlot));
 	if (!slots) fail("Out of memory building the edge map!");
 	for (size_t i = 0; i < capacity; i++) slots[i].key = EDGE_SLOT_EMPTY;
 
@@ -328,7 +328,7 @@ static int nodeSelected(const cgltf_node *node, char **meshes, int mesh_count)
 
 static void convert(const char *gltfPath, CollisionMesh *out, char **meshes, int mesh_count)
 {
-	cgltf_options options = {0};
+	cgltf_options options = {};
 	cgltf_data *data = NULL;
 	cgltf_result result = cgltf_parse_file(&options, gltfPath, &data);
 
@@ -365,7 +365,7 @@ static void convert(const char *gltfPath, CollisionMesh *out, char **meshes, int
 			if (pos_acc == NULL) continue;
 
 			/* Weld first: the primitive's own indices need remapping afterwards. */
-			uint16_t *remap = malloc(pos_acc->count * sizeof(uint16_t));
+			uint16_t *remap = (uint16_t *)malloc(pos_acc->count * sizeof(uint16_t));
 			if (!remap) fail("Out of memory building the remap table!");
 
 			for (cgltf_size l = 0; l < pos_acc->count; l++)
@@ -380,7 +380,7 @@ static void convert(const char *gltfPath, CollisionMesh *out, char **meshes, int
 			if (prim->indices != NULL)
 			{
 				cgltf_accessor *acc = prim->indices;
-				out->indices = realloc(out->indices, (out->index_count + acc->count) * sizeof(uint16_t));
+				out->indices = (uint16_t *)realloc(out->indices, (out->index_count + acc->count) * sizeof(uint16_t));
 				if (!out->indices) fail("Out of memory storing indices!");
 
 				for (cgltf_size k = 0; k < acc->count; k++)
@@ -403,12 +403,12 @@ static void convert(const char *gltfPath, CollisionMesh *out, char **meshes, int
 	   Welding can expose degenerate triangles that were hidden behind split
 	   vertices; they contribute nothing to collision, so they are dropped
 	   rather than aborting the build. */
-	out->normals = realloc(out->normals, (out->index_count / 3) * sizeof(PackedNormal));
+	out->normals = (PackedNormal *)realloc(out->normals, (out->index_count / 3) * sizeof(PackedNormal));
 	if (out->index_count && !out->normals) fail("Out of memory storing normals!");
 
 	/* Unit float normals, kept aside for the active-edge fold test: the packed
 	   ones lose precision and the test compares angles of 5 degrees. */
-	Vec3 *face_normals = malloc((out->index_count / 3 ? out->index_count / 3 : 1) * sizeof(Vec3));
+	Vec3 *face_normals = (Vec3 *)malloc((out->index_count / 3 ? out->index_count / 3 : 1) * sizeof(Vec3));
 	if (!face_normals) fail("Out of memory storing face normals!");
 
 	size_t write = 0;
